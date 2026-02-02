@@ -1,0 +1,100 @@
+# ------------------------------------------------------------------------------------------------------------------->
+# Script:  population_doc.r
+# Description:
+#   Describes the population arrays in population.
+#
+# ------------------------------------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: Feb 7, 2025
+# Revised: February 14, 2025 - updated to suggest county_population , as.data.frame, and as_tibble functions. Using "population"
+# as the targeted file to document.
+# Revised February 17, 2025 - Converted to table/arrays for data dtorage and manipulation.  Added autoplot
+# ------------------------------------------------------------------------------------------------------------------->
+#
+#' List of population arrays
+#'
+#'  A named list "population" of arrays with population figures. The list contains population data for the decennial censuses,
+#'  estimates, and projections sourced from the [U.S. Census Bureau](https://www.census.gov/) and [Texas Demographic
+#'  Center](https://demographics.texas.gov/). With one exception, these arrays contain age, sex, race, and
+#'  ethnicity (ASRE) of the population for Texas and all counties. The zcta array is the exception and only provides
+#'  the total population by zip code for Tarrant County only. Available arrays and their sources include:
+#'  *  census is the population on April 1st for the years 2000, 2010, and 2020 decennial censuses.
+#'  [U.S. Census Bureau](https://www.census.gov/) Summary Tape File #1 were used for 2000 and 2010.  The Demographic
+#'  and Housing Characteristics table was used for 2020.
+#'  *  census.estimates has the estimates for July 1st for the years 2010 through 2023. These were sourced from the
+#'  [Census Bureau Population and Housing Unit Estimates program](https://www.census.gov/programs-surveys/popest.html).
+#'  *  texas.estimates are the July 1st estimates for years 2011 through 2023 excluding the decennial census years.
+#'  This data is sourced from the
+#'  [Texas Demographic Center Estimates program](https://demographics.texas.gov/Data/TPEPP/Estimates/).
+#'  The 2001 throuh 2009 estimates data is to be added back in as a separate named array at a future date.  The source
+#'  of these earlier years data are saved files previously downloaded from the
+#'  [Texas Department of State Health Services Center for Health Statistics](https://www.dshs.texas.gov/center-health-statistics).
+#'  *  texas.projections  are the the projected populations counts for 2010 through 2050 using the 1.0 migration scenario
+#'  and produced by the [Texas Demographic Center Projections program](https://demographics.texas.gov/Data/TPEPP/Projections/)
+#'  2018 release. The center delayed Age, Sex, Race, Ethinicty (ASRE) projections to further study the effects of
+#'  the 2020 demographic and housing characteristics file delay as well as the implementation of
+#'  [differential privacy](https://demographics.texas.gov/Resources/TDC/Publications/20210526.2481/20210526_EvaluatingTheImpactDifferentialPrivacy.pdf?v=20211216)
+#'  by the Census Bureau.  Whereas 2022 projections have been released, they are still based on the 2010 census as a
+#'  basis. The 2024 projections will be used when the couty files are released.
+#'  * zcta are the zip code tabulation area 5-year period population estimates for the years ending 2011 through 2023 for Tarrant
+#'  County only.  Sourced from the  [Census Bureau American Community Survey](https://www.census.gov/programs-surveys/acs/data.html).
+#'  It contains population and margin of error by zip.code .
+#'
+#'  A function is provided to retrieve the population actually needed [county_population()] with a filtered array as a
+#'  result. Any of the arrays in population or those returned from [county_population()] can be coerced to a data frame
+#'  or tibble using the generic [as.data.frame()] or [as.tibble()] functions respectively.
+#'
+#' The age, sex, race and ethnicity (ASRE) dimension names with their associated values can differ by source. These
+#' tables have been standardized to use the same dimension names and where possible the same categorical values.
+#' However, there are differences in race where the census has a greater number of race categories available compared to
+#' those from the Texas Demographic Center (TDC).  Ethnicity categories also differ as the TDC has  population numbers
+#' for All and Hispanic, but not stratified by race, e.g., Black-Hispanic, White-Hispanic etc.
+#'
+#' Carefully consider how to use the census.estimates when selecting race when using "...in combination" categories as
+#' they are not mutually exclusive.
+#'
+#' The age.char variable  also differs depending on source.  For example the census.estimates table has five year age
+#' groups, whereas the other tables with ASRE have single years available.
+#'
+#' The Census Bureau  **updates** the estimates each year for the years after the most recent decennial census.
+#' Therefore the estimates for the 2021 and 2022 released in 2023 will be slightly different when released in 2024. For
+#' the census.estimates array, the years 2010 through 2019 were sourced from the data file released in mid-2020.
+#' The census bureau is expected to release in late 2024 or early 2025 final estimates for the intercensal years between
+#' 2010 and 2020 that will become the final estimates for those years. Estimates for years 2020 through 2023 are from
+#' the most recent estimates data file. As a result the estimates for 2020 through the most recent year will be
+#' updated/changed each year compared to the previous vintage file release.
+#'
+#' @format
+#'    The dimension names for all the arrays except for zcta are: year, area.name, sex, age.char, race, and ethnicity.
+#'    Index selection from each dimension returns the filtered array
+#'
+#' The census, census.estimates, texas.estimates and texas.projections arrays include the following dimensions
+#'    and available values, all values are character strings in an array :
+#'  * year with values:
+#'    - census 2000, 2010, and 2020.
+#'    - census.estimates 2001 through 2023.
+#'    - texas.estimates 2001 through 2023.
+#'    - texas.projections 2010 through 2050.
+#'  * fips is the state and county fips codes. This is not included in the dimensions in the array, but can be added using
+#'    the [add_fips()] function after converting to a data frame or tibble
+#'  * area.name has names of the following areas: `r stringr::str_flatten_comma(names(county_fips), last = ", and ")`
+#'  * sex has the values:  Female ,  Male , or  All
+#'  * age.char is ages and age groups:
+#'       * census has single years 0 through 99, plus 100-104, 105-109, 110+, and  All  age groups.
+#'       * census.estimates has five year age groups beginning 0-4 through 80-84, 85+, and  All  age groups.
+#'       * texas.estimates has single years 0 through 95 plus 85 +, 95 +, and  All  age groups.  It also has 5 year
+#'       age groups starting 0-4, through 80-84, and special spans of 15-44, and 15-49.
+#'       * texas.projections has single years 0 through 94, 95 + and  All  age groups
+#'  * race:
+#'       * census has American Indian And Alaska Native, Asian, Black, Hawaiian Or Pacific Islander, Other,
+#'         Two Or More, and White
+#'       * census.estimates has the same race categories as census with addition of "or in combination" for all the single
+#'       categories.  For example, "Asian or in combination"
+#'       * texas.estimates and texas.projections has Asian, Black, Other, and White.  __NOTE__ that texas.estimates race
+#'         variable has had Asian since 2017, that category was included in "Other" before 2017..
+#'  * ethnicity has the values: All, Hispanic, or Non-Hispanic.  __NOTE that the "Non-Hispanic" values
+#'  exist only for race equal to 'All' for texas.estimates and texas.projections tables.__
+#'  * population is the numeric value of the population.
+"population"
+
+

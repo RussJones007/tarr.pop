@@ -1,0 +1,42 @@
+Package: tarr.pop
+Type: Package
+Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
+Version: 0.0.0.9196
+Description: Popuation figures and functions to retrive subsets of the data.  
+    Contains population figures for Texas,  Tarrant county,  comparable 
+    large counties, and counties in the metroplex. Data sources include
+    the U.S. Census Bureau decennial census, population esitmates as well as
+    the Texas Data Center estimates and projections. 
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Authors@R: 
+    person(given = "Russell", family = "Jones",  role = c("aut", "cre"), email = "RussJones007@gmail.com")
+Depends: 
+    R (>= 4.2.0)
+Imports:
+    DelayedArray,
+    HDF5Array,
+    dplyr,
+    tidyr,
+    tibble,
+    ivs,
+    rlang,
+    methods,
+    forecast,
+    stats,
+    purrr,
+    ggplot2,
+    cli,
+    checkmate,
+    abind,
+    assertthat,
+    stringr,
+    scales,
+    Matrix,
+    rage
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

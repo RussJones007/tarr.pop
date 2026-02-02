@@ -1,0 +1,10 @@
+THe refacgored data_raw scripts build the HDF5AArray cubes.  THis refactor is meant to remove the un0necessary complixity found in the 
+current build scripts.
+
+This set uses a list of arr diemnsions to format the data into on disk HDF5Arrays.   The file naming scheme used is the
+recent build scripts will remain.
+
+The dim_name_defintions.r script hols the dimension and names uised for each dataset.
+A separate script uses the spec and builds a lisy for generating the HDF5Array files
+
+
