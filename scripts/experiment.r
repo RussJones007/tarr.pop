@@ -101,6 +101,11 @@ yearly_sums <- function(tp){
   ret
 }
 
+git_sitrep()
+use_git_config(user.name = "Russ Jones", user.email = "RussJones007@gmail.com")
+git_vaccinate()
+
+
 est_list  <- map(res_list, ~ .x[["projected"]] |> yearly_sums())
 (diff_list <- map(est_list, ~ .x - test_sums))
 pct_list  <- map(est_list, ~ ((.x - test_sums)/test_sums * 100) |> format(digits = 2) |> paste0("%"))
