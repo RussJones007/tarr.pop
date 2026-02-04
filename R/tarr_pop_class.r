@@ -350,23 +350,23 @@ as.tarr_pop.array <- function(x, data_col = "population", ...) {
   
   if (drop && length(dim(h_sub)) < nd) return(h_sub)
 
-  # this was commented out as rebuilding the dimnamnes attribute appears to be un-necessary  
-  # dn <- x$dimn
-  # dim_names <- names(dn)
-  # 
-  # for (kk in seq_len(nd)) {
-  #   sel <- idx[[kk]]
-  #   if (is.null(sel)) next
-  #   nm <- dim_names[kk]
-  #   this <- dn[[nm]]
-  #   
-  #   if (is.numeric(sel) || is.logical(sel)) {
-  #     dn[[nm]] <- this[sel]
-  #   } else {
-  #     dn[[nm]] <- this[this %in% sel]
-  #   }
-  # }
-  
+  # rebuilding the dimnamnes attribute 
+  dn <- x$dimn
+  dim_names <- names(dn)
+
+  for (kk in seq_len(nd)) {
+    sel <- idx[[kk]]
+    if (is.null(sel)) next
+    nm <- dim_names[kk]
+    this <- dn[[nm]]
+
+    if (is.numeric(sel) || is.logical(sel)) {
+      dn[[nm]] <- this[sel]
+    } else {
+      dn[[nm]] <- this[this %in% sel]
+    }
+  }
+
   new_tarr_pop(
     x             = h_sub,
     dimnames_list = dimnames(h_sub),
