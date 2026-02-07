@@ -73,16 +73,6 @@ new_poparray <- function(x,
                          time_dim = "year",
                          area_dim = "area.name",
                          ...) {
-  # ...
-}
-
-new_poparray <- function(x,
-                         dimnames_list = dimnames(x),
-                         data_col = "population",
-                         source = NULL,
-                         time_dim = "year",
-                         area_dim = "area.name",
-                         ...) {
   if (!inherits(x, "DelayedArray")) x <- DelayedArray::DelayedArray(x)
   
   if (is.null(dimnames_list) || !is.list(dimnames_list) || is.null(names(dimnames_list))) {
