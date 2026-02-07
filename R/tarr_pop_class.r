@@ -12,7 +12,8 @@
 
 #' Create tarr_pop objects
 #'
-#' Create or test for objects of type "tarr_pop".
+#' Create or test for objects of type "tarr_pop". DEPRECATED in favor of the poparray class.
+#' This construcotr wraps construction of poparray object and will be removed once conversion to poarray is complete.
 #'
 #' Constructor for tarr_pop objects. The S3 class 'tarr_pop' wraps a DelayedArray / HDF5Array The underlying data is
 #' held in `handle`, and standardized dimnames are kept in  `dimn`. Attributes are used for 'age_iv', 'data_col', and
@@ -26,39 +27,44 @@
 #'
 #' @return An object of class 'tarr_pop'.
 #' @export
-new_tarr_pop <- function(x,
-                         dimnames_list = dimnames(x),
-                         data_col = "population",
-                         source = NULL,
-                         ...) {
-  # Ensure we have a DelayedArray-compatible backend
-  if (!inherits(x, "DelayedArray")) {
-    x <- DelayedArray::DelayedArray(x)
-  }
-  
-  nms <- names(dimnames_list)
-  required_core <- c("year", "area.name", "sex", "age.char")
-  has_6d <- all(c("race", "ethnicity") %in% nms)
-  has_5d <- "race_eth" %in% nms
-  
-  if (!all(required_core %in% nms) || !(has_6d || has_5d)) {
-    stop("dimnames_list must have core dims (year, area.name, sex, age.char) and ",
-         "either 6D (race, ethnicity) OR 5D (race_eth). Found: ",
-         paste(nms, collapse = ", "))
-  }
-  
-  age_iv <- if ("age.char" %in% nms) age_to_iv(dimnames_list[["age.char"]]) else NA
-  
-  obj <- list(
-    handle = x,
-    dimn   = dimnames_list
-  )
-  attr(obj, "age_iv")   <- age_iv
-  attr(obj, "data_col") <- data_col
-  if (!is.null(source)) attr(obj, "source") <- source
-  class(obj) <- "tarr_pop"
-  obj
+#' 
+new_tarr_pop <- function(...) {
+  .Deprecated("new_poparray")
+  new_poparray(...)
 }
+# new_tarr_pop <- function(x,
+#                          dimnames_list = dimnames(x),
+#                          data_col = "population",
+#                          source = NULL,
+#                          ...) {
+#   # Ensure we have a DelayedArray-compatible backend
+#   if (!inherits(x, "DelayedArray")) {
+#     x <- DelayedArray::DelayedArray(x)
+#   }
+#   
+#   nms <- names(dimnames_list)
+#   required_core <- c("year", "area.name", "sex", "age.char")
+#   has_6d <- all(c("race", "ethnicity") %in% nms)
+#   has_5d <- "race_eth" %in% nms
+#   
+#   if (!all(required_core %in% nms) || !(has_6d || has_5d)) {
+#     stop("dimnames_list must have core dims (year, area.name, sex, age.char) and ",
+#          "either 6D (race, ethnicity) OR 5D (race_eth). Found: ",
+#          paste(nms, collapse = ", "))
+#   }
+#   
+#   age_iv <- if ("age.char" %in% nms) age_to_iv(dimnames_list[["age.char"]]) else NA
+#   
+#   obj <- list(
+#     handle = x,
+#     dimn   = dimnames_list
+#   )
+#   attr(obj, "age_iv")   <- age_iv
+#   attr(obj, "data_col") <- data_col
+#   if (!is.null(source)) attr(obj, "source") <- source
+#   class(obj) <- "tarr_pop"
+#   obj
+# }
 
 # class inquiry
 #' Is object a tarr_pop
@@ -321,88 +327,12 @@ as.tarr_pop.array <- function(x, data_col = "population", ...) {
 
 # Subsetting -------------------------------------------------------------------
 
-# tarr_pop method for the index `[` operator
+# tarr_pop method for the index `[` operator, DEPRACATED, using poparray
 # If drop = TRUE and resulting object no longer has all six dims, the 
 # return is the underlying subsetted HDF5Array rather than a tarr_pop.
-#' #' @export
 #' @export
-`[.tarr_pop` <- function(x, ..., drop = FALSE) {
-  dim_names   <- names(x)
-  nd  <- length(dim(x))
-  ndx <- rep(list(TRUE),nd)  # same length as dimension in x
+`[.tarr_pop` <- `[.poparray`
   
-  # handle the dots argument and just in case soemthing is missing
-  dots <- as.list(substitute(list(...)))[-1L]
-  idx <- lapply(dots, \(e) {if(is_missing_arg(e)) TRUE else eval(e, parent.frame())})
-  
-  # Set up ndx using dimension name or position
-  index_names <- names(idx)
-  if(! is.null(index_names)) {
-    positions <- match(index_names, dim_names)
-    ndx[positions] <- idx
-  } else {
-    ndx[ seq_len(length(idx)) ] <- idx
-  }
-  
-  #idx <- idx[seq_len(nd)]  # only keep the dims present
-  
-  h_sub <- do.call(`[`, c(list(x$handle), ndx, list(drop = drop)))
-  
-  if (drop && length(dim(h_sub)) < nd) return(h_sub)
-
-  # rebuilding the dimnamnes attribute 
-  dn <- x$dimn
-  dim_names <- names(dn)
-
-  for (kk in seq_len(nd)) {
-    sel <- idx[[kk]]
-    if (is.null(sel)) next
-    nm <- dim_names[kk]
-    this <- dn[[nm]]
-
-    if (is.numeric(sel) || is.logical(sel)) {
-      dn[[nm]] <- this[sel]
-    } else {
-      dn[[nm]] <- this[this %in% sel]
-    }
-  }
-
-  new_tarr_pop(
-    x             = h_sub,
-    dimnames_list = dimnames(h_sub),
-    data_col      = data_col(x),
-    source        = get_source(x),
-    age_iv        = attr(x, "age_iv")
-  )
-}
-
-# tarr_pop method for the index `[<-` operator
-# For an HDF5 / DelayedArray backend, in-place modification is non-trivial.
-# Here we implement a simple, conservative behavior: realize to array,
-# modify, and re-wrap as a DelayedArray-backed tarr_pop.
-
-#' @export
-`[<-.tarr_pop` <- function(x, i, j, ..., value) {
-  arr <- as.array(x$handle)
-  dn  <- dimnames(x)
-
-  # apply replacement on realized array
-  arr <- do.call(
-    `[<-`,
-    c(list(arr, i, j), list(...), list(value = value))
-  )
-
-  handle_new <- DelayedArray::DelayedArray(arr)
-
-  new_tarr_pop(
-    x             = handle_new,
-    dimnames_list = dn,
-    data_col      = data_col(x),
-    source        = get_source(x),
-    age_iv        = attr(x, "age_iv")
-  )
-}
-
 #' @export
 head.tarr_pop <- function(x, n = 6L, ...) {
   # For clarity and simplicity: head() returns a tibble of first n rows
@@ -425,6 +355,7 @@ data_col <- purrr::attr_getter("data_col")
 
 #' @rdname data_col
 #' @export
+
 `data_col<-` <- function(x, values){
   assertthat::assert_that(is.string(values),
                           msg = "data_col must be a character string of length one")
