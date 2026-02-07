@@ -54,7 +54,7 @@ The design of `poparray` is governed by the following principles:
 5.  **Delayed computation by default**\
     Operations preserve 'laziness' whenever possible and avoid realizing large arrays in memory.
 
------
+------------------------------------------------------------------------------------------------------------------------
 
 ## What a poparray object contains
 
@@ -90,8 +90,8 @@ These dimensions:
 
 ## Attribute usage and semantic metadata
 
-`poparray` relies heavily on attributes to store meaning that should not be encoded structurally in the array. 
-### dim_roles
+`poparray` relies heavily on attributes to store meaning that should not be encoded structurally in the array. \###
+dim_roles
 
 A named list describing the semantic role of each dimension:
 

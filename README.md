@@ -3,8 +3,9 @@
 A package for retrieving and managing population figures for epidemiological and public health analysis.
 
 ### Overview
-tarr.pop simplifies the process of retrieving population figures for analysis. Originally developed for Tarrant County Public Health Epidemiology, it is designed to be flexible and can be used by other jurisdictions as well.
-Population data is sourced from multiple authoritative providers and stored efficiently for large-scale analysis.
+tarr.pop simplifies the process of retrieving population figures for analysis. Originally developed for Tarrant County
+Public Health Epidemiology, it is designed to be flexible and can be used by other jurisdictions as well. Population
+data is sourced from multiple authoritative providers and stored efficiently for large-scale analysis.
 
 ### Data Sources
 The package integrates population data from the following sources:
@@ -24,9 +25,9 @@ Supplies county and census tract estimates.
 
 
 #### Data Storage
-Population data can be large, so it is stored in HDF5Arrays. Each source and data type (estimates, projections, census) is organized into individual HDF5Array files.
-Standardized Dimensions
-Arrays use standardized dimension names for consistency:
+Population data can be large, so it is stored in HDF5Arrays. Each source and data type (estimates, projections, census)
+is organized into individual HDF5Array files. Standardized Dimensions Arrays use standardized dimension names for
+consistency:
 
 year
 area.name — e.g., county names, census tract IDs

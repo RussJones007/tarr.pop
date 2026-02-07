@@ -2,6 +2,38 @@ library(tidyverse)
 library(profvis)
 library(tictoc)
 
+grep("^\\[`|^\\$|^\\[\\[", list.files("R", recursive = TRUE), value = TRUE)
+
+
+
+# sanity check
+library(DelayedArray)
+
+# Minimal example data
+x <- array(
+  1:12,
+  dim = c(3, 4),
+  dimnames = list(
+    year = 2020:2022,
+    area.name = c("A", "B", "C", "D")
+  )
+)
+
+pa <- new_poparray(x)
+
+# Subset
+#pa2 <- pa[1:2, , drop = FALSE]
+pa2 <- pa[1:2, , drop = FALSE]
+pa2 <- pa[1:2, 1:4, drop = FALSE]
+
+
+# Sanity checks
+inherits(pa2, "poparray")                # TRUE
+inherits(pa2$handle, "DelayedArray")     # TRUE
+!is.array(pa2$handle)                    # TRUE
+
+
+
 #zip <- open_tarr_pop(population$census.bureau$zcta)
 
 cen <- open_tarr_pop(population$census.bureau$census)
@@ -52,7 +84,6 @@ base_years <- cen_est |>
 base_years
 years(base_years)
 
-
 test_years <- cen_est |> 
   filter(year  %in%  2022:2024)
 test_sums <- map_int(2022:2024, ~ test_years |> filter(year == .x) |> sum()) |> set_names((2022:2024))
@@ -86,7 +117,6 @@ proj <- res_arima$projected |>
 
 as.data.frame(proj) |> View()
 
-
 class(res_arima$projected)
 res_list <- map(list(ARIMA = "ARIMA", CAGR = "CAGR", ETS = "ETS"), 
                 ~ project(tp = base_years, h = 3, level = 0.95, method = .x, guard = TRUE))
@@ -101,7 +131,6 @@ yearly_sums <- function(tp){
   ret
 }
 
-git_sitrep()
 use_git_config(user.name = "Russ Jones", user.email = "RussJones007@gmail.com")
 git_vaccinate()
 

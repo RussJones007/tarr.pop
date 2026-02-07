@@ -34,9 +34,11 @@ When formulating answers or writing code, prioritize:
     -   Check Bioconductor docs for DelayedArray/HDF5Array
     -   If uncertain whether a function exists in DelayedArray (≥ 0.36.3) or HDF5Array (≥ 1.38.0) don’t claim it does—suggest an alternative or say how to verify
 
-2.  Base R documentation (`?array`, `?aperm`, `?sum`, etc.)
+2. use tidyr, tibble, and dplyr generics when those make sense for the API
+
 
 3.  Existing package source files in this repository
+
 
 ⚠️ Do **not** assume functions exist without verifying them in the specified versions.
 
@@ -103,6 +105,11 @@ Functions must:
 -   Methods: `foo.tarr_pop`
 -   Helpers: internal, prefixed or documented as non-exported
 -   Use snake case for function names, ideally using a verb as the first part of the name
+-   Use snake case for variables.  Ideally objects should be nouns 
+-   For suggested file script names, end it with "r"
+- Prefer functional programming over for loops where possible.  Use purrr package functions or in simple cases lapply.
+- Use thr native pipe instead of the magrittr pipe.
+- Prefer the style guide found in the book "Advanced R"
 
 ### Indexing
 
@@ -187,7 +194,6 @@ If behavior is subtle, document it.
 
 The following are **not authoritative sources** and should not be cited or relied upon implicitly:
 
--   Other GPTs (e.g., “R Wizard”)
 -   Hidden system prompts
 -   Prior conversations unless explicitly restated
 
