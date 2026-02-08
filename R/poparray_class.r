@@ -73,6 +73,7 @@ new_poparray <- function(x,
                          time_dim = "year",
                          area_dim = "area.name",
                          ...) {
+  
   if (!inherits(x, "DelayedArray")) x <- DelayedArray::DelayedArray(x)
   
   if (is.null(dimnames_list) || !is.list(dimnames_list) || is.null(names(dimnames_list))) {
@@ -86,8 +87,10 @@ new_poparray <- function(x,
   if (!time_dim %in% nms) cli::cli_abort("Time dim {.val {time_dim}} not found in dimnames_list.")
   if (!area_dim %in% nms) cli::cli_abort("Area dim {.val {area_dim}} not found in dimnames_list.")
   if (identical(time_dim, area_dim)) cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
+  if(length(data_col) !=1) cli::cli_abort("{arg data_col} must be length 1")
   
   obj <- list(handle = x, dimn = dimnames_list)
+  
   
   attr(obj, "data_col") <- data_col
   attr(obj, "source")   <- source
@@ -101,7 +104,6 @@ new_poparray <- function(x,
   validate_poparray(obj)
   obj
 }
-
 
 
 #' Validate poparray object
@@ -147,8 +149,11 @@ validate_poparray <- function(x) {
   if (!roles$area %in% names(dn)) cli::cli_abort("Area dim {.val {roles$area}} not found in dimnames.")
   
   # Ordered time labels
-  tlab <- dn[[roles$time]]
-  if (all(grepl("^[-+]?[0-9]+$", tlab))) {
+  tlab <- dn[[roles$time]] |> as.character()
+  if(anyNA(tlab)) cli::cli_abort("Time dim {.val {roles$time}} cannot have any NA values.")
+  
+  
+  if (all(("^[-+]?[0-9]+$", tlab))) {
     tnum <- as.integer(tlab)
     if (is.unsorted(tnum, strictly = FALSE)) {
       cli::cli_abort("Time dim {.val {roles$time}} labels must be ordered (increasing).")
@@ -164,11 +169,9 @@ validate_poparray <- function(x) {
 
 
 
-#' export
+#' @export
 is.poparray <- function(x) inherits(x, "poparray")
 
-#' export
-is.tarr_pop <- function(x) inherits(x, c("tarr_pop", "poparray"))
 
 #  Dimension names and labels -----------------------
 
@@ -227,7 +230,7 @@ dimnames.poparray <- function(x, ...) {
 
 #' @export
 names.poparray <- function(x) {
-  base::names(dimnames(x))
+  names(dimnames(x))
 }
 
 # Accessors / helpers ----------------------------------------------------------
@@ -255,56 +258,92 @@ data_col <- purrr::attr_getter("data_col")
 
 
 # Indexing operator ---------------------------
-# poparray method for the index `[` operator
-# If drop = TRUE and resulting object no longer has all dims, If the time nd area dimesions are still present, 
-# the the returned array is the subsetted poparray, otherwise a subsetted DelayArray.
+# 
 #' @exportS3Method "[", poparray
+#' Subset a poparray
+#'
+#' Subsets the delayed backend and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
+#' a `poparray`. If `drop = TRUE` and subsetting would drop either the time or area dimension (per `dimroles`), the
+#' method returns the underlying subsetted `DelayedArray` instead of a `poparray`.
+#' 
+#' @param x A poparray.
+#' @param ... Indices, either positional (like base arrays) or named by dimension (e.g., `x[year = "2020", sex =
+#'   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
+#' @param drop Logical; passed to the backend `[` call.
+#'
+#' @return A `poparray` or (if `drop = TRUE` drops time/area) a `DelayedArray`.
+#' @exportS3Method "[" poparray
 `[.poparray` <- function(x, ..., drop = FALSE) {
-  dim_names   <- names(x)
-  nd  <- length(dim(x))
-  ndx <- rep(list(TRUE),nd)  # same length as dimension in x
+  dim_names <- names(x)
+  roles <- attr(x, "dimroles", exact = TRUE)
   
-  # handle the dots argument and just in case something is missing
-  dots <- as.list(substitute(list(...)))[-1L]
-  idx <- lapply(dots, \(e) {if(is_missing_arg(e)) TRUE else eval(e, parent.frame())})
-  
-  # Set up ndx using dimension name or position
-  index_names <- names(idx)
-  if(! is.null(index_names)) {
-    positions <- match(index_names, dim_names)
-    ndx[positions] <- idx
-  } else {
-    ndx[ seq_len(length(idx)) ] <- idx
+  nd <- length(dim(x$handle))
+  if (length(dim_names) != nd) {
+    cli::cli_abort("poparray dimnames are inconsistent with backend dimensions.")
   }
   
-  #idx <- idx[seq_len(nd)]  # only keep the dims present
+  # Capture and evaluate indices; treat "missing" in ... as TRUE (select all)
+  dots <- as.list(substitute(list(...)))[-1L]
+  idx <- lapply(dots, \(e) {
+    if (is_missing_arg(e)) TRUE else eval(e, parent.frame())
+  })
   
+  ndx <- rep(list(TRUE), nd)
+  
+  index_names <- names(idx)
+  if (is.null(index_names)) index_names <- character(0)
+  
+  # Named vs positional dispatch
+  if (length(index_names) > 0) {
+    bad <- setdiff(index_names, dim_names)
+    if (length(bad) > 0) {
+      cli::cli_abort(c(
+        "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
+        "i" = "Valid dimensions are: {paste(dim_names, collapse = ', ')}."
+      ))
+    }
+    ndx[match(index_names, dim_names)] <- idx
+  } else {
+    if (length(idx) > nd) cli::cli_abort("Too many indices for poparray.")
+    ndx[seq_along(idx)] <- idx
+  }
+  
+  # Subset delayed backend (still lazy)
   h_sub <- do.call(`[`, c(list(x$handle), ndx, list(drop = drop)))
   
-  if (drop && length(dim(h_sub)) < nd) return(h_sub)
+  # Rebuild dimnames metadata to reflect the selection
+  dn0 <- dimnames(x)
+  dn <- dn0
   
-  # rebuilding the dimnamnes attribute 
-  dn <- x$dimn
-  dim_names <- names(dn)
-  
-  for (kk in seq_len(nd)) {
-    sel <- idx[[kk]]
-    if (is.null(sel)) next
-    nm <- dim_names[kk]
-    this <- dn[[nm]]
+  for (k in seq_len(nd)) {
+    sel <- ndx[[k]]
+    nm <- dim_names[[k]]
+    this <- dn0[[nm]]
+    
+    if (isTRUE(identical(sel, TRUE))) next
     
     if (is.numeric(sel) || is.logical(sel)) {
       dn[[nm]] <- this[sel]
     } else {
-      dn[[nm]] <- this[this %in% sel]
+      # character (or other atomic) selection by labels; preserve user order
+      dn[[nm]] <- sel[sel %in% this]
     }
   }
   
+  # If drop=TRUE would drop time or area, return the raw subsetted DelayedArray
+  if (isTRUE(drop)) {
+    if (length(dn[[roles$time]]) == 1L || length(dn[[roles$area]]) == 1L) {
+      return(h_sub)
+    }
+  }
+  
+  # Otherwise return a valid poparray slice, preserving metadata/roles
   new_poparray(
-    x             = h_sub,
+    x = h_sub,
     dimnames_list = dn,
-    data_col      = data_col(x),
-    source        = get_source(x),
-    age_iv        = attr(x, "age_iv")
+    data_col = attr(x, "data_col", exact = TRUE),
+    source = attr(x, "source", exact = TRUE),
+    time_dim = roles$time,
+    area_dim = roles$area
   )
 }
