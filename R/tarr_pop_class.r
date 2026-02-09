@@ -121,20 +121,20 @@ print.tarr_pop <- function(x, ...) {
   recs <- length(x)
 
   cat("Class <tarr_pop>\n")
-  if (!is.null(src) && !is.na(src[["note"]])) {
-    cat("Series:", src[["note"]], "\n")
-  }
-  if (!is.null(src) && !is.na(src[["source"]])) {
-    cat("Sourced: ", src[["source"]], "\n", sep = "")
-  }
+  cat("Series:", src[["note"]], "\n")
+  cat("Sourced: ", src[["source"]], "\n", sep = "")
   cat("Length: ", format(recs, big.mark = ","), "\n", sep = "")
+  cat("Roles: time = '", roles$time, "', area = '", roles$area, "'\n", sep = "")
   cat("Dimensions: ", dimensions, "\n", sep = "")
   cat("Data column as data frame: '", data_col(x), "'\n", sep = "")
 
   invisible(x)
 }
 
-# Coercion to data.frame / tibble ---------------------------------------------
+# Coercions like to double,  data.frame / tibble ---------------------------------------------
+
+
+ 
 
 #' Coerce to Data Frame
 #'
