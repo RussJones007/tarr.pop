@@ -198,42 +198,92 @@ validate_labels_against_cube <- function(h5_handle, dimn, series_id) {
 
 # 5. Opener: HDF5 -> HDF5Array -> tarr_pop ------------------------------
 
+#' #' Open population series
+#' #'
+#' #' Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
+#' #'
+#' #' @param series_id name of the population series.  See the population list variable for easier selection in the IDE.
+#' #' @param dataset path to the data in the HDF5Array file
+#' #' @param data_col name of the column with the population figures when array is transoformed into a data frame.
+#' #'
+#' #' @returns the selected population series as a tarr_pop object
+# Optional backwards-compatible alias (consider deprecating)
+#' @export
+open_tarr_pop <- function(...) {
+  open_poparray(...)
+}
+
+# #' #TBD
+# open_tarr_pop <- function(series_id,
+#                           dataset = "/pop",
+#                           data_col = "population") {
+#   reg <- tarr_series_registry()
+#   row <- reg[reg$series_id == series_id, , drop = FALSE]
+#   if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
+# 
+#   path <- system.file("extdata", row$filename, package = utils::packageName())
+#   if (!nzchar(path)) {
+#     stop("HDF5 file not found for series '", series_id, "'. Expected in inst/extdata/: ", row$filename)
+#   }
+#
+#  h5 <- HDF5Array::HDF5Array(filepath = path, name = dataset)
+#
+#  dimn <- labels_for_series(series_id)
+#   validate_labels_against_cube(h5, dimn, series_id)
+# 
+#   # Attach dimnames onto the handle (cheap; does not read the whole dataset)
+#   dimnames(h5) <- dimn
+# 
+#   new_tarr_pop(
+#     x             = h5,
+#     dimnames_list = dimn,
+#     data_col      = data_col,
+#     source        = source_for(series_id)
+#   )
+# }
+
+# 5. Opener: HDF5 -> HDF5Array -> poparray ------------------------------
+
 #' Open population series
 #'
-#' Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
+#' Using the name of a population series that exists on disk, open it and return
+#' as a poparray object.
 #'
-#' @param series_id name of the population series.  See the population list variable for easier selection in the IDE.
-#' @param dataset path to the data in the HDF5Array file
-#' @param data_col name of the column with the population figures when array is transoformed into a data frame.
+#' @param series_id Name of the population series.
+#' @param dataset Path to the data in the HDF5 file.
+#' @param data_col Name of the value column when coercing to a data frame.
 #'
-#' @returns the selected population series as a tarr_pop object
+#' @returns A poparray
 #' @export
-#' @examples
-#' #TBD
-open_tarr_pop <- function(series_id,
+open_poparray <- function(series_id,
                           dataset = "/pop",
                           data_col = "population") {
+  
   reg <- tarr_series_registry()
   row <- reg[reg$series_id == series_id, , drop = FALSE]
   if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
-
+  
   path <- system.file("extdata", row$filename, package = utils::packageName())
   if (!nzchar(path)) {
-    stop("HDF5 file not found for series '", series_id, "'. Expected in inst/extdata/: ", row$filename)
+    stop("HDF5 file not found for series '", series_id,
+         "'. Expected in inst/extdata/: ", row$filename)
   }
-
+  
   h5 <- HDF5Array::HDF5Array(filepath = path, name = dataset)
-
+  
   dimn <- labels_for_series(series_id)
   validate_labels_against_cube(h5, dimn, series_id)
-
+  
   # Attach dimnames onto the handle (cheap; does not read the whole dataset)
   dimnames(h5) <- dimn
-
-  new_tarr_pop(
+  
+  new_poparray(
     x             = h5,
     dimnames_list = dimn,
     data_col      = data_col,
-    source        = source_for(series_id)
+    source        = source_for(series_id),
+    time_dim      = "year",
+    area_dim      = "area.name"
   )
 }
+
