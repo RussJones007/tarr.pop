@@ -1,25 +1,25 @@
 # ------------------------------------------------------------------------------------------------------------------->
 # Script: filter.R
 # Description:
-#   Implements the filter() method for class tarr_pop 
+#   Implements the filter() method for class poparray 
 # 
 # 
 # ------------------------------------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 5, 2026
-# 
+# Revised: February 9, 2026 to use poarray instead of tarr_pop
 # ------------------------------------------------------------------------------------------------------------------->
 
 
-#' Filter a `tarr_pop` array/cube by restricting dimension labels 
+#' Filter a `poparray` array/cube by restricting dimension labels 
 #'
-#' @description `filter.tarr_pop()` restricts a `tarr_pop` object along one or more named dimensions using **label-based
-#' predicates**, returning a delayed `tarr_pop` (or view) without materializing the data.
+#' @description `filter.poparray()` restricts a `poparray` object along one or more named dimensions using **label-based
+#' predicates**, returning a delayed `poparray` (or view) without materializing the data.
 #'
 #' This is **not** row filtering. It is **dimension slicing** intended for
 #' HDF5/DelayedArray-backed population cubes.
 #'
-#' @details ## What this method does `filter()` for `tarr_pop` builds or updates a subset plan that restricts dimension
+#' @details ## What this method does `filter()` for `poparray` builds or updates a subset plan that restricts dimension
 #' labels (e.g., years, counties, ages). The returned object remains delayed; realization happens later via `collect()`,
 #' `as.data.frame()`, `as_tibble()`, or similar.
 #'
@@ -59,27 +59,27 @@
 #' requested labels are not present, an error is thrown (often with suggested close matches). For ordered dimensions,
 #' errors are raised if coercion to the comparison scale fails (e.g., non-numeric year labels).
 #'
-#' @param .data A `tarr_pop` object.
+#' @param .data A `poparray` object.
 #' @param ... One or more filtering expressions. Each expression must constrain a single dimension name using supported
 #'   operators (see Details).
 #' @param .strict Logical. If `TRUE` (default), unknown categorical labels are an error. If `FALSE`, unknown categorical
 #'   labels are dropped with a warning.
 #'
-#' @return A delayed `tarr_pop` (or `tarr_pop_view`) with updated dimension restrictions. No materialization occurs.
+#' @return A delayed `poparray` (or `tarr_pop_view`) with updated dimension restrictions. No materialization occurs.
 #' 
-#' @exportS3Method filter tarr_pop
-filter.tarr_pop <- function(.data, ..., .strict = TRUE) {
+#' @exportS3Method filter poparray
+filter.poparray <- function(.data, ..., .strict = TRUE) {
   quos <- rlang::enquos(...)
   
   # Reject named "short form" args: filter(x, year = 2020)
   qnms <- names(quos)
   if (length(quos) && any(nzchar(qnms))) {
     warning(
-      "filter.tarr_pop() does not support named arguments like year = ...; ",
+      "filter.poparray() does not support named arguments like year = ...; ",
       "use predicates like year == ... or year %in% ....",
       call. = FALSE
     )
-    stop("Named arguments are not supported for filter.tarr_pop().", call. = FALSE)
+    stop("Named arguments are not supported for filter.poparray().", call. = FALSE)
   }
   
   if (!length(quos)) {
@@ -101,14 +101,12 @@ filter.tarr_pop <- function(.data, ..., .strict = TRUE) {
   }
   
   
-  # Apply lazy subsetting using the existing `[.tarr_pop` method.
-  # Do not pass dimension names as argument names to `[.tarr_pop`.
+  # Apply lazy subsetting using the existing `[.poparray` method.
+  # Do not pass dimension names as argument names to `[.poparray`.
   do.call(`[`, c(list(.data), unname(idx), list(drop = FALSE)))
 }
 
-# -----------------------------------------------------------------------------
-# Internal helpers
-# -----------------------------------------------------------------------------
+# Internal helpers -----------------------------------------------------------------------------
 
 tp_dim_type <- function(dim_name) {
   if (dim_name %in% c("year", "age.char")) "ordered" else "categorical"
@@ -150,7 +148,7 @@ tp_parse_expr <- function(expr, env) {
   # Binary ops: ==, %in%, <, <=, >, >=, %between%
   if (!rlang::is_call(expr)) {
     stop(
-      "filter.tarr_pop() predicates must be calls like dim == value or dim %in% values.",
+      "filter.poparray() predicates must be calls like dim == value or dim %in% values.",
       call. = FALSE
     )
   }
@@ -158,7 +156,7 @@ tp_parse_expr <- function(expr, env) {
   op <- as.character(expr[[1]])
   if (!op %in% c("==", "%in%", "<", "<=", ">", ">=", "%between%")) {
     stop(
-      "Unsupported operator in filter.tarr_pop(): ", op, ". ",
+      "Unsupported operator in filter.poparray(): ", op, ". ",
       "Supported operators include == and %in% (plus comparisons/ranges for ordered dims).",
       call. = FALSE
     )
@@ -407,9 +405,9 @@ tp_suggest_labels <- function(bad, available, n = 3) {
 #' @description
 #' `%between%` is a small infix helper intended for use inside `filter()` calls.
 #' It returns a call of the form `x %between% c(lower, upper)` that downstream
-#' methods (e.g., `filter.tarr_pop()`) interpret as an inclusive range constraint.
+#' methods (e.g., `filter.poparray()`) interpret as an inclusive range constraint.
 #'
-#' For `tarr_pop`:
+#' For `poparray`:
 #' - `year %between% c(2010, 2020)` selects years 2010–2020 (inclusive).
 #' - `age.char %between% c(25, 44)` selects age labels whose intervals overlap
 #'   ages 25–44 (inclusive; half-open target [25, 45)).
@@ -419,7 +417,7 @@ tp_suggest_labels <- function(bad, available, n = 3) {
 #'   matter; `c(44, 25)` is treated the same as `c(25, 44)`.
 #'
 #' @return A logical vector when evaluated in normal R contexts.
-#' When used inside `filter.tarr_pop()`, the expression is captured and interpreted
+#' When used inside `filter.poparray()`, the expression is captured and interpreted
 #' by the method (so it will not be evaluated in the usual way).
 #'
 #' @examples
@@ -427,7 +425,7 @@ tp_suggest_labels <- function(bad, available, n = 3) {
 #' 5 %between% c(1, 10)
 #' c(1, 5, 11) %between% c(1, 10)
 #'
-#' # Typical intended usage (captured by filter.tarr_pop()):
+#' # Typical intended usage (captured by filter.poparray()):
 #' # dplyr::filter(pop, year %between% c(2015, 2020))
 #' # dplyr::filter(pop, age.char %between% c(25, 44))
 #'
