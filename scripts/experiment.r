@@ -2,12 +2,8 @@ library(tidyverse)
 library(profvis)
 library(tictoc)
 
-grep("^\\[`|^\\$|^\\[\\[", list.files("R", recursive = TRUE), value = TRUE)
 
 
-
-# sanity check
-library(DelayedArray)
 
 # Minimal example data
 x <- array(
@@ -20,10 +16,13 @@ x <- array(
 )
 
 pa <- new_poparray(x)
+class(pa)
+pa
 
 # Subset
 #pa2 <- pa[1:2, , drop = FALSE]
 pa2 <- pa[1:2, , drop = FALSE]
+pa2
 pa2 <- pa[1:2, 1:4, drop = FALSE]
 
 
@@ -32,7 +31,7 @@ inherits(pa2, "poparray")                # TRUE
 inherits(pa2$handle, "DelayedArray")     # TRUE
 !is.array(pa2$handle)                    # TRUE
 
-
+rm(pa, pa2, x)
 
 #zip <- open_tarr_pop(population$census.bureau$zcta)
 
@@ -48,7 +47,7 @@ cen_2020 <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male"), TRUE, TRUE,
 cen_2020_a <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male"),,,]
 cen_2020_aa <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male")]
 cen_2020_b <- cen[area.name = c("Tarrant", "Dallas"), year = "2020"]
-cen_2020_c <- cen |> filter(year ==2020, area.name == c("Tarrant", "Dallas"))
+#cen_2020_c <- cen |> filter(year ==2020, area.name == c("Tarrant", "Dallas"))
 
 cen_2020
 cen_2020_a
@@ -65,7 +64,7 @@ rm(cen, cen_2020)
 
 # test projections ---------------------------------------------------------
 cen_est <- open_tarr_pop(population$census.bureau$estimates) 
-  
+cen_est  
 cen_est <- cen_est  |> 
   filter(year  %in% 2010:2024,
          area.name  %in% c("Bell"), 
