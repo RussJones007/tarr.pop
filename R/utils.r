@@ -263,6 +263,7 @@ assign_array_levels <- function(arr, dimname, char_vec){
 #'
 dim_labels <- function(arr, dimname, remove = NULL){
   assertthat::assert_that( any(dimname %in% names(dimnames(arr))), msg = str_glue("dimname '{dimname}' is not one of the dimensions for the array"))
+  #checkmate::
   assertthat::assert_that(is.tarr_pop(arr))
   ret <- dimnames(arr)[[dimname]]
   if(! is.null(remove)){
@@ -277,7 +278,7 @@ dim_labels <- function(arr, dimname, remove = NULL){
 
 
 
-## Functions to retrieve or assign dimension labels ----
+## Functions to retrieve or assign dimension labels -------------------------
 
 #' Factory function to generate wrapper functions for retrieving specific dimension labels from tarr_pop objects
 #' @param dimension should be a valid dimension of the array
@@ -384,7 +385,7 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
 #' Gets the list of information contained in "source" attribute of 'x'.  Objects from tarr_pop have a source attributes
 #' as possibly other objects.
 #' @param x is the object with a source attribute, like a tarr_pop array.
-#' @return a names character vector - names are note, source and updated.
+#' @return a named list of character  - names are note, source and updated.
 #' @keywords internal
 #' @export
 get_source <- function(obj){
