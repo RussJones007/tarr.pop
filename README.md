@@ -51,7 +51,7 @@ Design principles:
 
 ### Example usage
 
-\`\`\`r library(tarr.pop)
+library(tarr.pop)
 
 #### Open an array (returns a poparray)
 
