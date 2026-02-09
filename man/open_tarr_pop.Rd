@@ -2,23 +2,26 @@
 % Please edit documentation in R/open_tarr_pop.r
 \name{open_tarr_pop}
 \alias{open_tarr_pop}
-\title{Open population series}
+\title{#' Open population series
+#'
+#' Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
+#'
+#' @param series_id name of the population series.  See the population list variable for easier selection in the IDE.
+#' @param dataset path to the data in the HDF5Array file
+#' @param data_col name of the column with the population figures when array is transoformed into a data frame.
+#'
+#' @returns the selected population series as a tarr_pop object}
 \usage{
-open_tarr_pop(series_id, dataset = "/pop", data_col = "population")
-}
-\arguments{
-\item{series_id}{name of the population series.  See the population list variable for easier selection in the IDE.}
-
-\item{dataset}{path to the data in the HDF5Array file}
-
-\item{data_col}{name of the column with the population figures when array is transoformed into a data frame.}
-}
-\value{
-the selected population series as a tarr_pop object
+open_tarr_pop(...)
 }
 \description{
-Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
-}
-\examples{
-#TBD
+#' Open population series
+#'
+#' Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
+#'
+#' @param series_id name of the population series.  See the population list variable for easier selection in the IDE.
+#' @param dataset path to the data in the HDF5Array file
+#' @param data_col name of the column with the population figures when array is transoformed into a data frame.
+#'
+#' @returns the selected population series as a tarr_pop object
 }

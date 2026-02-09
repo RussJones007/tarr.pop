@@ -10,7 +10,7 @@ get_source(obj)
 \item{x}{is the object with a source attribute, like a tarr_pop array.}
 }
 \value{
-a names character vector - names are note, source and updated.
+a named list of character  - names are note, source and updated.
 }
 \description{
 Gets the list of information contained in "source" attribute of 'x'.  Objects from tarr_pop have a source attributes

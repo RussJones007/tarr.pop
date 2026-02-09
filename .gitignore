@@ -6,3 +6,4 @@
 .quarto
 .zip
 inst/doc
+.Rd

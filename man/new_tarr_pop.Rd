@@ -5,17 +5,13 @@
 \alias{is.tarr_pop}
 \title{Create tarr_pop objects}
 \usage{
-new_tarr_pop(
-  x,
-  dimnames_list = dimnames(x),
-  data_col = "population",
-  source = NULL,
-  ...
-)
+new_tarr_pop(...)
 
 is.tarr_pop(x)
 }
 \arguments{
+\item{...}{Reserved for future use.}
+
 \item{x}{object to check type or convert}
 
 \item{dimnames_list}{Named list of dimnames, with names: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}.}
@@ -23,14 +19,13 @@ is.tarr_pop(x)
 \item{data_col}{Name of the data column when converted to a data.frame/tibble.}
 
 \item{source}{Optional metadata describing data source (list or character).}
-
-\item{...}{Reserved for future use.}
 }
 \value{
 An object of class 'tarr_pop'.
 }
 \description{
-Create or test for objects of type "tarr_pop".
+Create or test for objects of type "tarr_pop". DEPRECATED in favor of the poparray class.
+This construcotr wraps construction of poparray object and will be removed once conversion to poarray is complete.
 
 Checks that the object is of class tarr_pop
 }

@@ -27,6 +27,14 @@ Population figure sources are:
 \item \href{https://demographics.texas.gov/Data/TPEPP/Projections/}{Texas Demographic Center Projections program}
 }
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/RussJones007/tarr.pop}
+  \item Report bugs at \url{https://github.com/RussJones007/tarr.pop/issues}
+}
+
+}
 \author{
 Russ Jones \href{mailto:RussJones007@gmail.com}{RussJones007@gmail.com}
 }
