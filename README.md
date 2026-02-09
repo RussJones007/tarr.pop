@@ -1,80 +1,70 @@
 ## tarr.pop
 
-A package for retrieving and managing population figures for epidemiological and public health analysis.
+An R package for retrieving and managing population figures for epidemiological and public health analysis.
 
 ### Overview
-tarr.pop simplifies the process of retrieving population figures for analysis. Originally developed for Tarrant County
-Public Health Epidemiology, it is designed to be flexible and can be used by other jurisdictions as well. Population
-data is sourced from multiple authoritative providers and stored efficiently for large-scale analysis.
 
-### Data Sources
+`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily. The core data structure is **`poparray`**, an S3 class that wraps a `DelayedArray` backend together with explicit, role-aware dimension metadata.
+
+### Data sources
+
 The package integrates population data from the following sources:
 
- - Texas Demographic Center (TDC)
-https://demographics.texas.gov/
-Used for projections and estimates.
+-   Texas Demographic Center (TDC): <https://demographics.texas.gov/>; used for projections and estimates.
+-   U.S. Census Bureau: decennial census data, annual estimates, and ZCTA-level estimates.
+-   Surveillance, Epidemiology, and End Results (SEER) Program: <https://seer.cancer.gov/>; supplies county and census tract estimates.
 
+### Storage model
 
--  U.S. Census Bureau
-Provides decennial census data, annual estimates, and ZCTA-level estimates.
+Population cubes can be large, so numeric data are typically stored in HDF5-backed arrays (via `HDF5Array`/`DelayedArray`) to avoid loading full datasets into memory. Semantic meaning (dimension roles, provenance, and optional geographic lookup tables) is stored as metadata/attributes rather than encoded as additional array dimensions.
 
+### poparray: core concept
 
--   Surveillance, Epidemiology, and End Results (SEER) Program
-https://seer.cancer.gov/
-Supplies county and census tract estimates.
+A **`poparray`** represents population counts indexed over **time** and **area**, optionally stratified by other independent (“orthogonal”) dimensions such as age, sex, race, or ethnicity.\
+Every `poparray` must include exactly one time dimension and one area dimension; all other dimensions are optional stratifications.
 
+Design principles:
 
-#### Data Storage
-Population data can be large, so it is stored in HDF5Arrays. Each source and data type (estimates, projections, census)
-is organized into individual HDF5Array files. Standardized Dimensions Arrays use standardized dimension names for
-consistency:
+-   Time and area are structural invariants.
+-   Other dimensions are optional stratifications and are not assumed to be present.
+-   Hierarchical geography is not represented as multiple dimensions; hierarchy belongs in metadata (e.g., a lookup table) and is used for explicit aggregation/collapse operations.
+-   Laziness is the default; realization is avoided unless explicitly documented (e.g., tabular coercions, some summaries/plots).
 
-year
-area.name — e.g., county names, census tract IDs
-sex
-age.char — age or age group
-race
-ethnicity
+### Core capabilities
 
-Where possible, dimension values are standardized (e.g., sex = "Male" or "Female"). However, age formats may vary: some arrays use single ages, others use age groups, or a mix of both.
+`poparray` supports:
 
-#### Core Features
-The package provides an S3 class tarr_pop to:
+-   Array-like interface: `dim()`, `length()`, `dimnames()`, `names()`.
+-   Printing: `print()` shows a compact summary including roles, dimensions, and the configured value column used for tabular coercions.
+-   Filtering/subsetting: `[` preserves laziness and updates dimension metadata consistently (default `drop = FALSE`), and `filter()` can be used via a `poparray` method.
+-   Collapsing dimensions: stratification dimensions may be collapsed freely; collapsing time/area should be explicit and metadata-driven, and area collapsing uses lookup tables (replacing—not adding—the area dimension).
+-   Splitting: `split(x, f)` returns a named list of slices by a chosen dimension (e.g., by year or by area).
+-   Tabular coercion (**EAGER**): `as.data.frame(x)` and `tibble::as_tibble(x)` realize the selected slice; subset first for large cubes.
+-   Plotting hooks where implemented (`plot()`, `autoplot()`), which may rely on tabular coercions and can realize subsets.
 
-Wrap array details and provide array semantics
-Enable filtering and collapsing of dimensions
-Support typical array operations like indexing
-Offer generic plotting via plot() and autoplot()
+### Typical workflow
 
-#### Dimension Operations
+-   Open a population series into a `poparray`.
+-   Filter to the time/area/strata you need using `filter()` (method for `poparray`, stays lazy).
+-   Collapse one or more stratification dimensions using `collapse_dim()` (method for `poparray`); time/area collapsing should be explicit and metadata-driven.
+-   Convert a manageable slice to a data frame/tibble for downstream analysis (**EAGER**).
 
-Filtering: Select specific dimension values
-Collapsing: Combine dimension labels into larger groups
+### Example usage
 
-Example: Aggregate individual ages into age groups
+\`\`\`r library(tarr.pop)
 
-Example: Combine geographic areas into larger units
+#### Open an array (returns a poparray)
 
+pop \<- open_poparray("some_series_id")
 
-#### Workflow for Retrieving Population Data:
+#### Filter (generic; poparray method)
 
-* Open the chosen array (cube)
-* Filter dimension names
-* Collapse or summarize dimensions
-* Convert to a data frame or save to disk
+filtered \<- filter(pop, year == "2025", sex == "Female")
 
+#### Collapse a dimension (generic; poparray method)
 
-#### Example Usage
-R
-Load the package library(tarr.pop)
-Open an arraypop_data <- open_tarr_pop("tdc_projection")
-Filter by year and sex
-filtered <- filter_tarr_pop(pop_data, year = 2025, sex = "Female")
-Collapse age groups
-collapsed <- collapse_tarr_pop(filtered, age.char = c("0-4", "5-9", "10-14"))# Convert to data framedf <- as.data.frame(collapsed)Show more lines
+collapsed \<- collapse_dim(filtered, "age.char", c("0-4", "5-9", "10-14"))
 
-#### Why Use tarr.pop?
+#### EAGER: realize a manageable slice as a data.frame
 
-Handles large population datasets efficiently
-Provides standardized dimensions for consistency
-Flexible for epidemiology, public health, and demographic analysis
+df \<- as.data.frame(collapsed)
