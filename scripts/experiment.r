@@ -47,7 +47,7 @@ cen_2020 <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male"), TRUE, TRUE,
 cen_2020_a <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male"),,,]
 cen_2020_aa <- cen["2020", c("Tarrant", "Dallas"), c("Female", "Male")]
 cen_2020_b <- cen[area.name = c("Tarrant", "Dallas"), year = "2020"]
-#cen_2020_c <- cen |> filter(year ==2020, area.name == c("Tarrant", "Dallas"))
+cen_2020_c <- cen |> filter(year ==2020, area.name == c("Tarrant", "Dallas"))
 
 cen_2020
 cen_2020_a

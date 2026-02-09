@@ -14,15 +14,15 @@ matter; \code{c(44, 25)} is treated the same as \code{c(25, 44)}.}
 }
 \value{
 A logical vector when evaluated in normal R contexts.
-When used inside \code{filter.tarr_pop()}, the expression is captured and interpreted
+When used inside \code{filter.poparray()}, the expression is captured and interpreted
 by the method (so it will not be evaluated in the usual way).
 }
 \description{
 \verb{\%between\%} is a small infix helper intended for use inside \code{filter()} calls.
 It returns a call of the form \code{x \%between\% c(lower, upper)} that downstream
-methods (e.g., \code{filter.tarr_pop()}) interpret as an inclusive range constraint.
+methods (e.g., \code{filter.poparray()}) interpret as an inclusive range constraint.
 
-For \code{tarr_pop}:
+For \code{poparray}:
 \itemize{
 \item \code{year \%between\% c(2010, 2020)} selects years 2010–2020 (inclusive).
 \item \code{age.char \%between\% c(25, 44)} selects age labels whose intervals overlap
@@ -34,7 +34,7 @@ ages 25–44 (inclusive; half-open target [25, 45)).
 5 \%between\% c(1, 10)
 c(1, 5, 11) \%between\% c(1, 10)
 
-# Typical intended usage (captured by filter.tarr_pop()):
+# Typical intended usage (captured by filter.poparray()):
 # dplyr::filter(pop, year \%between\% c(2015, 2020))
 # dplyr::filter(pop, age.char \%between\% c(25, 44))
 
