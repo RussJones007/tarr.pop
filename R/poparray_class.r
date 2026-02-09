@@ -14,7 +14,7 @@
 #' Construct a poparray
 #'
 #' Creates a poparray object: a lazy, role-aware population cube backed by a `DelayedArray` (often an `HDF5Array`) with
-#' explicit dimension labels and enforced invariants for time and area dimensions.
+#' explicit dimension labels.  Dimensions representing time and area are required (invariants). 
 #'
 #' A poparray must include exactly one time dimension and one area dimension (by default `"year"` and `"area.name"`),
 #' and all other dimensions are treated as optional stratification dimensions.
@@ -87,7 +87,7 @@ new_poparray <- function(x,
   if (!time_dim %in% nms) cli::cli_abort("Time dim {.val {time_dim}} not found in dimnames_list.")
   if (!area_dim %in% nms) cli::cli_abort("Area dim {.val {area_dim}} not found in dimnames_list.")
   if (identical(time_dim, area_dim)) cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
-  if(length(data_col) !=1) cli::cli_abort("{arg data_col} must be length 1")
+  if(length(data_col) !=1 || is.na(data_col) || ! is.character(data_col) )   cli::cli_abort("{.arg data_col} must be length 1 and not NA")
   
   obj <- list(handle = x, dimn = dimnames_list)
   
@@ -153,7 +153,7 @@ validate_poparray <- function(x) {
   if(anyNA(tlab)) cli::cli_abort("Time dim {.val {roles$time}} cannot have any NA values.")
   
   
-  if (all(("^[-+]?[0-9]+$", tlab))) {
+  if (all(grepl("^[-+]?[0-9]+$", tlab))) {
     tnum <- as.integer(tlab)
     if (is.unsorted(tnum, strictly = FALSE)) {
       cli::cli_abort("Time dim {.val {roles$time}} labels must be ordered (increasing).")
@@ -169,11 +169,13 @@ validate_poparray <- function(x) {
 
 
 
+
+
 #' @export
 is.poparray <- function(x) inherits(x, "poparray")
 
 
-#  Dimension names and labels -----------------------
+#  dim,  names, labels, and length  -----------------------
 
 #' Get dimensions of a poparray
 #'
@@ -233,37 +235,103 @@ names.poparray <- function(x) {
   names(dimnames(x))
 }
 
-# Accessors / helpers ----------------------------------------------------------
-
-#' Get or set the name of the tarr_pop data column
+#' Length of a poparray
 #'
-#' tarr_pop objects have a "data_col" attribute that is used to name the column that holds the numeric data when
-#' coercing to a data frame [as.data.frame()] or tibble [tibble::as_tibble()]. This convenience function can retrieve or
-#' set that attribute.
+#' Returns the total number of cells in the poparray, equivalent to
+#' `prod(dim(x))`. This is a metadata-only operation and does not realize the
+#' delayed backend.
 #'
-#' @param x a tarr_pop object
-#' @return character string
+#' @param x A poparray.
+#'
+#' @return A numeric scalar giving the total number of elements.
 #' @export
-data_col <- purrr::attr_getter("data_col")
-
-#' @rdname data_col
-#' @export
-`data_col<-` <- function(x, values){
-  assertthat::assert_that(is.string(values),
-                          msg = "data_col must be a character string of length one")
-  
-  attr(x, "data_col") <- values
-  x
+length.poparray <- function(x) {
+  d <- dim(x)
+  if (is.null(d)) cli::cli_abort("poparray backend has no dimensions.")
+  as.numeric(prod(d))
 }
 
 
-# Indexing operator ---------------------------
+# Print and summary methods -----------------------------------------------------------------------------------------
+
+#' @export
+print.poparray <- function(x, ...) {
+  src <- get_source(x)
+  roles <- attr(x, "dimroles", exact = TRUE)
+  
+  dms <- dimnames(x)
+  dms_names <- names(dms)
+  
+  dms_sizes <- lengths(dms)
+  names(dms_sizes) <- dms_names
+  
+  dimensions <- paste(
+    paste0(names(dms_sizes), " (", dms_sizes, ")"),
+    collapse = ", "
+  )
+  
+  recs <- length(x)
+  
+  cat("Class <poparray>\n")
+  cat("Series: ", src[["note"]], "\n", sep = "")
+  cat("Sourced: ", src[["source"]], "\n", sep = "")
+  cat("Updated: ", src[["updated"]], "\n", sep = "")
+  cat("Length: ", format(recs, big.mark = ","), "\n", sep = "")
+  cat("Roles: time = '", roles$time, "', area = '", roles$area, "'\n", sep = "")
+  cat("Dimensions: ", dimensions, "\n", sep = "")
+  cat("Data column as data frame: '", data_col(x), "'\n", sep = "")
+  
+  invisible(x)
+}
+
+#' Summary of a poparray (may scan backend)
+#'
+#' Computes basic summaries of the numeric values in a poparray. This operation
+#' preserves delayed execution where possible, but it may still require scanning
+#' the full backend and can be expensive for large cubes.
+#'
+#' @param object A poparray.
+#' @param ... Passed to DelayedArray reduction functions (if used).
+#'
+#' @return A named numeric vector (class `summaryDefault`) similar to
+#'   `summary.numeric()`.
+#' @export
+summary.poparray <- function(object, ...) {
+  x <- object
+  validate_poparray(x)
+  
+  h <- x$handle
+  
+  # Prefer DelayedArray reductions (avoid as.array())
+  # NOTE: these return small realized scalars.
+  n_na <- DelayedArray::sum(is.na(h), na.rm = TRUE, ...)
+  
+  s <- DelayedArray::sum(h, na.rm = TRUE, ...)
+  mn <- DelayedArray::min(h, na.rm = TRUE, ...)
+  mx <- DelayedArray::max(h, na.rm = TRUE, ...)
+  mu <- DelayedArray::mean(h, na.rm = TRUE, ...)
+  
+  ret <- c(
+    Min. = as.numeric(mn),
+    Mean = as.numeric(mu),
+    Max. = as.numeric(mx),
+    Sum  = as.numeric(s),
+    NA.s = as.numeric(n_na)
+  )
+  
+  class(ret) <- "summaryDefault"
+  ret
+}
+
+
+
+
+# Indexing operator ----------------------------------------------------
 # 
-#' @exportS3Method "[", poparray
 #' Subset a poparray
 #'
-#' Subsets the delayed backend and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
-#' a `poparray`. If `drop = TRUE` and subsetting would drop either the time or area dimension (per `dimroles`), the
+#' Subsets the poparray object and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
+#' a `poparray`. If `drop = TRUE` and subsetting would drop either the `dimroles` time or area dimensions , the
 #' method returns the underlying subsetted `DelayedArray` instead of a `poparray`.
 #' 
 #' @param x A poparray.
@@ -272,9 +340,14 @@ data_col <- purrr::attr_getter("data_col")
 #' @param drop Logical; passed to the backend `[` call.
 #'
 #' @return A `poparray` or (if `drop = TRUE` drops time/area) a `DelayedArray`.
-#' @exportS3Method "[" poparray
+#' @export
 `[.poparray` <- function(x, ..., drop = FALSE) {
   dim_names <- names(x)
+  
+  # check that the poparry object has the proper roles available.  This handles manually made poparrays that are missing
+  # required attributes
+  validate_poparray((x))
+  
   roles <- attr(x, "dimroles", exact = TRUE)
   
   nd <- length(dim(x$handle))
@@ -325,8 +398,18 @@ data_col <- purrr::attr_getter("data_col")
     if (is.numeric(sel) || is.logical(sel)) {
       dn[[nm]] <- this[sel]
     } else {
-      # character (or other atomic) selection by labels; preserve user order
-      dn[[nm]] <- sel[sel %in% this]
+      sel_chr  <- as.character(sel)
+      this_chr <- as.character(this)
+      # check that selected labesl actually exist, if not indicates an error. 
+      unknown  <- setdiff(sel_chr, this_chr)
+      if(length(unknown) > 0){
+        cli::cli_abort(c(
+          "Unknown label(s) in dim {.val {nm}}.",
+          "i" = "Unknown: {paste(utils::head(unknown, 10), collapse = ', ')}{if (length(unknown) > 10) ', ...' else ''}.",
+          "i" = "Valid labels example: {paste(utils::head(this_chr, 10), collapse = ', ')}{if (length(this_chr) > 10) ', ...' else ''}."
+        ))
+      }
+      dn[[nm]] <- sel_chr
     }
   }
   
@@ -347,3 +430,280 @@ data_col <- purrr::attr_getter("data_col")
     area_dim = roles$area
   )
 }
+
+
+
+# Coere to double, data.frame, or tibble functions ------------------------------------------------------------------------
+
+#' Coerce poparray values to double (lazy)
+#'
+#' Returns a poparray with the same dimensions/metadata but with the delayed
+#' backend coerced to double storage where possible.
+#'
+#' @param x A poparray.
+#' @param ... Unused.
+#'
+#' @return A poparray backed by a double-typed delayed array.
+#' @export
+as.double.poparray <- function(x, ...) {
+  validate_poparray(x)
+  
+  h2 <- as.double(x$handle)  # should remain delayed if DelayedArray supports it
+  
+  new_poparray(
+    x = h2,
+    dimnames_list = dimnames(x),
+    data_col = attr(x, "data_col", exact = TRUE),
+    source = attr(x, "source", exact = TRUE),
+    time_dim = attr(x, "dimroles", exact = TRUE)$time,
+    area_dim = attr(x, "dimroles", exact = TRUE)$area
+  )
+}
+
+
+#' Coerce poparray to data frame (EAGER)
+#'
+#' S3 method to coerce a poparray to a data frame. This method **realizes** the delayed backend (for the current
+#' poparray slice) and converts it to a long data.frame via `as.table()` semantics (one row per cell).
+#'
+#' For large cubes, subset first (e.g., restrict years/areas) to avoid materializing an unmanageably large array.
+#'
+#' @param x A poparray.
+#' @param stringsAsFactors Passed to `as.data.frame.table()`.
+#' @param responseName Name of the value column (defaults to `data_col(x)`).
+#' @param bytes_threshold is the number of bytes to warnn you shen a large data frame isbing retunrd. Default is 40 MB.
+#' @param ... Passed to `as.data.frame.table()` (rarely needed).
+#'
+#' @return A data.frame with one column per dimension plus `responseName`.
+#' @export
+as.data.frame.poparray <- function(x,
+                                   stringsAsFactors = TRUE,
+                                   responseName = data_col(x),
+                                   bytes_threshold = 40e6,
+                                   ...) {
+  validate_poparray(x)
+  # Warn when realizing the DelayedArray
+  warn_if_realization_large(x, bytes_threshold = bytes_threshold)
+  
+  # EAGER: materialize the current slice
+  arr <- as.array(x$handle)
+  dimnames(arr) <- dimnames(x)
+  
+  df <- as.data.frame(
+    as.table(arr),
+    stringsAsFactors = stringsAsFactors,
+    responseName = responseName,
+    ...
+  )
+  
+  polish_df(df, stringsAsFactors = stringsAsFactors, time_dim = attr(x, "dimroles", exact = TRUE)$time)
+}
+
+#' Coerce poparray to tibble (EAGER)
+#'
+#' Coercion is done via `as.data.frame.poparray()` for consistency, then
+#' converted to a tibble.
+#'
+#' @param x A poparray.
+#' @param stringsAsFactors Logical; passed to `as.data.frame.poparray()`.
+#' @param ... Passed to `as.data.frame.poparray()`.
+#' @param .name_repair Name repair strategy for tibble.
+#'
+#' @return A tibble.
+#' @export
+as_tibble.poparray <- function(x,
+                               stringsAsFactors = TRUE,
+                               ...,
+                               .name_repair = c("check_unique", "unique",
+                                                "universal", "minimal")) {
+  as.data.frame(x, stringsAsFactors = stringsAsFactors, ...) |>
+    tibble::as_tibble(.name_repair = .name_repair)
+}
+
+
+
+
+# Split a poparry -------------------------------------------------------------------------------------------------
+
+#' Split a poparray by a dimension
+#'
+#' Splits a poparray into a named list of slices, one per label of a chosen
+#' dimension. This method preserves laziness by subsetting the delayed backend.
+#'
+#' If `drop = FALSE` (default), each element is a `poparray`. If `drop = TRUE`
+#' and the split dimension is the time or area role (per `dimroles`), each slice
+#' will drop that role and the result elements will be a subsetted `DelayedArray`
+#' objects as the time and area roles are required for a poparray.
+#'
+#' @param x A poparray.
+#' @param f The dimension to split by: either a single dimension name (character
+#'   scalar) or a single integer position.
+#' @param drop Logical; whether to drop dimensions in the subset, passed to `[`.
+#' @param ... Unused.
+#'
+#' @return A named list of poparray (or DelayedArray) slices.
+#' @export
+split.poparray <- function(x, f, drop = FALSE, ...) {
+  validate_poparray(x)
+  
+  dim_names <- names(x)
+  nd <- length(dim(x$handle))
+  roles <- attr(x, "dimroles", exact = TRUE)
+  
+  # Resolve split dimension name + position
+  if (is.character(f) && length(f) == 1) {
+    # role keywords
+    if (identical(f, "time")) f <- roles$time
+    if (identical(f, "area")) f <- roles$area
+    
+    if (!f %in% dim_names) {
+      cli::cli_abort(c(
+        "{.arg f} is not a valid dimension/role for this poparray.",
+        "i" = "Use a dimension name, or one of: {.val time}, {.val area}.",
+        "i" = "Valid dimensions are: {paste(dim_names, collapse = ', ')}."
+      ))
+    }
+    split_dim <- f
+    split_pos <- match(f, dim_names)
+    
+  } else if (is.numeric(f) && length(f) == 1) {
+    split_pos <- as.integer(f)
+    if (is.na(split_pos) || split_pos < 1L || split_pos > nd) {
+      cli::cli_abort("{.arg f} (position) must be between 1 and {nd}.")
+    }
+    split_dim <- dim_names[[split_pos]]
+    
+  } else {
+    cli::cli_abort("{.arg f} must be a single dimension name, role ('time'/'area'), or a single position.")
+  }
+  
+  labs <- dimnames(x)[[split_dim]]
+  if (length(labs) == 0) return(stats::setNames(list(), character(0)))
+  
+  out <- lapply(labs, \(lab) {
+    # Named indexing, so dimension order doesn't matter
+    do.call(`[`, list(x, drop = drop, structure(list(lab), names = split_dim)))
+  })
+  
+  purr::set_names(out, labs)
+}
+
+
+# Accessors / helpers ----------------------------------------------------------
+
+#' Get or set the name of the tarr_pop data column
+#'
+#' tarr_pop objects have a "data_col" attribute that is used to name the column that holds the numeric data when
+#' coercing to a data frame [as.data.frame()] or tibble [tibble::as_tibble()]. This convenience function can retrieve or
+#' set that attribute.
+#'
+#' @param x a tarr_pop object
+#' @return character string
+#' @export
+data_col <- purrr::attr_getter("data_col")
+
+#' @rdname data_col
+#' @export
+`data_col<-` <- function(x, values) {
+  checkmate::assert_character(values, len = 1, any.missing = FALSE)
+  attr(x, "data_col") <- values
+  x
+}
+
+
+#' Warn for large realized array
+#'
+#' Used for the side effect of issuing a warning when a realized array is very large.
+#'
+#' @param x A poparray.
+#' @param bytes_threshold Threshold in bytes for warning (default ~400 MB).
+#' @returns x invisibly.
+#' @keywords internal
+warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
+  validate_poparray(x)
+  
+  t <- tolower(DelayedArray::type(x$handle))
+  
+  bytes_per_cell <- switch(
+    t,
+    "integer" = 4,
+    "double"  = 8,
+    "numeric" = 8,
+    "logical" = 1,
+    8 # default conservative fallback
+  )
+  
+  n_cells <- as.numeric(prod(dim(x)))
+  if (!is.finite(n_cells)) return(invisible(x))
+  
+  est_bytes <- n_cells * as.numeric(bytes_per_cell)
+  
+  if (est_bytes >= bytes_threshold) {
+    est_mb <- est_bytes / 1024^2
+    cli::cli_warn(c(
+      "Coercing this poparray to an in-memory array is {.emph EAGER} and may use substantial memory.",
+      "i" = "Cells: {format(n_cells, big.mark = ',')}.",
+      "i" = "Backend type: {.val {t}} (~{bytes_per_cell} bytes/cell).",
+      "i" = "Estimated realized array size: ~{format(round(est_mb, 1), nsmall = 1)} MB (array only).",
+      "i" = "Consider subsetting years/areas (or another dimension) before calling as.data.frame() / as.array()."
+    ))
+  }
+  
+  invisible(x)
+}
+
+#' Polish data frames after coercing
+#'
+#'  Used by as.data.frame() as a suport function
+#'
+#' @param df 
+#' @param stringsAsFactors 
+#' @param time_dim 
+#'
+#' @returns a data frame
+#' @keywords internal
+#' @examples
+#' #todo
+polish_df <- function(df,
+                      stringsAsFactors = TRUE,
+                      time_dim = "year") {
+  df <- df[stats::complete.cases(df), ] |>
+    dplyr::mutate(
+      dplyr::across(where(is_char_int),    char_to_int),
+      dplyr::across(where(is_char_double), char_to_double)
+    )
+  
+  if (stringsAsFactors && "age.char" %in% names(df)) {
+    ages <- df[["age.char"]] |>
+      (\(x) if (is.factor(x)) levels(x) else unique(x))()
+    
+    all_term <- ages[stringr::str_detect(
+      ages, stringr::regex("all", ignore_case = TRUE)
+    )]
+    
+    if (!is.null(ages)) {
+      ages_no_all <- if (rlang::is_empty(all_term)) ages else ages[ages != all_term]
+      age_ivs <- rage::as.age_group(ages_no_all) |>
+        sort()
+      
+      age_levels <- c(as.character(age_ivs), all_term)
+      df[["age.char"]] <- ordered(df[["age.char"]], levels = age_levels)
+    }
+  }
+  
+  # Order time dimension if it's a factor
+  if (time_dim %in% names(df) && is.factor(df[[time_dim]])) {
+    lev <- levels(df[[time_dim]])
+    # if levels are integer-like, sort numerically; else sort lexicographically
+    if (all(grepl("^[-+]?[0-9]+$", lev))) {
+      lev2 <- sort(as.integer(lev))
+      lev2 <- as.character(lev2)
+    } else {
+      lev2 <- sort(lev)
+    }
+    df[[time_dim]] <- factor(df[[time_dim]], levels = lev2, ordered = TRUE)
+  }
+  
+  df
+}
+
