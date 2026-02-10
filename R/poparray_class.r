@@ -593,20 +593,20 @@ split.poparray <- function(x, f, drop = FALSE, ...) {
 
 #' @export
 sum.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$data
+  a <- x$handle
   # sum() on DelayedArray triggers block processing / delayed reduction
   base::sum(a, ..., na.rm = na.rm)
 }
 
 #' @export
 mean.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$data
+  a <- x$handle
   base::mean(a, ..., na.rm = na.rm)
 }
 
 #' @export
 sd.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$data
+  a <- x$handle
   # For general DelayedArray, sd() may or may not be specialized;
   # safest is a two-pass block reduction if you need guaranteed behavior.
   # (See next section.)
@@ -618,7 +618,7 @@ Summary.poparray <- function(..., na.rm = FALSE) {
   args <- list(...)
   # Support min(x) / max(x) where first arg is poparray
   x <- args[[1L]]
-  a <- x$data
+  a <- x$handle
   
   fun <- .Generic
     do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
