@@ -1,8 +1,9 @@
 # ------------------------------------------------------------------------------------------------------------------->
 # Script: filter.R
 # Description:
-#   Implements the filter() method for class poparray 
-# 
+#   Implements the filter() method for class poparray.  There are allot of variables named tp, which before re factoring
+#   was shorthand for tarr_pop.  The important parts of the functions have been replaced wit poarray, tp remains as it 
+#   is harmless, though it no longer stands for tsrr_pop .# 
 # 
 # ------------------------------------------------------------------------------------------------------------------->
 # Author: Russ Jones

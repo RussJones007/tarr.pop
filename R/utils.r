@@ -262,9 +262,12 @@ assign_array_levels <- function(arr, dimname, char_vec){
 #' dim_labels(cen, dimname = "race", remove = stringr::regex(combination))
 #'
 dim_labels <- function(arr, dimname, remove = NULL){
-  assertthat::assert_that( any(dimname %in% names(dimnames(arr))), msg = str_glue("dimname '{dimname}' is not one of the dimensions for the array"))
-  #checkmate::
-  assertthat::assert_that(is.tarr_pop(arr))
+  checkmate::assert_class(x = arr, classes = "poparray")
+  checkmate::assert(
+    check_string(dimname),
+    check_choice(dimname, names(dimnames(arr)))
+  )
+
   ret <- dimnames(arr)[[dimname]]
   if(! is.null(remove)){
     if (inherits(x = remove, what = "stringr_regex")) {
@@ -393,6 +396,15 @@ get_source <- function(obj){
   if(is.null(ret)) ret <- c(note = "", source = "Not given", updated = "Unknown", population_type = "Unknown")
   ret
 }
+
+
+# Mathmatical and summary operatios -------------------------------------------------------------------------------
+sum.poparray(x, ..., na.rm = FALSE){
+  DelayedArray::
+  
+  
+}
+
 
 
 # is_missing argument -------------------------------------------------------------------

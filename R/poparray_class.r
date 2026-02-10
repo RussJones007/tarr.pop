@@ -254,7 +254,7 @@ length.poparray <- function(x) {
 
 # Print and summary methods -----------------------------------------------------------------------------------------
 
-#' @export
+#' @exportS3Method base::print
 print.poparray <- function(x, ...) {
   src <- get_source(x)
   roles <- attr(x, "dimroles", exact = TRUE)
@@ -587,6 +587,48 @@ split.poparray <- function(x, f, drop = FALSE, ...) {
   
   purr::set_names(out, labs)
 }
+
+
+# Operators -------------------------------------------------------------------------------------------------------
+
+#' @export
+sum.poparray <- function(x, ..., na.rm = FALSE) {
+  a <- x$data
+  # sum() on DelayedArray triggers block processing / delayed reduction
+  base::sum(a, ..., na.rm = na.rm)
+}
+
+#' @export
+mean.poparray <- function(x, ..., na.rm = FALSE) {
+  a <- x$data
+  base::mean(a, ..., na.rm = na.rm)
+}
+
+#' @export
+sd.poparray <- function(x, ..., na.rm = FALSE) {
+  a <- x$data
+  # For general DelayedArray, sd() may or may not be specialized;
+  # safest is a two-pass block reduction if you need guaranteed behavior.
+  # (See next section.)
+  stats::sd(as.vector(a), na.rm = na.rm)
+}
+
+#' @export
+Summary.poparray <- function(..., na.rm = FALSE) {
+  args <- list(...)
+  # Support min(x) / max(x) where first arg is poparray
+  x <- args[[1L]]
+  a <- x$data
+  
+  fun <- .Generic
+    do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
+  # if (fun %in% c("min", "max", "range")) {
+  #   do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
+  # } else {
+  #   stop(sprintf("Summary(%s) not implemented for poparray.", fun), call. = FALSE)
+  # }
+}
+
 
 
 # Accessors / helpers ----------------------------------------------------------
