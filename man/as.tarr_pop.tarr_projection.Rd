@@ -4,7 +4,7 @@
 \alias{as.tarr_pop.tarr_projection}
 \title{Coerce a tarr_projection to a tarr_pop}
 \usage{
-\method{as.tarr_pop}{tarr_projection}(x, which = c("projected", "lower", "upper"), ...)
+as.tarr_pop.tarr_projection(x, which = c("projected", "lower", "upper"), ...)
 }
 \arguments{
 \item{x}{a tarr_projection object}

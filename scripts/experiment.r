@@ -3,8 +3,6 @@ library(profvis)
 library(tictoc)
 
 
-
-
 # Minimal example data
 x <- array(
   1:12,
@@ -35,8 +33,12 @@ rm(pa, pa2, x)
 
 #zip <- open_tarr_pop(population$census.bureau$zcta)
 
-cen <- open_tarr_pop(population$census.bureau$census)
+#cen <- open_tarr_pop(population$census.bureau$census)
+cen <- open_poparray(population$census.bureau$census)
 cen
+
+dim(cen)
+
 years(cen)
 ages(cen) |> rage::as.age_group() |> sort()
 setdiff(areas(cen), c("Dallas", "Zavala", "Texas"))

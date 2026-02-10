@@ -398,15 +398,6 @@ get_source <- function(obj){
 }
 
 
-# Mathmatical and summary operatios -------------------------------------------------------------------------------
-sum.poparray(x, ..., na.rm = FALSE){
-  DelayedArray::
-  
-  
-}
-
-
-
 # is_missing argument -------------------------------------------------------------------
 # Checks if an expression is missing, such as missing arguments or when looking for missing
 # in ... type arguments
