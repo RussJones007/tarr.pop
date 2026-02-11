@@ -5,7 +5,7 @@
 #
 # This file defines:
 #   - project(): user-facing entry point
-#   - project_cube(): applies a 1D engine across a tarr_pop cube
+#   - project_cube(): applies a 1D engine across a poparray cube
 #   - run_projection_engine(): dispatcher
 #   - engine_*(): per-series forecasting engines (placeholders here)
 #
@@ -15,7 +15,7 @@
 #   - no silent full realization (only per-series vectors are realized)
 #   - interactive guard for large unfiltered cubes
 # ------------------------------------------------------------------------------
-# NOTE: normalize_level(), check_projection_scale(), new_tarr_projection()
+# NOTE: normalize_level(), check_projection_scale(), new_pop_projection()
 # are defined in projection_classes.R
 #
 # -------------------------------------------------------------------------------------->
@@ -76,13 +76,13 @@ extract_series <- function(tp, year_k, fixed_k_list) {
   as.numeric(y)
 }
 
-# Build a tarr_pop from an in-memory array, inheriting basic metadata
+# Build a poparray from an in-memory array, inheriting basic metadata
 # (we keep this small and explicit; you can later swap to HDF5-backed outputs).
-tarr_pop_from_array_like <- function(arr, template, dimnames_list) {
+poparray_from_array_like <- function(arr, template, dimnames_list) {
   src <- attr(template, "source", exact = TRUE)
   dc  <- attr(template, "data_col", exact = TRUE) %||% "population"
   
-  new_tarr_pop(
+  new_poparray(
     x = DelayedArray::DelayedArray(arr),
     dimnames_list = dimnames_list,
     data_col = dc,
@@ -98,7 +98,7 @@ tp_projection_hdf5_writer <- function(out_dim,
                                       out_dimnames,
                                       year_k,
                                       dir = tempdir(),
-                                      prefix = "tarr_projection",
+                                      prefix = "pop_projection",
                                       chunkdim = NULL,
                                       compression_level = 6) {
 
@@ -461,7 +461,7 @@ engine_cagr <- function(y, years, h, level, ...) {
 
 #' @keywords internal
 project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
-  if (!inherits(tp, "tarr_pop")) stop("`tp` must be a tarr_pop.", call. = FALSE)
+  if (!inherits(tp, "poparray")) stop("`tp` must be a poparray.", call. = FALSE)
   
   h <- as.integer(h)
   if (length(h) != 1L || is.na(h) || h < 1L) stop("`h` must be a positive integer.", call. = FALSE)
@@ -472,7 +472,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   
   dn <- dimnames(tp)
   if (is.null(names(dn))) {
-    stop("tarr_pop must have named dimensions (including 'year').", call. = FALSE)
+    stop("poparray must have named dimensions (including 'year').", call. = FALSE)
   }
   time_nm <- tp_time_dim_name(tp)
   year_k <- match(time_nm, names(dn))
@@ -540,10 +540,10 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
     }
   }
   
-  # Wrap arrays into tarr_pop using new_tarr_pop()
-  population_forecast_tp <- tarr_pop_from_array_like(pf_arr, template = tp, dimnames_list = out_dn)
-  lower_tp              <- tarr_pop_from_array_like(lo_arr, template = tp, dimnames_list = out_dn)
-  upper_tp              <- tarr_pop_from_array_like(up_arr, template = tp, dimnames_list = out_dn)
+  # Wrap arrays into poparray using new_poparray()
+  population_forecast_tp <- poparray_from_array_like(pf_arr, template = tp, dimnames_list = out_dn)
+  lower_tp              <- poparray_from_array_like(lo_arr, template = tp, dimnames_list = out_dn)
+  upper_tp              <- poparray_from_array_like(up_arr, template = tp, dimnames_list = out_dn)
   
   # Build projection provenance source string
   orig_source <- attr(tp, "source", exact = TRUE)
@@ -551,7 +551,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
     orig_source <- "unknown"
   }
   source <- paste0("Projection from ", orig_source[1])
-  new_tarr_projection(
+  new_pop_projection(
     projected = population_forecast_tp,
     lower = lower_tp,
     upper = upper_tp,
@@ -585,7 +585,7 @@ infer_projection_method <- function(n_base_years) {
 infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
   dn <- dimnames(tp)
   if (is.null(names(dn))) {
-    stop("tarr_pop must have named dimensions to infer the time axis.", call. = FALSE)
+    stop("poparray must have named dimensions to infer the time axis.", call. = FALSE)
   }
   
   time_nm <- if (is.null(time_dim)) tp_time_dim_name(tp) else time_dim
@@ -602,7 +602,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 
 #' Project a population cube forward in time
 #'
-#' Fits independent time-series models for each non-time cell of a `tarr_pop`
+#' Fits independent time-series models for each non-time cell of a `poparray`
 #' cube and forecasts population counts for `h` future years. Each unique
 #' combination of non-time dimensions (e.g., county × sex × age × race ×
 #' ethnicity) is modeled separately.
@@ -611,7 +611,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' For most use cases, `"auto"` is recommended and will select the appropriate
 #' engine based on the number of base years available in the input cube.
 #'
-#' The returned `tarr_projection` object contains three `tarr_pop` cubes:
+#' The returned `pop_projection` object contains three `poparray` cubes:
 #' `projected`, `lower`, and `upper`, along with projection metadata.
 #'
 #' ## Engine methods
@@ -632,17 +632,17 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' ## Projection metadata
 #'
 #' The following metadata are stored as attributes on the returned
-#' `tarr_projection` object:
+#' `pop_projection` object:
 #'
 #' * **method** — The projection engine used (`"ETS"`, `"CAGR"`, or `"ARIMA"`).
 #' * **level** — The confidence level used when computing the `upper` and
 #'   `lower` bounds.
 #' * **source** — A character string describing the projection origin, including
-#'   source information from the originating `tarr_pop`.
+#'   source information from the originating `poparray`.
 #' * **base_years** — The number of historical years used to fit the model.
 #' * **created** — Timestamp indicating when the projection was generated.
 #'
-#' @param tp A `tarr_pop` object (filtered or unfiltered) containing a time
+#' @param tp A `poparray` object (filtered or unfiltered) containing a time
 #'   dimension.
 #' @param h Integer forecast horizon (number of future years).
 #' @param level Confidence level for interval estimation (default `0.95`).
@@ -656,12 +656,12 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #'   
 #'   Fewer than 5 base years results in an error.
 #' @param time_dim Name of the time dimension used for inference. Defaults to
-#'   `"year"`, which is common in `tarr_pop` objects.
+#'   `"year"`, which is common in `poparray` objects.
 #' @param guard Logical; if `TRUE`, prompts in interactive sessions when the
 #'   implied number of independent models is large.
 #' @param ... Additional arguments passed to the selected engine implementation.
 #'
-#' @return A `tarr_projection` object.
+#' @return A `pop_projection` object.
 #' @examples
 #' # A tiny synthetic 3D cube: year × area.name × sex
 #' dn <- list(
@@ -671,7 +671,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' )
 #' arr <- array(seq_along(dn$year), dim = c(7, 1, 1), dimnames = dn)
 #'
-#' tp <- new_tarr_pop(
+#' tp <- new_poparray(
 #'   x = DelayedArray::DelayedArray(arr),
 #'   dimnames_list = dn,
 #'   data_col = "population",
@@ -681,14 +681,14 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' \dontrun{
 #'   pr <- project(tp, h = 3, method = "auto", level = 0.95, guard = FALSE)
 #'   pr
-#'   as.tarr_pop(pr, which = "projected")
+#'   as.poparray(pr, which = "projected")
 #' }
 #' 
 #' @seealso
-#' * [tarr_projection] for the returned object structure.
-#' * [as.tarr_pop.tarr_projection()] to extract one of the three cubes.
-#' * [as.data.frame.tarr_projection()] and [as_tibble.tarr_projection()] for tabular output.
-#' * [plot.tarr_projection()] for visualization (added in the next step).
+#' * [pop_projection] for the returned object structure.
+#' * [as.poparray.pop_projection()] to extract one of the three cubes.
+#' * [as.data.frame.pop_projection()] and [as_tibble.pop_projection()] for tabular output.
+#' * [plot.pop_projection()] for visualization (added in the next step).
 #' 
 #' @export
 project <- function(tp,

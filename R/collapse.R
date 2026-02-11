@@ -2,7 +2,7 @@
 # Script: collapse.R
 # Description:
 #   Implrments the collapse_dim() function.  THe collapse_dim() function is introcued as a generic, the a method is 
-#   given to implement for class tarr_pop  - collapse_dim_tarr.pop().  This function was inspired by the original 
+#   given to implement for class poparray  - collapse_dim_tarr.pop().  This function was inspired by the original 
 #   group_ages() function to collage ages into large groups.  
 #
 # -------------------------------------------------------------------------------------->
@@ -11,12 +11,12 @@
 # Revised:
 # -------------------------------------------------------------------------------------->
 
-#' Collapse a dimension of a tarr_pop cube
+#' Collapse a dimension of a poparray cube
 #'
 #' Groups labels along one dimension and sums population counts within groups.
 #' Designed to stay lazy with DelayedArray/HDF5Array backends.
 #'
-#' @param x A tarr_pop object
+#' @param x A poparray object
 #' @param dim Dimension name (character) or index (integer)
 #' @param groups Mapping from old labels -> new group labels.
 #'   See Details.
@@ -31,14 +31,14 @@
 #'
 #' Old labels not present in `groups` are dropped.
 #'
-#' @return A new tarr_pop with the chosen dimension collapsed by sum.
+#' @return A new poparray with the chosen dimension collapsed by sum.
 #' @export
 collapse_dim <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
   UseMethod("collapse_dim")
 }
 
 #' @export
-collapse_dim.tarr_pop <- function(x, groups, dim, keep_empty = FALSE, name = NULL) {
+collapse_dim.poparray <- function(x, groups, dim, keep_empty = FALSE, name = NULL) {
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -127,14 +127,14 @@ collapse_dim.tarr_pop <- function(x, groups, dim, keep_empty = FALSE, name = NUL
   type_in <- DelayedArray::type(a_perm)
   bytes_per <- switch(type_in, integer = 4, double = 8, logical = 4, raw = 1, 8)
   est_bytes <- prod(d_perm) * bytes_per   # working set we will realize (a_perm)
-  max_bytes <- getOption("tarr_pop.max_bytes", 2e9)  # default ~2GB
+  max_bytes <- getOption("poparray.max_bytes", 2e9)  # default ~2GB
   
   if (is.finite(est_bytes) && est_bytes > max_bytes) {
     stop(
       "collapse_dim(): would need to realize ~", format(est_bytes, scientific = TRUE),
       " bytes into memory for this collapse.\n",
       "Either: (1) filter/slice first to reduce size, or (2) implement disk-backed collapse.\n",
-      "You can raise the limit via options(tarr_pop.max_bytes=...)."
+      "You can raise the limit via options(poparray.max_bytes=...)."
     )
   }
   
@@ -164,8 +164,8 @@ collapse_dim.tarr_pop <- function(x, groups, dim, keep_empty = FALSE, name = NUL
     names(dn_new)[[k]] <- name
   }
   
-  # ---- 10) Wrap into a new tarr_pop ----
-  out <- new_tarr_pop(
+  # ---- 10) Wrap into a new poparray ----
+  out <- new_poparray(
     x = arr_new,
     dimnames_list = dn_new,
     data_col = data_col(x),

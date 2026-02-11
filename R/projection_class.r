@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_class.r
 # Description:
-#   Defines the tarr_projection class, constructor, validator, corcison, subsetting, and
+#   Defines the pop_projection class, constructor, validator, corcison, subsetting, and
 #   print methods.  The plot method is defined in projection_plot.r script as it is quite long. 
 #
 # -------------------------------------------------------------------------------------->
@@ -11,7 +11,7 @@
 # -------------------------------------------------------------------------------------->
 
 
-# tarr_projection class -------------------------------------------------------------------------------------------
+# pop_projection class -------------------------------------------------------------------------------------------
 
 #' Projection object
 #'
@@ -22,7 +22,7 @@
 #' in the original matrix . 
 #'
 #' @section Structure:
-#' A `tarr_projection` object is a list with three tarr_pop cubes:
+#' A `pop_projection` object is a list with three poparray cubes:
 #'
 #' * lower: is the lower limits of the calculated confidence interval.
 #' * projected: The projected population figures. 
@@ -32,15 +32,15 @@
 #' *   **level** is the confidence level used
 #' *   **methods_used** are the unique methods actually used across all cells
 #' *   **n_fallback** are the number of cells that required fallback as the forecasting method .
-#' *   **source** is the  "projected from" plus the original tarr_pop source
+#' *   **source** is the  "projected from" plus the original poparray source
 #' *   **base_years** are the base years used to project/forecast
 #' *   **created** is the date and time stamp at time the object was created. 
 #'
 #' @seealso
 #' * [project()] to create a projection.
-#' * [as.tarr_pop.tarr_projection()] to select one of the tarr_pop objects
+#' * [as.poparray.pop_projection()] to select one of the poparray objects
 #'
-#' @name tarr_projection
+#' @name pop_projection
 #' @docType class
 #' @keywords internal
 NULL
@@ -79,14 +79,14 @@ tp_dimnames_equal <- function(a, b) {
 tp_time_dim_name <- function(tp) {
   dn <- tp_dimnames(tp)
   if (!is.null(names(dn)) && "year" %in% names(dn)) return("year")
-  stop("tarr_projection requires a `year` dimension.", call. = FALSE)
+  stop("pop_projection requires a `year` dimension.", call. = FALSE)
 }
 
 # ---- scale guard -------------------------------------------------------------
 
 check_projection_scale <- function(tp,
-                                   max_models = getOption("tarr_pop.max_models", 1500L),
-                                   ask = getOption("tarr_pop.ask_before_large_projection", TRUE)) {
+                                   max_models = getOption("poparray.max_models", 1500L),
+                                   ask = getOption("poparray.ask_before_large_projection", TRUE)) {
   
   dn <- tp_dimnames(tp)
   time_nm <- tp_time_dim_name(tp)
@@ -125,18 +125,18 @@ check_projection_scale <- function(tp,
 # ---- constructor + validator -------------------------------------------------
 
 #' @keywords internal
-validate_tarr_projection <- function(x) {
+validate_pop_projection <- function(x) {
   # ---- basic structure ----
-  if (!inherits(x, "tarr_projection")) {
+  if (!inherits(x, "pop_projection")) {
     cli::cli_abort(
-      "{.arg x} must inherit from {.cls tarr_projection}.",
+      "{.arg x} must inherit from {.cls pop_projection}.",
       call = rlang::caller_env()
     )
   }
   
   if (!is.list(x)) {
     cli::cli_abort(
-      "{.cls tarr_projection} must be a list.",
+      "{.cls pop_projection} must be a list.",
       call = rlang::caller_env()
     )
   }
@@ -146,7 +146,7 @@ validate_tarr_projection <- function(x) {
   if (length(missing_req)) {
     cli::cli_abort(
       c(
-        "{.cls tarr_projection} is missing required components.",
+        "{.cls pop_projection} is missing required components.",
         "x" = "Missing: {.val {missing_req |> paste(collapse = ', ')}}."
       ),
       call = rlang::caller_env()
@@ -155,14 +155,14 @@ validate_tarr_projection <- function(x) {
   
   # ---- cube type checks ----
   bad_tp <- c(
-    projected = !is.tarr_pop(x$projected),
-    lower = !is.tarr_pop(x$lower),
-    upper = !is.tarr_pop(x$upper)
+    projected = !is.poparray(x$projected),
+    lower = !is.poparray(x$lower),
+    upper = !is.poparray(x$upper)
   )
   if (any(bad_tp)) {
     cli::cli_abort(
       c(
-        "All components of a {.cls tarr_projection} must be {.cls tarr_pop} objects.",
+        "All components of a {.cls pop_projection} must be {.cls poparray} objects.",
         "x" = "Invalid: {.val {names(bad_tp)[bad_tp] |> paste(collapse = ', ')}}."
       ),
       call = rlang::caller_env()
@@ -173,7 +173,7 @@ validate_tarr_projection <- function(x) {
   if (!identical(tp_dim(x$projected), tp_dim(x$lower)) ||
       !identical(tp_dim(x$projected), tp_dim(x$upper))) {
     cli::cli_abort(
-      "{.cls tarr_projection} cubes must have identical dimensions.",
+      "{.cls pop_projection} cubes must have identical dimensions.",
       call = rlang::caller_env()
     )
   }
@@ -181,7 +181,7 @@ validate_tarr_projection <- function(x) {
   if (!tp_dimnames_equal(x$projected, x$lower) ||
       !tp_dimnames_equal(x$projected, x$upper)) {
     cli::cli_abort(
-      "{.cls tarr_projection} cubes must have identical dimnames.",
+      "{.cls pop_projection} cubes must have identical dimnames.",
       call = rlang::caller_env()
     )
   }
@@ -195,7 +195,7 @@ validate_tarr_projection <- function(x) {
   level <- attr(x, "level", exact = TRUE)
   if (is.null(level)) {
     cli::cli_abort(
-      "{.cls tarr_projection} is missing attribute {.field level}.",
+      "{.cls pop_projection} is missing attribute {.field level}.",
       call = rlang::caller_env()
     )
   }
@@ -209,7 +209,7 @@ validate_tarr_projection <- function(x) {
   method <- attr(x, "method", exact = TRUE)
   if (is.null(method)) {
     cli::cli_abort(
-      "{.cls tarr_projection} is missing attribute {.field method}.",
+      "{.cls pop_projection} is missing attribute {.field method}.",
       call = rlang::caller_env()
     )
   }
@@ -239,7 +239,7 @@ validate_tarr_projection <- function(x) {
   base_years <- attr(x, "base_years", exact = TRUE)
   if (is.null(base_years)) {
     cli::cli_abort(
-      "{.cls tarr_projection} is missing attribute {.field base_years}.",
+      "{.cls pop_projection} is missing attribute {.field base_years}.",
       call = rlang::caller_env()
     )
   }
@@ -275,7 +275,7 @@ validate_tarr_projection <- function(x) {
 }
 
 
-new_tarr_projection <- function(projected,
+new_pop_projection <- function(projected,
                                 lower,
                                 upper,
                                 level = 0.95,
@@ -286,15 +286,15 @@ new_tarr_projection <- function(projected,
   
   # ---- Type / class-ish checks (domain-specific) ----
   bad_pop <- c(
-    projected = !is.tarr_pop(projected),
-    lower = !is.tarr_pop(lower),
-    upper = !is.tarr_pop(upper)
+    projected = !is.poparray(projected),
+    lower = !is.poparray(lower),
+    upper = !is.poparray(upper)
   )
   
   if (any(bad_pop)) {
     cli::cli_abort(
       c(
-        "{.arg projected}, {.arg lower}, and {.arg upper} must all be {.cls tarr_pop} objects.",
+        "{.arg projected}, {.arg lower}, and {.arg upper} must all be {.cls poparray} objects.",
         "x" = "Invalid inputs: {names(bad_pop)[bad_pop] |> paste(collapse = ', ')}."
       ),
       call = rlang::caller_env()
@@ -371,7 +371,7 @@ new_tarr_projection <- function(projected,
     lower = lower,
     upper = upper
   )
-  class(x) <- "tarr_projection"
+  class(x) <- "pop_projection"
   
   attr(x, "level") <- level
   attr(x, "method") <- method
@@ -379,17 +379,17 @@ new_tarr_projection <- function(projected,
   attr(x, "base_years") <- base_chr
   attr(x, "created") <- Sys.time()
   
-  validate_tarr_projection(x)
+  validate_pop_projection(x)
   x
 }
 
 # ---- print ------------------------------------------------------------------
 
 #' @export
-print.tarr_projection <- function(x, ...) {
-  validate_tarr_projection(x)
+print.pop_projection <- function(x, ...) {
+  validate_pop_projection(x)
   
-  cat("<tarr_projection>\n")
+  cat("<pop_projection>\n")
   cat("  method: ", attr(x, "method"), "\n", sep = "")
   cat("  level:  ", attr(x, "level"), "\n", sep = "")
   cat("  source: ", attr(x, "source"), "\n", sep = "")
@@ -416,14 +416,14 @@ print.tarr_projection <- function(x, ...) {
 # ---- subsetting --------------------------------------------------------------
 
 #' @export
-`[.tarr_projection` <- function(x, ..., drop = FALSE) {
-  validate_tarr_projection(x)
+`[.pop_projection` <- function(x, ..., drop = FALSE) {
+  validate_pop_projection(x)
   
   pf <- x$projected[..., drop = drop]
   lo <- x$lower[..., drop = drop]
   up <- x$upper[..., drop = drop]
   
-  if (!is.tarr_pop(pf)) {
+  if (!is.poparray(pf)) {
     return(list(projected = pf, lower = lo, upper = up))
   }
   
@@ -432,7 +432,7 @@ print.tarr_projection <- function(x, ...) {
     lower = lo,
     upper = up
   )
-  class(y) <- "tarr_projection"
+  class(y) <- "pop_projection"
   
   for (nm in c("level", "method", "source", "base_years", "created")) {
     attr(y, nm) <- attr(x, nm, exact = TRUE)
@@ -443,23 +443,23 @@ print.tarr_projection <- function(x, ...) {
 
 # ---- coercion ---------------------------------------------------------------
 
-#' Coerce a tarr_projection to a tarr_pop
+#' Coerce a pop_projection to a poparray
 #' 
-#' at tarr_projection consists of three tarr_pop cubes, this coercion returns a single tarr_pop object
+#' at pop_projection consists of three poparray cubes, this coercion returns a single poparray object
 #' based on the which argument. 
 #'
-#' @param x a tarr_projection object
-#' @param which whn x is tarr_projection object, you choose which cube to make intoa single tarr_pop: 
+#' @param x a pop_projection object
+#' @param which whn x is pop_projection object, you choose which cube to make into a single poparray: 
 #'     *  projected
 #'     *  lower
 #'     *  upper
 #' @param ...
 #'
 #' @export
-as.tarr_pop.tarr_projection <- function(x,
+as.poparray.pop_projection <- function(x,
                                         which = c("projected", "lower", "upper"),
                                         ...) {
-  validate_tarr_projection(x)
+  validate_pop_projection(x)
   which <- match.arg(which)
   
   tp <- x[[which]]
@@ -511,12 +511,12 @@ projection_to_df <- function(x,
 
 
 
-#' Corerce tarr_projection to a data frame 
+#' Corerce pop_projection to a data frame 
 #' 
-#' Transforms the  tarr_pop in x to a data frame or tibble.  Causes a realization of all data in the lower, upper,
+#' Transforms the  poparray in x to a data frame or tibble.  Causes a realization of all data in the lower, upper,
 #'and  population_project cubes. 
 #'
-#' @param x a tarr_projection object
+#' @param x a pop_projection object
 #' @param ... 
 #' @param include_level the default TRUE means add a column with the confidence level used for the projection
 #' @param include_model the default TRUE causes a column has the model used fo the projection
@@ -526,13 +526,13 @@ projection_to_df <- function(x,
 #'
 #' @examples
 #' # TO DO
-as.data.frame.tarr_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
+as.data.frame.pop_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
   projection_to_df(x, include_level = include_level, ...)
 }
 
-#' @rdname as.data.frame.tarr_projection
+#' @rdname as.data.frame.pop_projection
 #' @export
-as_tibble.tarr_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
+as_tibble.pop_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
   if (!requireNamespace("tibble", quietly = TRUE)) {
     stop("Package 'tibble' is required for as_tibble().", call. = FALSE)
   }

@@ -432,6 +432,89 @@ summary.poparray <- function(object, ...) {
 }
 
 
+# Coerce to poparray' ---------------------------------------------------------------------------------------------
+
+#' Coerce to a poparray Object
+#'
+#' Used to coerce a data frame or an array/table to a poparray object.
+#'
+#' @param x object to coerce like a data frame or a table/array.
+#' @param data_col single character string with the population column name.
+#' @param ... additional arguments to pass (see methods).
+#'
+#' @return a poparray classed object
+#' @export
+as.poparray <- function(x, data_col = "population", ...) {
+  UseMethod("as.poparray")
+}
+
+#' @export
+as.poparray.default <- function(x, data_col = "population", ...) {
+  stop("No method exists for class ", paste(class(x), collapse = ", "))
+}
+
+# @export
+# as.poparray.data.frame <- function(x,
+#                                    data_col = "population",
+#                                    backend = c("hdf5", "delayed"),
+#                                    filepath = NULL,
+#                                    dataset = "/pop",
+#                                    chunkdim = NULL,
+#                                    level = 6L,
+#                                    ...) {
+#   assert_that(is.scalar(data_col),
+#               is.numeric(x[[data_col]]),
+#               x %has_name% c("year", "area.name", "sex", "age.char",
+#                              "race", "ethnicity"))
+#   
+#   backend <- match.arg(backend)
+#   
+#   # Strip unneeded columns, convert to array
+#   arr <- x |>
+#     dplyr::select(-dplyr::any_of(c("fips", "age.iv"))) |>
+#     droplevels() |>
+#     df_2_array(data_col = data_col)
+#   
+#   dn <- dimnames(arr)
+#   
+#   if (backend == "hdf5") {
+#     if (is.null(filepath)) {
+#       stop("For backend = 'hdf5', 'filepath' must be provided.")
+#     }
+#     handle <- HDF5Array::writeHDF5Array(
+#       arr,
+#       filepath = filepath,
+#       name     = dataset,
+#       chunkdim = chunkdim,
+#       level    = level
+#     )
+#   } else {
+#     handle <- DelayedArray::DelayedArray(arr)
+#   }
+#   
+#   new_poparray(x = handle,
+#                dimnames_list = dn,
+#                data_col = data_col,
+#                ...)
+# }
+
+#' @export
+as.poparray.array <- function(x, data_col = "population", ...) {
+  assert_that(is_scalar_character(data_col))
+  assert_that(is.numeric(x))
+  assert_that(
+    dimnames(x) %has_names%
+      c("year", "area.name", "sex", "age.char", "race", "ethnicity")
+  )
+  
+  handle <- DelayedArray::DelayedArray(x)
+  new_poparray(x = handle,
+               dimnames_list = dimnames(x),
+               data_col = data_col,
+               ...)
+}
+
+
 
 # Coere to double, data.frame, or tibble functions ------------------------------------------------------------------------
 
@@ -495,8 +578,10 @@ as.data.frame.poparray <- function(x,
     responseName = responseName,
     ...
   )
-  
-  polish_df(df, stringsAsFactors = stringsAsFactors, time_dim = attr(x, "dimroles", exact = TRUE)$time)
+
+  polish_df(df = df, 
+            stringsAsFactors = stringsAsFactors, 
+            time_dim = attr(x, "dimroles", exact = TRUE)$time)
 }
 
 #' Coerce poparray to tibble (EAGER)
@@ -709,6 +794,7 @@ warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
 polish_df <- function(df,
                       stringsAsFactors = TRUE,
                       time_dim = "year") {
+  
   df <- df[stats::complete.cases(df), ] |>
     dplyr::mutate(
       dplyr::across(where(is_char_int),    char_to_int),

@@ -1,11 +1,11 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_plot.r
 # Description:
-#   the plot() funcion for class tarr_projection 
+#   the plot() funcion for class pop_projection 
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones with assistance from 
-# AI:  chatGPT 5.2 tarr_pop project
+# AI:  chatGPT 5.2 poparray project
 # Created: January 19, 2026
 # Revised:
 # -------------------------------------------------------------------------------------->
@@ -14,7 +14,7 @@
 
 #' Plot a population projection
 #'
-#' Visualizes a `tarr_projection` object either as a time series of total
+#' Visualizes a `pop_projection` object either as a time series of total
 #' population with uncertainty bounds or as a grid of population pyramids.
 #'
 #' ## Plot types
@@ -63,7 +63,7 @@
 #' Other graphical parameters (e.g., `lwd`, `col`, `cex`) are passed to the
 #' base plotting functions.
 #'
-#' @param x A `tarr_projection` object.
+#' @param x A `pop_projection` object.
 #' @param type Plot type: `"ts"` for a time-series plot of total population
 #'   or `"pyramid"` for a grid of population pyramids.
 #' @param areas Optional character vector of area names to plot when
@@ -74,13 +74,13 @@
 #'   Defaults to 5 and may not exceed 5. The most recent years are used.
 #' @param ... Additional graphical parameters passed to the plotting functions.
 #'
-#' @return Invisibly returns the input `tarr_projection` object.
+#' @return Invisibly returns the input `pop_projection` object.
 #'
 #' @seealso
 #' * [project()] for creating population projections
-#' * [tarr_projection] for the projection object structure
-#' * [plot.tarr_pop()] for population pyramid plotting
-#' * [as.tarr_pop.tarr_projection()] to extract individual projection cubes
+#' * [pop_projection] for the projection object structure
+#' * [plot.poparray()] for population pyramid plotting
+#' * [as.poparray.pop_projection()] to extract individual projection cubes
 #'
 #' @examples
 #' # Create a small synthetic projection example
@@ -97,7 +97,7 @@
 #'   dimnames = dn
 #' )
 #'
-#' tp <- new_tarr_pop(
+#' tp <- new_poparray(
 #'   x = DelayedArray::DelayedArray(arr),
 #'   dimnames_list = dn,
 #'   data_col = "population",
@@ -115,13 +115,13 @@
 #' }
 #' 
 #' @export
-plot.tarr_projection <- function(x,
+plot.pop_projection <- function(x,
                                  type = c("ts", "pyramid"),
                                  areas = NULL,
                                  max_areas = 3,
                                  max_years = 5,
                                  ...) {
-  validate_tarr_projection(x)
+  validate_pop_projection(x)
   
   type <- match.arg(type)
   
@@ -148,7 +148,7 @@ plot.tarr_projection <- function(x,
   if (identical(type, "ts")) {
     # "ts" ignores area selection by design; it plots totals over time with ribbon
     return(
-      plot_ts_tarr_projection(
+      plot_ts_pop_projection(
         x = x,
         time_nm = time_nm,
         ...
@@ -161,7 +161,7 @@ plot.tarr_projection <- function(x,
   dn <- tp_dimnames(x$projected)
   if (is.null(names(dn))) {
     cli::cli_abort(
-      "{.cls tarr_pop} cubes must have named dimensions to plot pyramids.",
+      "{.cls poparray} cubes must have named dimensions to plot pyramids.",
       call = rlang::caller_env()
     )
   }
@@ -228,7 +228,7 @@ plot.tarr_projection <- function(x,
     )
   }
   
-  plot_pyramid_tarr_projection(
+  plot_pyramid_pop_projection(
     x = x,
     time_nm = time_nm,
     years = years_sel,
@@ -246,7 +246,7 @@ tp_totals_by_time <- function(tp, time_nm) {
   dn <- dimnames(tp)
   if (is.null(names(dn)) || !time_nm %in% names(dn)) {
     cli::cli_abort(
-      "Time dimension {.val {time_nm}} not found in tarr_pop dimnames.",
+      "Time dimension {.val {time_nm}} not found in poparray dimnames.",
       call = rlang::caller_env()
     )
   }
@@ -271,7 +271,7 @@ subset_tp_named <- function(tp, selections, drop = FALSE) {
   dnm <- names(dn)
   if (is.null(dnm)) {
     cli::cli_abort(
-      "tarr_pop must have named dimensions for named subsetting.",
+      "poparray must have named dimensions for named subsetting.",
       call = rlang::caller_env()
     )
   }
@@ -299,7 +299,7 @@ subset_tp_named <- function(tp, selections, drop = FALSE) {
 # ---- plot implementations ----------------------------------------------------
 
 #' @keywords internal
-plot_ts_tarr_projection <- function(x, time_nm, ...) {
+plot_ts_pop_projection <- function(x, time_nm, ...) {
   
   dots <- list(...)
   
@@ -390,8 +390,8 @@ plot_ts_tarr_projection <- function(x, time_nm, ...) {
 }
 
 #' @keywords internal
-plot_pyramid_tarr_projection <- function(x, time_nm, years, areas, ...) {
-  # Delegate to existing plot.tarr_pop pyramid logic by subsetting forecast cube
+plot_pyramid_pop_projection <- function(x, time_nm, years, areas, ...) {
+  # Delegate to existing plot.poparray pyramid logic by subsetting forecast cube
   # to the selected years × areas (and keeping all other dims).
   tp <- x$projected
   
@@ -402,7 +402,7 @@ plot_pyramid_tarr_projection <- function(x, time_nm, years, areas, ...) {
   
   tp_sub <- subset_tp_named(tp, selections = sel, drop = FALSE)
   
-  # Delegate (your plot.tarr_pop already builds a year×area grid)
+  # Delegate (your plot.poparray already builds a year×area grid)
   plot(tp_sub, ...)
   
   invisible(x)

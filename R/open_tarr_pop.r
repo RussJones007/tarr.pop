@@ -213,34 +213,6 @@ open_tarr_pop <- function(...) {
   open_poparray(...)
 }
 
-# #' #TBD
-# open_tarr_pop <- function(series_id,
-#                           dataset = "/pop",
-#                           data_col = "population") {
-#   reg <- tarr_series_registry()
-#   row <- reg[reg$series_id == series_id, , drop = FALSE]
-#   if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
-# 
-#   path <- system.file("extdata", row$filename, package = utils::packageName())
-#   if (!nzchar(path)) {
-#     stop("HDF5 file not found for series '", series_id, "'. Expected in inst/extdata/: ", row$filename)
-#   }
-#
-#  h5 <- HDF5Array::HDF5Array(filepath = path, name = dataset)
-#
-#  dimn <- labels_for_series(series_id)
-#   validate_labels_against_cube(h5, dimn, series_id)
-# 
-#   # Attach dimnames onto the handle (cheap; does not read the whole dataset)
-#   dimnames(h5) <- dimn
-# 
-#   new_tarr_pop(
-#     x             = h5,
-#     dimnames_list = dimn,
-#     data_col      = data_col,
-#     source        = source_for(series_id)
-#   )
-# }
 
 # 5. Opener: HDF5 -> HDF5Array -> poparray ------------------------------
 
