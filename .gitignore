@@ -6,4 +6,5 @@
 .quarto
 .zip
 inst/doc
+scripts
 .Rd
