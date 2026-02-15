@@ -265,115 +265,133 @@ validate_pop_projection <- function(x) {
 }
 
 
-new_pop_projection <- function(projected,
-                                lower,
-                                upper,
-                                level = 0.95,
-                                method,
-                                source,
-                                base_years) {
-  level <- normalize_level(level)
+#' @keywords internal
+new_pop_projection <- function(
+    data,
+    level,
+    method,
+    source,
+    base_years
+) {
   
-  # ---- Type / class-ish checks (domain-specific) ----
-  bad_pop <- c(
-    projected = !is.poparray(projected),
-    lower = !is.poparray(lower),
-    upper = !is.poparray(upper)
-  )
+  checkmate::assert_class(data, "DelayedArray")
   
-  if (any(bad_pop)) {
-    cli::cli_abort(
+  dn <- dimnames(data)
+  
+  if (is.null(dn) || !"stat" %in% names(dn)) {
+    cli::abort("Projection array must contain a 'stat' dimension.")
+  }
+  
+  stat_levels <- dn[["stat"]]
+  
+  required_levels <- c("projection", "std_error")
+  
+  if (!identical(stat_levels, required_levels)) {
+    cli::abort(
       c(
-        "{.arg projected}, {.arg lower}, and {.arg upper} must all be {.cls poparray} objects.",
-        "x" = "Invalid inputs: {names(bad_pop)[bad_pop] |> paste(collapse = ', ')}."
-      ),
-      call = rlang::caller_env()
+        "The 'stat' dimension must be exactly:",
+        "x projection",
+        "x std_error"
+      )
     )
   }
   
-  # ---- Dimension checks ----
-  if (!identical(tp_dim(projected), tp_dim(lower)) ||
-      !identical(tp_dim(projected), tp_dim(upper))) {
-    cli::cli_abort(
-      "{.arg projected}, {.arg lower}, and {.arg upper} must have identical dimensions.",
-      call = rlang::caller_env()
-    )
-  }
-  
-  if (!tp_dimnames_equal(projected, lower) ||
-      !tp_dimnames_equal(projected, upper)) {
-    cli::cli_abort(
-      "{.arg projected}, {.arg lower}, and {.arg upper} must have identical dimnames.",
-      call = rlang::caller_env()
-    )
-  }
-  
-  # ---- method ----
-  method <- toupper(as.character(method))
-  method_choices <- c("ARIMA", "ETS", "CAGR")
-  
-  if (!method %in% method_choices) {
-    cli::cli_abort(
-      c(
-        "{.arg method} must be one of: {method_choices |> paste(collapse = ', ')}.",
-        "i" = "You supplied: {.val {method}}."
-      ),
-      call = rlang::caller_env()
-    )
-  }
-  
-  # ---- base_years ----
-  # checkmate handles the "missing or empty" case neatly if we test missing first.
-  if (missing(base_years)) {
-    cli::cli_abort("{.arg base_years} must be supplied.", call = rlang::caller_env())
-  }
-  
-  msg <- checkmate::check_atomic_vector(base_years, min.len = 1, any.missing = FALSE)
-  if (!identical(msg, TRUE)) {
-    cli::cli_abort(
-      c("{.arg base_years} must be a non-empty vector.", "x" = msg),
-      call = rlang::caller_env()
-    )
-  }
-  
-  time_nm <- tp_time_dim_name(projected)
-  years_avail <- tp_dimnames(projected)[[time_nm]]
-  
-  base_chr <- as.character(base_years)
-  years_chr <- as.character(years_avail)
-  
-  
-  
-  # if (!all(base_chr %in% years_chr)) {
-  #   missing_years <- setdiff(unique(base_chr), unique(years_chr))
-  #   cli::cli_abort(
-  #     c(
-  #       "{.arg base_years} must be contained in the cube's year labels.",
-  #       "x" = "These years are not present: {missing_years |> paste(collapse = ', ')}."
-  #     ),
-  #     call = rlang::caller_env()
-  #   )
-  # }
-  # 
-  # ---- Construct object ----
-  x <- list(
-    projected = projected,
-    lower = lower,
-    upper = upper
+  structure(
+    list(data = data),
+    level      = level,
+    method     = method,
+    source     = source,
+    base_years = base_years,
+    class = "poparray_projection"
   )
-  class(x) <- "pop_projection"
-  
-  attr(x, "level") <- level
-  attr(x, "method") <- method
-  attr(x, "source") <- as.character(source)
-  attr(x, "base_years") <- base_chr
-  attr(x, "created") <- Sys.time()
-  
-  validate_pop_projection(x)
-  x
 }
 
-# ---- print ------------------------------------------------------------------
+#' Construct a poparray_projection object
+#'
+#' @param projection A DelayedArray containing projected population values
+#' @param std_error A DelayedArray containing standard errors
+#' @param level Confidence level associated with standard errors (e.g., 0.95)
+#' @param method Projection method name
+#' @param source Data source description
+#' @param base_years Numeric vector of base years used in projection
+#'
+#' @return A poparray_projection object
+#' @export
+poparray_projection <- function(
+    projection,
+    std_error,
+    level,
+    method,
+    source,
+    base_years
+) {
+  
+  checkmate::assert_class(projection, "DelayedArray")
+  checkmate::assert_class(std_error, "DelayedArray")
+  
+  if (!identical(dim(projection), dim(std_error))) {
+    cli::abort("projection and std_error must have identical dimensions.")
+  }
+  
+  if (!identical(dimnames(projection), dimnames(std_error))) {
+    cli::abort("projection and std_error must have identical dimnames.")
+  }
+  
+  # Ensure DelayedArray::abind exists
+  if (!exists("abind", where = asNamespace("DelayedArray"))) {
+    cli::abort("DelayedArray::abind() is not available in this version.")
+  }
+  
+  combined <- DelayedArray::abind(
+    projection,
+    std_error,
+    along = length(dim(projection)) + 1
+  )
+  
+  dimnames(combined) <- c(
+    dimnames(projection),
+    list(stat = c("projection", "std_error"))
+  )
+  
+  new_pop_projection(
+    data       = combined,
+    level      = level,
+    method     = method,
+    source     = source,
+    base_years = base_years
+  )
+}
+
+
+
+# poparray_projection data access helpers -------------------------------------------------------------------------
+
+#' @export
+projection <- function(x) {
+  x$data[,,,,,, "projection", drop = FALSE]
+}
+
+#' @export
+std_error <- function(x) {
+  x$data[,,,,,, "std_error", drop = FALSE]
+}
+
+#' @export
+confint.poparray_projection <- function(x, level = 0.95, ...) {
+  
+  z <- stats::qnorm(1 - (1 - level)/2)
+  
+  proj <- projection(x)
+  se   <- std_error(x)
+  
+  lower <- proj - z * se
+  upper <- proj + z * se
+  
+  list(lower = lower, upper = upper)
+}
+
+
+# print ------------------------------------------------------------------
 
 #' @export
 print.pop_projection <- function(x, ...) {
