@@ -69,21 +69,23 @@ cen_est <- open_tarr_pop(population$census.bureau$estimates)
 cen_est  
 cen_est <- cen_est  |> 
   filter(year  %in% 2010:2024,
-         area.name  %in% c("Bell"), 
+         area.name  %in% c("Tarrant"), 
          race  %in% races(cen_est, remove = regex("combination$"))
          )
-
+cen_est$handle
 years(cen_est)
 areas(cen_est)
 as.data.frame(cen_est)
 as_tibble(cen_est)
+
 cen_est |> class()
 lobstr::obj_size(cen_est)
-
+attributes(cen_est)
 base_years <- cen_est |> 
   filter(year %in% 2011:2021)
 base_years
 years(base_years)
+
 
 test_years <- cen_est |> 
   filter(year  %in%  2022:2024)
@@ -94,36 +96,43 @@ test_sums
 
 #tic.clearlog()
 #debug(project_cube)
-system.time(
-res_arima <-  project(tp = base_years, h = 3, level = 0.95, method = "ARIMA")
-)
-res_ets <-  project(tp = base_years, h = 3, level = 0.95, method = "ETS")
-res_cagr <-  project(tp = base_years, h = 3, level = 0.95, method = "CAGR")
-plot(res_arima)
-
-# log <- tic.log(format = FALSE) 
-# totals <- tapply(
-#   X = vapply(log, \(x) x$toc - x$tic, numeric(1)),
-#   INDEX = vapply(log, \(x) x$msg, character(1)),
-#   FUN = sum
+# system.time(
+# res_arima <-  project(tp = base_years, h = 3, level = 0.95, method = "ARIMA")
 # )
-# 
-#totals
+# res_ets <-  project(tp = base_years, h = 3, level = 0.95, method = "ETS")
+# res_cagr <-  project(tp = base_years, h = 3, level = 0.95, method = "CAGR")
+# plot(res_arima)
+# plot(res_ets)
 
-proj <- res_arima$projected |>
+# split is not working
+# dimnames(test_years) |> names()
+# list_years <- split(test_years, f = "year")
+# undebug(split.poparray)
+# as.poparray(res_arima) |> 
+#   as.data.frame() |> 
+#   group_by(year) |> 
+#   summarise(pop = sum(population))
+
+
+res_list <- map(list(ARIMA = "ARIMA", CAGR = "CAGR", ETS = "ETS"), 
+                ~ project(tp = base_years, h = 3, level = 0.95, method = .x, guard = TRUE))
+
+res_list[["ARIMA"]]
+
+proj <- res_list[["ARIMA"]]$projected |>
 #  collapse_dim(dim = "sex", groups = list(all = sexes(res_arima$projected)))|> 
   collapse_dim(dim = "age.char", groups = list(all = ages(res_arima$projected))) |> 
   collapse_dim(dim = "race", groups = list(all = races(res_arima$projected))) |> 
   collapse_dim(dim = "ethnicity", groups = list(all = ethnicities(res_arima$projected))) 
 
-as.data.frame(proj) |> View()
+as_tibble(proj) |> View()
 
-class(res_arima$projected)
-res_list <- map(list(ARIMA = "ARIMA", CAGR = "CAGR", ETS = "ETS"), 
-                ~ project(tp = base_years, h = 3, level = 0.95, method = .x, guard = TRUE))
-                
-                
-
+# res_list <- list(
+# ARIMA = res_arima,
+# CAGR  = res_cagr,
+# ETS   = res_ets
+# )
+        
 # local function to sum a cube by each year it contains
 yearly_sums <- function(tp){
   yrs <- years(tp)
@@ -132,17 +141,29 @@ yearly_sums <- function(tp){
   ret
 }
 
-use_git_config(user.name = "Russ Jones", user.email = "RussJones007@gmail.com")
-git_vaccinate()
-
+#use_git_config(user.name = "Russ Jones", user.email = "RussJones007@gmail.com")
+# git_vaccinate()
 
 est_list  <- map(res_list, ~ .x[["projected"]] |> yearly_sums())
+est_list |> bind_rows(.id = "model")
 (diff_list <- map(est_list, ~ .x - test_sums))
 pct_list  <- map(est_list, ~ ((.x - test_sums)/test_sums * 100) |> format(digits = 2) |> paste0("%"))
 pct_list
 
-est_df <- map(res_list, as.data.frame) |> 
-  bind_rows()
+
+tarr_projection_age <- cen_est |> 
+  collapse_dim(dim = "race", groups = list(all = races(res_arima$projected))) |> 
+  collapse_dim(dim = "ethnicity", groups = list(all = ethnicities(res_arima$projected))) |> 
+  project(h = 2, method = "CAGR")
+
+tarr_projection_age <- cen_est |> 
+  collapse_dim(dim = "age", groups = list(all = ages(res$arima$projected))) |> 
+  collapse_dim(dim = "ethnicity", groups = list(all = ethnicities(res_arima$projected))) |> 
+  project(h = 2, method = "CAGR")
+
+  
+
+est_df <- bind_rows(est_list, .id = "model")
 test_df <- as.data.frame(test_years) |> 
   rename(census_estimate = population)
 
@@ -166,7 +187,7 @@ ggplot(all_est, aes(x = age.char)) +
 ggplot(all_est, aes(x = age.char, y = pct, fill = model)) +
   geom_bar(stat = "identity")+
   scale_y_continuous(labels = scales::percent) +
-  facet_grid(year ~  Model) +
+  facet_grid(year ~  model) +
   #ggthemes::theme_tufte() +
   theme_bw()+
   labs(x = "Age Group", y = "Percent Difference", 
