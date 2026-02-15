@@ -21,3 +21,15 @@ test_that("confint returns DelayedArrays", {
   ci <- confint(proj)
   expect_s4_class(ci$lower, "DelayedArray")
 })
+
+
+# --- Testing the '[' operator
+test_that("subset keeps projection class when stat present", {
+  y <- proj["2030", , , , , , ]
+  expect_s3_class(y, "poparray_projection")
+})
+
+test_that("subset returns poparray when stat removed", {
+  y <- proj[,,,,,, "projection"]
+  expect_s3_class(y, "poparray")
+})

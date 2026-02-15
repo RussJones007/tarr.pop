@@ -100,57 +100,77 @@ tp_projection_hdf5_writer <- function(out_dim,
                                       dir = tempdir(),
                                       prefix = "pop_projection",
                                       chunkdim = NULL,
-                                      compression_level = 6) {
-
+                                      compression_level = 6,
+                                      dataset = "data",
+                                      stat_levels = c("projection", "std_error")) {
+  
   checkmate::assert_integerish(out_dim, lower = 1, any.missing = FALSE)
   checkmate::assert_list(out_dimnames, len = length(out_dim))
   checkmate::assert_int(year_k, lower = 1, upper = length(out_dim))
   checkmate::assert_string(dir)
   checkmate::assert_string(prefix)
   checkmate::assert_integerish(compression_level, len = 1, lower = 0, upper = 9)
-
+  checkmate::assert_string(dataset)
+  checkmate::assert_character(stat_levels, min.len = 1)
+  
   if (!requireNamespace("rhdf5", quietly = TRUE)) {
     cli::abort("Package {.pkg rhdf5} is required for HDF5-backed projection writing.")
   }
-
+  if (!requireNamespace("HDF5Array", quietly = TRUE)) {
+    cli::abort("Package {.pkg HDF5Array} is required for HDF5-backed projection writing.")
+  }
+  
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-
-  # Choose chunk dims if not supplied.
-  # Write pattern is: many single-cells across non-year dims, spanning the full horizon along year.
+  
+  # ---- validate stat dimension ----
+  if (is.null(names(out_dimnames)) || !"stat" %in% names(out_dimnames)) {
+    cli::abort("`out_dimnames` must include a named 'stat' dimension.")
+  }
+  stat_k <- match("stat", names(out_dimnames))
+  if (stat_k != length(out_dim)) {
+    cli::abort("The 'stat' dimension must be the last dimension in `out_dim` / `out_dimnames`.")
+  }
+  if (!identical(out_dimnames[["stat"]], stat_levels)) {
+    cli::abort("`out_dimnames[['stat']]` must be exactly: {paste(stat_levels, collapse = ', ')}.")
+  }
+  if (out_dim[[stat_k]] != length(stat_levels)) {
+    cli::abort("`out_dim[['stat']]` must equal length(stat_levels).")
+  }
+  
+  # ---- Choose chunk dims if not supplied ----
+  # Write pattern: many single-cells across non-year dims, spanning the full horizon along year,
+  # and ALWAYS writing a single stat slice (projection or std_error).
+  #
+  # Keep stat fully inside the chunk (stat length is tiny).
   if (is.null(chunkdim)) {
     chunkdim <- rep.int(1L, length(out_dim))
     chunkdim[[year_k]] <- min(out_dim[[year_k]], 64L)
+    chunkdim[[stat_k]] <- out_dim[[stat_k]]  # include both stat values in every chunk
   }
   checkmate::assert_integerish(chunkdim, len = length(out_dim), lower = 1, any.missing = FALSE)
-
+  chunkdim[[stat_k]] <- out_dim[[stat_k]]    # force stat chunk to full length
+  
   path <- file.path(
     dir,
     paste0(prefix, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".h5")
   )
-
+  
   rhdf5::h5createFile(path)
-
-  create_dataset <- function(name) {
-    rhdf5::h5createDataset(
-      file = path,
-      dataset = name,
-      dims = out_dim,
-      chunk = chunkdim,
-      level = as.integer(compression_level)
-    )
-    invisible(TRUE)
-  }
-
-  create_dataset("projected")
-  create_dataset("lower")
-  create_dataset("upper")
-
-  # Initialize datasets to NA without holding the full cube in memory.
-  # We do a blockwise fill using the chunk geometry.
+  
+  # ---- Create single dataset ----
+  rhdf5::h5createDataset(
+    file    = path,
+    dataset = dataset,
+    dims    = out_dim,
+    chunk   = chunkdim,
+    level   = as.integer(compression_level)
+  )
+  
+  # ---- Initialize dataset to NA without holding full cube in memory ----
   init_na_blockwise <- function(name) {
     idx_max <- ceiling(out_dim / chunkdim)
     grid <- expand.grid(lapply(seq_along(out_dim), function(k) seq_len(idx_max[[k]])))
-
+    
     for (i in seq_len(nrow(grid))) {
       g <- as.integer(grid[i, ])
       start <- (g - 1L) * chunkdim + 1L
@@ -160,27 +180,42 @@ tp_projection_hdf5_writer <- function(out_dim,
     }
     invisible(TRUE)
   }
-
-  init_na_blockwise("projected")
-  init_na_blockwise("lower")
-  init_na_blockwise("upper")
-
-  # Write a length-h numeric vector into a dataset slice:
-  #   - along the year dimension we write the full horizon
-  #   - all other dimensions are fixed to a single index
-  write_year_slice <- function(dataset, fixed_k_list, values) {
+  
+  init_na_blockwise(dataset)
+  
+  # ---- Write a length-h numeric vector into a dataset slice ----
+  # Writes:
+  #   - full horizon along year dimension
+  #   - one index for all other dims (from fixed_k_list)
+  #   - one index for stat dimension (from `stat`)
+  write_year_slice <- function(dataset = "data", fixed_k_list, stat, values) {
     values <- as.numeric(values)
     if (length(values) != out_dim[[year_k]]) {
       cli::abort("`values` must be length {out_dim[[year_k]]} (the projection horizon).")
     }
-
+    
+    stat <- as.character(stat)
+    if (length(stat) != 1L || is.na(stat) || !nzchar(stat)) {
+      cli::abort("`stat` must be a single non-empty character string.")
+    }
+    stat_pos <- match(stat, stat_levels)
+    if (is.na(stat_pos)) {
+      cli::abort("Unknown `stat` '{stat}'. Must be one of: {paste(stat_levels, collapse = ', ')}.")
+    }
+    
     nd <- length(out_dim)
     start <- rep.int(1L, nd)
     count <- rep.int(1L, nd)
-
+    
+    # write full year horizon
     start[[year_k]] <- 1L
     count[[year_k]] <- length(values)
-
+    
+    # stat slice
+    start[[stat_k]] <- stat_pos
+    count[[stat_k]] <- 1L
+    
+    # fixed indices for other dims
     if (length(fixed_k_list)) {
       for (nm in names(fixed_k_list)) {
         k <- as.integer(nm)
@@ -188,30 +223,30 @@ tp_projection_hdf5_writer <- function(out_dim,
         count[[k]] <- 1L
       }
     }
-
-    # h5write expects an array matching the hyperslab shape (with singleton dims).
-    slice_dim <- count
-    arr <- array(values, dim = slice_dim)
-
+    
+    # Hyperslab payload must match `count` shape (with singleton dims)
+    arr <- array(values, dim = count)
+    
     rhdf5::h5write(arr, file = path, name = dataset, start = start, count = count)
     invisible(TRUE)
   }
-
-    as_handles <- function() {
+  
+  as_handles <- function() {
     list(
-      projected = HDF5Array::HDF5Array(path, "projected"),
-      lower     = HDF5Array::HDF5Array(path, "lower"),
-      upper     = HDF5Array::HDF5Array(path, "upper"),
-      path      = path
+      data = HDF5Array::HDF5Array(path, dataset),
+      path = path
     )
   }
-
+  
   structure(
     list(
       path = path,
       out_dim = out_dim,
       out_dimnames = out_dimnames,
       year_k = year_k,
+      stat_k = stat_k,
+      stat_levels = stat_levels,
+      dataset = dataset,
       write_year_slice = write_year_slice,
       as_handles = as_handles
     ),
@@ -461,10 +496,14 @@ engine_cagr <- function(y, years, h, level, ...) {
 
 #' @keywords internal
 project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
-  if (!inherits(tp, "poparray")) stop("`tp` must be a poparray.", call. = FALSE)
+  if (!inherits(tp, "poparray")) {
+    stop("`tp` must be a poparray.", call. = FALSE)
+  }
   
   h <- as.integer(h)
-  if (length(h) != 1L || is.na(h) || h < 1L) stop("`h` must be a positive integer.", call. = FALSE)
+  if (length(h) != 1L || is.na(h) || h < 1L) {
+    stop("`h` must be a positive integer.", call. = FALSE)
+  }
   
   level <- normalize_level(level)
   
@@ -474,10 +513,11 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   if (is.null(names(dn))) {
     stop("poparray must have named dimensions (including 'year').", call. = FALSE)
   }
-  time_nm <- tp_time_dim_name(tp)
-  year_k <- match(time_nm, names(dn))
   
-  base_years_chr <- as.character(dn[[time_nm]])
+  time_nm <- tp_time_dim_name(tp)
+  year_k  <- match(time_nm, names(dn))
+  
+  base_years_chr   <- as.character(dn[[time_nm]])
   future_years_chr <- make_future_year_labels(base_years_chr, h = h)
   
   # Output dimnames: preserve all dims; replace year labels with future years
@@ -488,16 +528,25 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   out_dim <- in_dim
   out_dim[[year_k]] <- h
   
-  # HDF5-backed output cubes (no full in-memory allocation)
+  # ---- NEW: add stat dimension (last) ----
+  stat_levels <- c("projection", "std_error")
+  out_dim_stat <- c(out_dim, length(stat_levels))
+  out_dn_stat  <- c(out_dn, list(stat = stat_levels))
+  
+  # ---- HDF5-backed output cube (single dataset with stat dim) ----
+  # NOTE: tp_projection_hdf5_writer() must be updated to create ONE dataset/handle
+  # with these dimensions + dimnames, and to support write_year_slice() for stat.
   w <- tp_projection_hdf5_writer(
-    out_dim = out_dim,
-    out_dimnames = out_dn,
-    year_k = year_k
+    out_dim      = out_dim_stat,
+    out_dimnames = out_dn_stat,
+    year_k       = year_k,
+    stat_levels  = stat_levels
   )
+  
   handles <- w$as_handles()
-  pf_arr <- handles$projected
-  lo_arr <- handles$lower
-  up_arr <- handles$upper
+  # Expect ONE handle now (7D DelayedArray / HDF5Array)
+  # Name can be "data" (recommended) or "projection" etc.
+  proj_da <- handles$data
   
   other_k <- setdiff(seq_along(in_dim), year_k)
   
@@ -512,14 +561,28 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   
   base_years_used <- NULL
   
+  # z multiplier for transforming CI width -> std_error
+  # If run_projection_engine() returns lower/upper corresponding to `level`,
+  # then: upper - lower = 2*z*se  =>  se = (upper-lower)/(2*z)
+  z <- stats::qnorm(1 - (1 - level) / 2)
+  
   if (is.null(grid)) {
     # 1D year-only cube
     y <- extract_series(tp, year_k = year_k, fixed_k_list = list())
-    res <- run_projection_engine(method = method, y = y, years = base_years_chr, h = h, level = level, ...)
+    res <- run_projection_engine(
+      method = method,
+      y = y,
+      years = base_years_chr,
+      h = h,
+      level = level,
+      ...
+    )
     
-    w$write_year_slice("projected", fixed_k_list = list(), values = res$projected)
-    w$write_year_slice("lower",     fixed_k_list = list(), values = res$lower)
-    w$write_year_slice("upper",     fixed_k_list = list(), values = res$upper)
+    se <- (res$upper - res$lower) / (2 * z)
+    
+    # NEW: write into stat slices
+    w$write_year_slice("data", fixed_k_list = list(), stat = "projection", values = res$projected)
+    w$write_year_slice("data", fixed_k_list = list(), stat = "std_error",  values = se)
     
     base_years_used <- as.character(res$base_years)
     
@@ -527,23 +590,26 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
     for (i in seq_len(nrow(grid))) {
       fixed_k_list <- as.list(grid[i, , drop = FALSE])
       names(fixed_k_list) <- names(grid) # dim positions as character
-
+      
       y <- extract_series(tp, year_k = year_k, fixed_k_list = fixed_k_list)
-
-      res <- run_projection_engine(method = method, y = y, years = base_years_chr, h = h, level = level, ...)
-
-      w$write_year_slice("projected", fixed_k_list = fixed_k_list, values = res$projected)
-      w$write_year_slice("lower",     fixed_k_list = fixed_k_list, values = res$lower)
-      w$write_year_slice("upper",     fixed_k_list = fixed_k_list, values = res$upper)
-
+      
+      res <- run_projection_engine(
+        method = method,
+        y = y,
+        years = base_years_chr,
+        h = h,
+        level = level,
+        ...
+      )
+      
+      se <- (res$upper - res$lower) / (2 * z)
+      
+      w$write_year_slice("data", fixed_k_list = fixed_k_list, stat = "projection", values = res$projected)
+      w$write_year_slice("data", fixed_k_list = fixed_k_list, stat = "std_error",  values = se)
+      
       if (is.null(base_years_used)) base_years_used <- as.character(res$base_years)
     }
   }
-  
-  # Wrap arrays into poparray using new_poparray()
-  population_forecast_tp <- poparray_from_array_like(pf_arr, template = tp, dimnames_list = out_dn)
-  lower_tp              <- poparray_from_array_like(lo_arr, template = tp, dimnames_list = out_dn)
-  upper_tp              <- poparray_from_array_like(up_arr, template = tp, dimnames_list = out_dn)
   
   # Build projection provenance source string
   orig_source <- attr(tp, "source", exact = TRUE)
@@ -551,13 +617,13 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
     orig_source <- "unknown"
   }
   source <- paste0("Projection from ", orig_source[1])
+  
+  # NEW: projection object stores a single array with a stat dim
   new_pop_projection(
-    projected = population_forecast_tp,
-    lower = lower_tp,
-    upper = upper_tp,
-    level = level,
-    method = method,
-    source = source,
+    data       = proj_da,
+    level      = level,
+    method     = method,
+    source     = source,
     base_years = base_years_used
   )
 }
