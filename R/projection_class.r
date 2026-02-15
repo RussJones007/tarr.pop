@@ -7,33 +7,29 @@
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 18, 2026 
-# Revised:
+# Revised: Februay 10, 2026, renamed class to poarray_projection
 # -------------------------------------------------------------------------------------->
 
 
 # pop_projection class -------------------------------------------------------------------------------------------
 
-#' Projection object
+#' Projection class
 #'
 #' @description
-#' An S3 class representing a time-based projection.
-#'
-#' Objects of this class are typically created by [project()].  It contains the predicted population for each cell
-#' in the original matrix . 
-#'
-#' @section Structure:
-#' A `pop_projection` object is a list with three poparray cubes:
-#'
-#' * lower: is the lower limits of the calculated confidence interval.
-#' * projected: The projected population figures. 
-#' * upper: is the upper limit of the calculated confidenceinterval.
+#' An S3 class representing a time-based projection. The class is a wrapper around an HDF5Array that contains the
+#' projected population and a dimension of the error. Objects of this class are typically created by [project()].  
 #' 
+#' @section Structure:
+#' A `pop_projection` object is a list with a HDF5Array cube as a member. The cube is very similar to a poparray but
+#' wheres athe poparray figures are for population, these are projected population figures and another set of figures
+#' are added that represents the standard error and labeled as "stderr".
+#'
 #' Attributes included:
 #' *   **level** is the confidence level used
-#' *   **methods_used** are the unique methods actually used across all cells
+#' *   **methods_used** are the unique time series forecasting methods used across all cells
 #' *   **n_fallback** are the number of cells that required fallback as the forecasting method .
 #' *   **source** is the  "projected from" plus the original poparray source
-#' *   **base_years** are the base years used to project/forecast
+#' *   **base_years** are the base years or time unit used to project/forecast
 #' *   **created** is the date and time stamp at time the object was created. 
 #'
 #' @seealso
@@ -52,12 +48,6 @@ normalize_level <- function(level) {
     check_double(level, lower = 0.5, upper = 0.99, any.missing = FALSE, len = 1),
     check_double(level, lower = 50, upper =  99, any.missing = FALSE,   len = 1)
   )
-  # if (length(level) != 1L || is.na(level)) {
-  #   stop("`level` must be a single non-missing number.", call. = FALSE)
-  # }
-  # if (!is.numeric(level)) {
-  #   stop("`level` must be numeric.", call. = FALSE)
-  # }
   
   if (level > 0 && level < 1) return(as.numeric(level))
   if (level > 1 && level < 100) return(as.numeric(level) / 100)
