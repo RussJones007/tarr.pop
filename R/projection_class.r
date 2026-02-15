@@ -424,29 +424,30 @@ print.pop_projection <- function(x, ...) {
 # ---- subsetting --------------------------------------------------------------
 
 #' @export
-`[.pop_projection` <- function(x, ..., drop = FALSE) {
-  validate_pop_projection(x)
+`[.poparray_projection` <- function(x, ..., drop = FALSE) {
   
-  pf <- x$projected[..., drop = drop]
-  lo <- x$lower[..., drop = drop]
-  up <- x$upper[..., drop = drop]
+  # Subset underlying DelayedArray
+  subset_data <- x$data[..., drop = drop]
   
-  if (!is.poparray(pf)) {
-    return(list(projected = pf, lower = lo, upper = up))
+  dn <- dimnames(subset_data)
+  
+  # If stat dimension still exists, return projection object
+  if (!is.null(dn) && "stat" %in% names(dn)) {
+    
+    return(
+      new_pop_projection(
+        data       = subset_data,
+        level      = attr(x, "level"),
+        method     = attr(x, "method"),
+        source     = attr(x, "source"),
+        base_years = attr(x, "base_years")
+      )
+    )
   }
   
-  y <- list(
-    projected = pf,
-    lower = lo,
-    upper = up
-  )
-  class(y) <- "pop_projection"
-  
-  for (nm in c("level", "method", "source", "base_years", "created")) {
-    attr(y, nm) <- attr(x, nm, exact = TRUE)
-  }
-  
-  y
+  # Otherwise stat dimension was removed → return poparray
+  # assuming poparray constructor exists
+  poparray(subset_data)
 }
 
 # ---- coercion ---------------------------------------------------------------
