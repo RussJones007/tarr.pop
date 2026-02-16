@@ -8,7 +8,7 @@
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: `Feb 3, 2026
-# Revised: Feb 16, 2026 - mutiple bug fixes nd trm updates
+# Revised: Feb 16, 2026 - multiple bug fixes nd term updates
 # -------------------------------------------------------------------------------------->
 
 #' Construct a poparray
@@ -288,7 +288,7 @@ print.poparray <- function(x, ...) {
   
   recs <- length(x)
   
-  cat("Class <poparray>\n")
+  cat("<poparray>\n")
   cat("Series: ", src[["note"]], "\n", sep = "")
   cat("Sourced: ", src[["source"]], "\n", sep = "")
   cat("Updated: ", src[["updated"]], "\n", sep = "")

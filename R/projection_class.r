@@ -485,16 +485,27 @@ print.poparray_projection <- function(x, ...) {
     sep = ""
   )
   
-  dn <- dimnames(x$handle)
-  dims <- dim(x$handle)
+  dms <- dimnames(x$handle)
+  dms_names <- names(dms)
+  #dn <- dimnames(x$handle)
+  #dms <- dim(x$handle)
+  dms_sizes <- lengths(dms)
+  names(dms_sizes) <- dms_names
   
-  if (!is.null(names(dn))) {
-    cat("  dims:\n")
-    for (i in seq_along(dims)) {
-      cat("    - ", names(dn)[i], ": ", dims[i], "\n", sep = "")
-    }
-  }
+  dimensions <- paste(
+    paste0(names(dms_sizes), " (", dms_sizes, ")"),
+    collapse = ", "
+  )
   
+  cat("Dimensions: ", dimensions, "\n", sep = "")
+  # 
+  # if (!is.null(names(dms))) {
+  #   cat("  dims:\n")
+  #   for (i in seq_along(dims)) {
+  #     cat("    - ", names(dn)[i], ": ", dims[i], "\n", sep = "")
+  #   }
+  # }
+  # 
   invisible(x)
 }
 
