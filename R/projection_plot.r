@@ -142,8 +142,8 @@ plot.poparray_projection <- function(x,
   }
   
   pa <- as.poparray(x)
-  pa_proj <- pa[stat = "projection", drop = TRUE]
-  time_nm <- attr(pa_proj, "dimroles", exact = TRUE)$time
+  pa_proj <- pa[stat = "projection", drop = FALSE]
+  time_nm <- attr(pa, "dimroles", exact = TRUE)$time
   
   if (identical(type, "ts")) {
     # "ts" ignores area selection by design; it plots totals over time with ribbon
