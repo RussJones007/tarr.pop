@@ -666,8 +666,9 @@ projection_to_df <- function(x,
 #'
 #' @param x a poparray_projection object
 #' @param ... 
-#' @param include_level the default TRUE means add a column with the confidence level used for the projection
-#' @param include_model the default TRUE causes a column has the model used fo the projection
+#' @param include_level the default is FALSE. When TRUE means add a column with the confidence level used for the
+#'   projection. The confidence level is also available in the attributes, attr(x, "level")
+#' @param include_model the default FALSE.  When TRUE causes a column with the model name used for the projection
 #' @param include_confidence default FALSE; when TRUE adds `lower` and `upper`
 #'   confidence-limit columns computed from `projection`, `std_error`, and the
 #'   object's confidence `level`.
@@ -679,28 +680,42 @@ projection_to_df <- function(x,
 #' # TO DO
 as.data.frame.poparray_projection <- function(x,
                                               ...,
-                                              include_level = TRUE,
-                                              include_model = TRUE,
+                                              include_level = FALSE,
+                                              include_model = FALSE,
                                               include_confidence = FALSE) {
-  projection_to_df(
+  out <- projection_to_df(
     x,
     include_level = include_level,
     include_model = include_model,
     include_confidence = include_confidence,
     ...
   )
+  
+  # Keep projection metadata, then return a base data.frame (not tibble).
+  src <- attr(out, "source", exact = TRUE)
+  mth <- attr(out, "method", exact = TRUE)
+  lvl <- attr(out, "level", exact = TRUE)
+  byr <- attr(out, "base_years", exact = TRUE)
+  crt <- attr(out, "created", exact = TRUE)
+  
+  out <- base::as.data.frame(out, stringsAsFactors = FALSE)
+  
+  attr(out, "source") <- src
+  attr(out, "method") <- mth
+  attr(out, "level") <- lvl
+  attr(out, "base_years") <- byr
+  attr(out, "created") <- crt
+  
+  out
 }
 
 #' @rdname as.data.frame.poparray_projection
 #' @export
 as_tibble.poparray_projection <- function(x,
                                           ...,
-                                          include_level = TRUE,
-                                          include_model = TRUE,
+                                          include_level = FALSE,
+                                          include_model = FALSE,
                                           include_confidence = FALSE) {
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("Package 'tibble' is required for as_tibble().", call. = FALSE)
-  }
   df <- projection_to_df(
     x,
     include_level = include_level,
@@ -710,6 +725,7 @@ as_tibble.poparray_projection <- function(x,
   )
   out <- tibble::as_tibble(df)
   
+  #source <- normalize_projection_source(source)
   attr(out, "source") <- attr(df, "source", exact = TRUE)
   attr(out, "method") <- attr(df, "method", exact = TRUE)
   attr(out, "level") <- attr(df, "level", exact = TRUE)
@@ -718,5 +734,6 @@ as_tibble.poparray_projection <- function(x,
   
   out
 }
-  source <- normalize_projection_source(source)
+
+
   
