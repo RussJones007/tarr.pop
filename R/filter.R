@@ -1,14 +1,13 @@
 # ------------------------------------------------------------------------------------------------------------------->
 # Script: filter.R
 # Description:
-#   Implements the filter() method for class poparray.  There are allot of variables named tp, which before re factoring
-#   was shorthand for tarr_pop.  The important parts of the functions have been replaced wit poarray, tp remains as it 
-#   is harmless, though it no longer stands for tsrr_pop .# 
+#   Implements the filter() method for class poparray.
+#   The internal helper prefix `tp_` is legacy naming and does not indicate class type.
 # 
 # ------------------------------------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 5, 2026
-# Revised: February 9, 2026 to use poarray instead of tarr_pop
+# Revised: February 16, 2026 for role-aware ordered filtering and predicate parser fixes
 # ------------------------------------------------------------------------------------------------------------------->
 
 
@@ -66,7 +65,7 @@
 #' @param .strict Logical. If `TRUE` (default), unknown categorical labels are an error. If `FALSE`, unknown categorical
 #'   labels are dropped with a warning.
 #'
-#' @return A delayed `poparray` (or `tarr_pop_view`) with updated dimension restrictions. No materialization occurs.
+#' @return A delayed `poparray` with updated dimension restrictions. No materialization occurs.
 #' 
 #' @exportS3Method filter poparray
 filter.poparray <- function(.data, ..., .strict = TRUE) {
@@ -87,18 +86,19 @@ filter.poparray <- function(.data, ..., .strict = TRUE) {
     return(.data)
   }
   
-  # Parse all predicates, then apply by dimension (intersection)
+  .strict <- isTRUE(.strict)
+  
+  # Parse all predicates into trees, then apply by dimension (intersection).
   preds <- lapply(quos, tp_parse_predicate, env = rlang::caller_env())
-  dims  <- vapply(preds, `[[`, character(1), "dim")
   
   dn <- dimnames(.data)
   dim_order <- names(dn)
   idx <- rep(list(TRUE), length(dim_order))
   names(idx) <- dim_order
   
-  for (d in unique(dims)) {
-    d_preds <- preds[dims == d]
-    idx[[d]] <- tp_eval_dim_preds(.data, dim_name = d, preds = d_preds, .strict = .strict)
+  for (pred in preds) {
+    d <- tp_pred_dim(pred)
+    idx[[d]] <- idx[[d]] & tp_eval_pred_tree(.data, pred, .strict = .strict)
   }
   
   
@@ -109,8 +109,9 @@ filter.poparray <- function(.data, ..., .strict = TRUE) {
 
 # Internal helpers -----------------------------------------------------------------------------
 
-tp_dim_type <- function(dim_name) {
-  if (dim_name %in% c("year", "age.char")) "ordered" else "categorical"
+tp_dim_type <- function(parray, dim_name) {
+  ordered_dims <- c(time_role(parray), "age.char")
+  if (dim_name %in% ordered_dims) "ordered" else "categorical"
 }
 
 tp_allowed_ops <- function(dim_type) {
@@ -128,22 +129,27 @@ tp_parse_predicate <- function(quo, env) {
 }
 
 tp_parse_expr <- function(expr, env) {
-  # Allow (a & b) / (a | b) within-dimension only
+  # Parentheses are transparent for predicate parsing.
+  if (rlang::is_call(expr, "(")) {
+    return(tp_parse_expr(expr[[2]], env = env))
+  }
+  
+  # Allow (a & b) / (a | b) within-dimension only.
   if (rlang::is_call(expr, "&") || rlang::is_call(expr, "|")) {
     op <- as.character(expr[[1]])
     lhs <- tp_parse_expr(expr[[2]], env = env)
     rhs <- tp_parse_expr(expr[[3]], env = env)
     
-    if (!identical(lhs$dim, rhs$dim)) {
+    lhs_dim <- tp_pred_dim(lhs)
+    rhs_dim <- tp_pred_dim(rhs)
+    if (!identical(lhs_dim, rhs_dim)) {
       stop(
         "Each filter expression must reference exactly one dimension. ",
         "Use multiple filter() arguments for AND across dimensions.",
         call. = FALSE
       )
     }
-    lhs$combine <- op
-    lhs$rhs_pred <- rhs
-    return(lhs)
+    return(list(type = "bool", op = op, lhs = lhs, rhs = rhs))
   }
   
   # Binary ops: ==, %in%, <, <=, >, >=, %between%
@@ -183,55 +189,64 @@ tp_parse_expr <- function(expr, env) {
     )
   }
   
-  list(
-    dim = dim_name,
-    op  = op,
-    rhs = rhs_val,
-    env = env
-  )
+  list(type = "atom", dim = dim_name, op = op, rhs = rhs_val, env = env)
 }
 
-tp_eval_dim_preds <- function(x, dim_name, preds, .strict = TRUE) {
+tp_pred_dim <- function(pred) {
+  if (is.null(pred$type)) {
+    stop("Invalid predicate parse node.", call. = FALSE)
+  }
+  
+  if (identical(pred$type, "atom")) return(pred$dim)
+  if (identical(pred$type, "bool")) {
+    lhs_dim <- tp_pred_dim(pred$lhs)
+    rhs_dim <- tp_pred_dim(pred$rhs)
+    if (!identical(lhs_dim, rhs_dim)) {
+      stop(
+        "Each filter expression must reference exactly one dimension. ",
+        "Use multiple filter() arguments for AND across dimensions.",
+        call. = FALSE
+      )
+    }
+    return(lhs_dim)
+  }
+  
+  stop("Unknown predicate node type: ", pred$type, call. = FALSE)
+}
+
+tp_eval_pred_tree <- function(x, pred, .strict = TRUE) {
+  if (identical(pred$type, "bool")) {
+    lhs_keep <- tp_eval_pred_tree(x, pred$lhs, .strict = .strict)
+    rhs_keep <- tp_eval_pred_tree(x, pred$rhs, .strict = .strict)
+    
+    if (identical(pred$op, "&")) return(lhs_keep & rhs_keep)
+    if (identical(pred$op, "|")) return(lhs_keep | rhs_keep)
+    
+    stop("Unsupported boolean combiner: ", pred$op, call. = FALSE)
+  }
+  
+  if (!identical(pred$type, "atom")) {
+    stop("Unknown predicate node type: ", pred$type, call. = FALSE)
+  }
+  
   dn <- dimnames(x)
+  dim_name <- pred$dim
   if (!dim_name %in% names(dn)) {
     stop("Unknown dimension: '", dim_name, "'.", call. = FALSE)
   }
   
-  dim_type <- tp_dim_type(dim_name)
+  dim_type <- tp_dim_type(x, dim_name)
   allowed <- tp_allowed_ops(dim_type)
-  
-  # Validate ops for this dimension type
-  ops <- vapply(preds, `[[`, character(1), "op")
-  bad_ops <- setdiff(unique(ops), allowed)
-  if (length(bad_ops)) {
+  if (!pred$op %in% allowed) {
     stop(
       "Unsupported operator(s) for dimension '", dim_name, "': ",
-      paste(bad_ops, collapse = ", "), ".",
+      pred$op, ".",
       call. = FALSE
     )
   }
   
   labels <- dn[[dim_name]]
-  keep <- rep(TRUE, length(labels))
-  
-  # Apply each predicate (intersection)
-  for (p in preds) {
-    p_keep <- tp_eval_single_pred(x, dim_name, labels, p, dim_type, .strict)
-    
-    # Combine within-dimension (& or |) before intersecting with prior constraints.
-    if (!is.null(p$combine) && !is.null(p$rhs_pred)) {
-      rhs_keep <- tp_eval_single_pred(x, dim_name, labels, p$rhs_pred, dim_type, .strict)
-      if (identical(p$combine, "&")) {
-        p_keep <- p_keep & rhs_keep
-      } else if (identical(p$combine, "|")) {
-        p_keep <- p_keep | rhs_keep
-      }
-    }
-    
-    keep <- keep & p_keep
-  }
-  
-  which(keep)
+  tp_eval_single_pred(x, dim_name, labels, pred, dim_type, .strict)
 }
 
 tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
@@ -246,11 +261,14 @@ tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
     }
   }
   
-  # Ordered dimensions
-  if (identical(dim_name, "year")) {
+  # Ordered time-role dimensions (e.g., year or custom time dim).
+  if (dim_type == "ordered" && !identical(dim_name, "age.char")) {
     y <- suppressWarnings(as.integer(labels))
     if (anyNA(y)) {
-      stop("Year dimension contains non-numeric labels; cannot apply ordered filters.", call. = FALSE)
+      stop(
+        "Time/ordered dimension '", dim_name, "' contains non-numeric labels; cannot apply ordered filters.",
+        call. = FALSE
+      )
     }
     return(tp_eval_ordered_numeric(y, op, rhs))
   }
