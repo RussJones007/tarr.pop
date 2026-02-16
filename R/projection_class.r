@@ -186,8 +186,6 @@ validate_poparray_projection <- function(x) {
   
   
   source <- get_source(x)[1]
-  #if(length(source > 1)) attr(x, "source") <- source[1]
-  
   if (is.null(source) || length(source) != 1L || is.na(source) || !is.character(source)) {
     cli::cli_abort(
       "{.field source} must be a length-1 character value.",
