@@ -620,7 +620,7 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
   if (is.null(orig_source) || (is.character(orig_source) && !nzchar(orig_source))) {
     orig_source <- "unknown"
   }
-  source <- paste0("Projection from ", orig_source[1])
+  source <- paste0("Populatin projection based on data from ", orig_source[1])
   
   # NEW: projection object stores a single array with a stat dim
   new_poparray_projection(
