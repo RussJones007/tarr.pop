@@ -7,7 +7,7 @@
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 18, 2026 
-# Revised: Februay 10, 2026, renamed class to poarray_projection
+# Revised: Februay 10, 2026, renamed class to poparray_projection
 # -------------------------------------------------------------------------------------->
 
 
@@ -154,9 +154,11 @@ validate_poparray_projection <- function(x) {
       call = rlang::caller_env()
     )
   }
-  if (!identical(as.character(dn[["stat"]]), c("projection", "std_error"))) {
+  stat_levels <- as.character(dn[["stat"]])
+  allowed_levels <- c("projection", "std_error")
+  if (!length(stat_levels) || anyNA(stat_levels) || any(!stat_levels %in% allowed_levels)) {
     cli::cli_abort(
-      "{.field handle} {.field stat} labels must be exactly {.val projection, std_error}.",
+      "{.field handle} {.field stat} labels must be a non-empty subset of {.val projection, std_error}.",
       call = rlang::caller_env()
     )
   }
@@ -280,13 +282,11 @@ new_poparray_projection <- function(
   stat_levels <- dn[["stat"]]
   
   required_levels <- c("projection", "std_error")
-  
-  if (!identical(stat_levels, required_levels)) {
+  if (!length(stat_levels) || anyNA(stat_levels) || any(!stat_levels %in% required_levels)) {
     cli::cli_abort(
       c(
-        "The 'stat' dimension must be exactly:",
-        "x projection",
-        "x std_error"
+        "The {.field stat} dimension must contain valid levels.",
+        "x" = "Allowed levels: {.val projection}, {.val std_error}."
       )
     )
   }
@@ -386,6 +386,9 @@ projection <- function(x) {
   if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
     cli::abort("Projection data must contain a named 'stat' dimension.")
   }
+  if (!"projection" %in% dn[["stat"]]) {
+    cli::abort("Projection data does not contain the 'projection' level in the 'stat' dimension.")
+  }
   
   stat_k <- match("stat", names(dn))
   idx <- rep(list(TRUE), length(dim(x$handle)))
@@ -399,6 +402,9 @@ std_error <- function(x) {
   dn <- dimnames(x$handle)
   if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
     cli::abort("Projection data must contain a named 'stat' dimension.")
+  }
+  if (!"std_error" %in% dn[["stat"]]) {
+    cli::abort("Projection data does not contain the 'std_error' level in the 'stat' dimension.")
   }
 
   stat_k <- match("stat", names(dn))
@@ -457,11 +463,34 @@ print.poparray_projection <- function(x, ...) {
 
 #' @export
 `[.poparray_projection` <- function(x, ..., drop = FALSE) {
+  dn0 <- dimnames(x$handle)
+  dnm <- names(dn0)
+  nd <- length(dn0)
   
+  dots <- as.list(substitute(list(...)))[-1L]
+  idx <- lapply(dots, \(e) {
+    if (identical(e, quote(expr = ))) TRUE else eval(e, parent.frame())
+  })
   
-  # Subset underlying DelayedArray
-  subset_data <- x$handle[..., drop = drop]
+  ndx <- rep(list(TRUE), nd)
+  idx_names <- names(idx)
+  if (is.null(idx_names)) idx_names <- character(0)
   
+  if (length(idx_names) > 0) {
+    bad <- setdiff(idx_names, dnm)
+    if (length(bad) > 0) {
+      cli::cli_abort(c(
+        "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
+        "i" = "Valid dimensions are: {paste(dnm, collapse = ', ')}."
+      ))
+    }
+    ndx[match(idx_names, dnm)] <- idx
+  } else {
+    if (length(idx) > nd) cli::cli_abort("Too many indices for projection object.")
+    ndx[seq_along(idx)] <- idx
+  }
+  
+  subset_data <- do.call(`[`, c(list(x$handle), ndx, list(drop = drop)))
   dn <- dimnames(subset_data)
   
   # If stat dimension still exists, return projection object
