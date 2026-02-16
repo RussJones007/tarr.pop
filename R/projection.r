@@ -234,8 +234,11 @@ tp_projection_hdf5_writer <- function(out_dim,
   }
   
   as_handles <- function() {
+    h <- HDF5Array::HDF5Array(path, dataset)
+    # Preserve semantic dimnames on the delayed handle (including named `stat`).
+    dimnames(h) <- out_dimnames
     list(
-      handle = HDF5Array::HDF5Array(path, dataset),
+      handle = h,
       path = path
     )
   }
@@ -512,9 +515,9 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   if (isTRUE(guard)) check_projection_scale(tp)
   
   dn <- dimnames(tp)
-  # if (is.null(names(dn))) {
-  #   stop("poparray must have named dimensions (including 'year').", call. = FALSE)
-  # }
+  if (is.null(names(dn))) {
+    stop("poparray must have named dimensions (including the time dimension).", call. = FALSE)
+  }
   
   time_nm <- tp_time_dim_name(tp)
   year_k  <- match(time_nm, names(dn))
@@ -546,8 +549,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   )
   
   handles <- w$as_handles()
-  # Expect ONE handle now (7D DelayedArray / HDF5Array)
-  # Name can be "data" (recommended) or "projection" etc.
+  # Expect ONE handle now: delayed/HDF5-backed cube with a named `stat` dimension.
   proj_da <- handles$handle
   
   other_k <- setdiff(seq_along(in_dim), year_k)
