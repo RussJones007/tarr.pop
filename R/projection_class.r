@@ -415,6 +415,15 @@ poparray_projection <- function(
 
 # poparray_projection data access helpers -------------------------------------------------------------------------
 
+#' Extract projected values from a poparray_projection
+#'
+#' Returns the delayed array slice where the `stat` dimension is
+#' `"projection"`.
+#'
+#' @param x A `poparray_projection` object.
+#'
+#' @return A `DelayedArray` slice retaining all dimensions, with `stat`
+#' restricted to `"projection"` (`drop = FALSE`).
 #' @export
 projection <- function(x) {
   dn <- dimnames(x$handle)
@@ -432,6 +441,15 @@ projection <- function(x) {
   do.call(`[`, c(list(x$handle), idx, list(drop = FALSE)))
 }
 
+#' Extract standard errors from a poparray_projection
+#'
+#' Returns the delayed array slice where the `stat` dimension is
+#' `"std_error"`.
+#'
+#' @param x A `poparray_projection` object.
+#'
+#' @return A `DelayedArray` slice retaining all dimensions, with `stat`
+#' restricted to `"std_error"` (`drop = FALSE`).
 #' @export
 std_error <- function(x) {
   dn <- dimnames(x$handle)
