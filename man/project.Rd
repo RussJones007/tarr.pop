@@ -15,7 +15,7 @@ project(
 )
 }
 \arguments{
-\item{tp}{A \code{tarr_pop} object (filtered or unfiltered) containing a time
+\item{tp}{A \code{poparray} object (filtered or unfiltered) containing a time
 dimension.}
 
 \item{h}{Integer forecast horizon (number of future years).}
@@ -34,7 +34,7 @@ If \code{"auto"}, the method is inferred from the number of base years in \code{
 Fewer than 5 base years results in an error.}
 
 \item{time_dim}{Name of the time dimension used for inference. Defaults to
-\code{"year"}, which is common in \code{tarr_pop} objects.}
+\code{"year"}, which is common in \code{poparray} objects.}
 
 \item{guard}{Logical; if \code{TRUE}, prompts in interactive sessions when the
 implied number of independent models is large.}
@@ -42,10 +42,10 @@ implied number of independent models is large.}
 \item{...}{Additional arguments passed to the selected engine implementation.}
 }
 \value{
-A \code{tarr_projection} object.
+A \code{pop_projection} object.
 }
 \description{
-Fits independent time-series models for each non-time cell of a \code{tarr_pop}
+Fits independent time-series models for each non-time cell of a \code{poparray}
 cube and forecasts population counts for \code{h} future years. Each unique
 combination of non-time dimensions (e.g., county × sex × age × race ×
 ethnicity) is modeled separately.
@@ -55,7 +55,7 @@ The projection method may be \code{"auto"}, \code{"ETS"}, \code{"CAGR"}, or \cod
 For most use cases, \code{"auto"} is recommended and will select the appropriate
 engine based on the number of base years available in the input cube.
 
-The returned \code{tarr_projection} object contains three \code{tarr_pop} cubes:
+The returned \code{pop_projection} object contains three \code{poparray} cubes:
 \code{projected}, \code{lower}, and \code{upper}, along with projection metadata.
 \subsection{Engine methods}{
 \itemize{
@@ -75,13 +75,13 @@ and differencing can be reliably estimated.
 \subsection{Projection metadata}{
 
 The following metadata are stored as attributes on the returned
-\code{tarr_projection} object:
+\code{pop_projection} object:
 \itemize{
 \item \strong{method} — The projection engine used (\code{"ETS"}, \code{"CAGR"}, or \code{"ARIMA"}).
 \item \strong{level} — The confidence level used when computing the \code{upper} and
 \code{lower} bounds.
 \item \strong{source} — A character string describing the projection origin, including
-source information from the originating \code{tarr_pop}.
+source information from the originating \code{poparray}.
 \item \strong{base_years} — The number of historical years used to fit the model.
 \item \strong{created} — Timestamp indicating when the projection was generated.
 }
@@ -96,7 +96,7 @@ dn <- list(
 )
 arr <- array(seq_along(dn$year), dim = c(7, 1, 1), dimnames = dn)
 
-tp <- new_tarr_pop(
+tp <- new_poparray(
   x = DelayedArray::DelayedArray(arr),
   dimnames_list = dn,
   data_col = "population",
@@ -106,15 +106,15 @@ tp <- new_tarr_pop(
 \dontrun{
   pr <- project(tp, h = 3, method = "auto", level = 0.95, guard = FALSE)
   pr
-  as.tarr_pop(pr, which = "projected")
+  as.poparray(pr, which = "projected")
 }
 
 }
 \seealso{
 \itemize{
-\item \link{tarr_projection} for the returned object structure.
-\item \code{\link[=as.tarr_pop.tarr_projection]{as.tarr_pop.tarr_projection()}} to extract one of the three cubes.
-\item \code{\link[=as.data.frame.tarr_projection]{as.data.frame.tarr_projection()}} and \code{\link[=as_tibble.tarr_projection]{as_tibble.tarr_projection()}} for tabular output.
-\item \code{\link[=plot.tarr_projection]{plot.tarr_projection()}} for visualization (added in the next step).
+\item \link{pop_projection} for the returned object structure.
+\item \code{\link[=as.poparray.pop_projection]{as.poparray.pop_projection()}} to extract one of the three cubes.
+\item \code{\link[=as.data.frame.pop_projection]{as.data.frame.pop_projection()}} and \code{\link[=as_tibble.pop_projection]{as_tibble.pop_projection()}} for tabular output.
+\item \code{\link[=plot.pop_projection]{plot.pop_projection()}} for visualization (added in the next step).
 }
 }

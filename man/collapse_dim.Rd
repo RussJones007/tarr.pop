@@ -2,12 +2,12 @@
 % Please edit documentation in R/collapse.R
 \name{collapse_dim}
 \alias{collapse_dim}
-\title{Collapse a dimension of a tarr_pop cube}
+\title{Collapse a dimension of a poparray cube}
 \usage{
 collapse_dim(x, dim, groups, keep_empty = FALSE, name = NULL)
 }
 \arguments{
-\item{x}{A tarr_pop object}
+\item{x}{A poparray object}
 
 \item{dim}{Dimension name (character) or index (integer)}
 
@@ -19,7 +19,7 @@ See Details.}
 \item{name}{Optional new name for the dimension (defaults to original)}
 }
 \value{
-A new tarr_pop with the chosen dimension collapsed by sum.
+A new poparray with the chosen dimension collapsed by sum.
 }
 \description{
 Groups labels along one dimension and sums population counts within groups.
