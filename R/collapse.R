@@ -1,14 +1,13 @@
 # -------------------------------------------------------------------------------------->
 # Script: collapse.R
 # Description:
-#   Implrments the collapse_dim() function.  THe collapse_dim() function is introcued as a generic, the a method is 
-#   given to implement for class poparray  - collapse_dim_tarr.pop().  This function was inspired by the original 
-#   group_ages() function to collage ages into large groups.  
+#   Implements collapse_dim() generic + poparray method.
+#   collapse_dim() groups labels within a selected dimension and sums values by group.
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 11, 2026
-# Revised:
+# Revised: February 16, 2026
 # -------------------------------------------------------------------------------------->
 
 #' Collapse a dimension of a poparray cube
@@ -38,7 +37,7 @@ collapse_dim <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
 }
 
 #' @export
-collapse_dim.poparray <- function(x, groups, dim, keep_empty = FALSE, name = NULL) {
+collapse_dim.poparray <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -82,9 +81,10 @@ collapse_dim.poparray <- function(x, groups, dim, keep_empty = FALSE, name = NUL
   # stable new levels (in appearance order)
   new_levels <- unique(new_for_old_keep)
   if (keep_empty) {
-    # If you have a helper to get all defined group names, use it;
-    # otherwise just ensure names(groups) included.
-    new_levels <- union(new_levels, names(groups))
+    # keep declared levels even when no old label maps to them.
+    all_levels <- defined_group_levels(groups)
+    all_levels <- all_levels[!is.na(all_levels)]
+    new_levels <- union(new_levels, all_levels)
   }
   
   # group index (1..n_new) for each kept old label
@@ -164,16 +164,27 @@ collapse_dim.poparray <- function(x, groups, dim, keep_empty = FALSE, name = NUL
     names(dn_new)[[k]] <- name
   }
   
+  # Preserve time/area role metadata from the original object, adjusting for rename().
+  roles <- attr(x, "dimroles", exact = TRUE)
+  time_dim_out <- roles$time
+  area_dim_out <- roles$area
+  if (!is.null(name) && is.character(name) && length(name) == 1L) {
+    if (identical(roles$time, dim_nm)) time_dim_out <- name
+    if (identical(roles$area, dim_nm)) area_dim_out <- name
+  }
+  
   # ---- 10) Wrap into a new poparray ----
   out <- new_poparray(
     x = arr_new,
     dimnames_list = dn_new,
     data_col = data_col(x),
-    source = get_source(x)
+    source = get_source(x),
+    time_dim = time_dim_out,
+    area_dim = area_dim_out
   )
   
   # refresh age_iv if age.char changed (if you store it as attribute)
-  if (identical(dim_nm, "age.char") && !is.null(attr(out, "age_iv", exact = TRUE))) {
+  if ("age.char" %in% names(dn_new) && !is.null(attr(out, "age_iv", exact = TRUE))) {
     attr(out, "age_iv") <- age_to_iv(dn_new[["age.char"]])
   }
   
