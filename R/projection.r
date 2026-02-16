@@ -5,12 +5,12 @@
 #
 # This file defines:
 #   - project(): user-facing entry point
-#   - project_cube(): applies a 1D engine across a poparray cube
+#   - project_cube(): applies a 1D time sries fitting engine across a poparray cube
 #   - run_projection_engine(): dispatcher
 #   - engine_*(): per-series forecasting engines (placeholders here)
 #
 # Requirements:
-#   - one confidence band per call (level)
+#   - Calculates the projected population and std_error (standard_error) for each series
 #   - preserve input schema (works for 3D, 5D, 6D, ...)
 #   - no silent full realization (only per-series vectors are realized)
 #   - interactive guard for large unfiltered cubes
@@ -21,7 +21,8 @@
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 14, 2026
-# Revised:  Refactored January 19, 2026
+# Revised:  Re-factored January 19, 2026
+# Changes from pop_projection to poparray_projection.  The class has one cube indexed on projection vs std_error
 # -------------------------------------------------------------------------------------->
 
 # ---- helpers -----------------------------------------------------------------
@@ -98,7 +99,7 @@ tp_projection_hdf5_writer <- function(out_dim,
                                       out_dimnames,
                                       year_k,
                                       dir = tempdir(),
-                                      prefix = "pop_projection",
+                                      prefix = "population_projection",
                                       chunkdim = NULL,
                                       compression_level = 6,
                                       dataset = "data",
@@ -114,27 +115,27 @@ tp_projection_hdf5_writer <- function(out_dim,
   checkmate::assert_character(stat_levels, min.len = 1)
   
   if (!requireNamespace("rhdf5", quietly = TRUE)) {
-    cli::abort("Package {.pkg rhdf5} is required for HDF5-backed projection writing.")
+    cli::cli_abort("Package {.pkg rhdf5} is required for HDF5-backed projection writing.")
   }
   if (!requireNamespace("HDF5Array", quietly = TRUE)) {
-    cli::abort("Package {.pkg HDF5Array} is required for HDF5-backed projection writing.")
+    cli::cli_abort("Package {.pkg HDF5Array} is required for HDF5-backed projection writing.")
   }
   
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   
   # ---- validate stat dimension ----
   if (is.null(names(out_dimnames)) || !"stat" %in% names(out_dimnames)) {
-    cli::abort("`out_dimnames` must include a named 'stat' dimension.")
+    cli::cli_abort("`out_dimnames` must include a named 'stat' dimension.")
   }
   stat_k <- match("stat", names(out_dimnames))
   if (stat_k != length(out_dim)) {
-    cli::abort("The 'stat' dimension must be the last dimension in `out_dim` / `out_dimnames`.")
+    cli::cli_abort("The 'stat' dimension must be the last dimension in `out_dim` / `out_dimnames`.")
   }
   if (!identical(out_dimnames[["stat"]], stat_levels)) {
-    cli::abort("`out_dimnames[['stat']]` must be exactly: {paste(stat_levels, collapse = ', ')}.")
+    cli::cli_abort("`out_dimnames[['stat']]` must be exactly: {paste(stat_levels, collapse = ', ')}.")
   }
   if (out_dim[[stat_k]] != length(stat_levels)) {
-    cli::abort("`out_dim[['stat']]` must equal length(stat_levels).")
+    cli::cli_abort("`out_dim[['stat']]` must equal length(stat_levels).")
   }
   
   # ---- Choose chunk dims if not supplied ----
@@ -191,16 +192,16 @@ tp_projection_hdf5_writer <- function(out_dim,
   write_year_slice <- function(dataset = "data", fixed_k_list, stat, values) {
     values <- as.numeric(values)
     if (length(values) != out_dim[[year_k]]) {
-      cli::abort("`values` must be length {out_dim[[year_k]]} (the projection horizon).")
+      cli::cli_abort("`values` must be length {out_dim[[year_k]]} (the projection horizon).")
     }
     
     stat <- as.character(stat)
     if (length(stat) != 1L || is.na(stat) || !nzchar(stat)) {
-      cli::abort("`stat` must be a single non-empty character string.")
+      cli::cli_abort("`stat` must be a single non-empty character string.")
     }
     stat_pos <- match(stat, stat_levels)
     if (is.na(stat_pos)) {
-      cli::abort("Unknown `stat` '{stat}'. Must be one of: {paste(stat_levels, collapse = ', ')}.")
+      cli::cli_abort("Unknown `stat` '{stat}'. Must be one of: {paste(stat_levels, collapse = ', ')}.")
     }
     
     nd <- length(out_dim)
@@ -510,9 +511,9 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   if (isTRUE(guard)) check_projection_scale(tp)
   
   dn <- dimnames(tp)
-  if (is.null(names(dn))) {
-    stop("poparray must have named dimensions (including 'year').", call. = FALSE)
-  }
+  # if (is.null(names(dn))) {
+  #   stop("poparray must have named dimensions (including 'year').", call. = FALSE)
+  # }
   
   time_nm <- tp_time_dim_name(tp)
   year_k  <- match(time_nm, names(dn))
@@ -619,7 +620,8 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   source <- paste0("Projection from ", orig_source[1])
   
   # NEW: projection object stores a single array with a stat dim
-  new_pop_projection(
+  browser()
+  new_poparray_projection(
     data       = proj_da,
     level      = level,
     method     = method,
@@ -770,6 +772,9 @@ project <- function(tp,
   if (identical(method, "auto")) {
     method <- infer_projection_method_from_tp(tp, time_dim = time_dim)
   }
+  
+  # validate poparray here, only needed  her and other functions can depend on getitng a poparray object
+  validate_poparray(tp)
   
   project_cube(tp = tp, h = h, level = level, method = method, guard = guard, ...)
 }

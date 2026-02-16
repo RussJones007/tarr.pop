@@ -67,9 +67,11 @@ tp_dimnames_equal <- function(a, b) {
 }
 
 tp_time_dim_name <- function(tp) {
+  
   dn <- tp_dimnames(tp)
-  if (!is.null(names(dn)) && "year" %in% names(dn)) return("year")
-  stop("pop_projection requires a `year` dimension.", call. = FALSE)
+  time_dm <- time_role(tp)
+  if (!is.null(names(dn)) && time_dm %in% names(dn)) return(time_dm)
+  stop("poparray_projection requires a time role in poparray object", call. = FALSE)
 }
 
 # ---- scale guard -------------------------------------------------------------
@@ -115,68 +117,35 @@ check_projection_scale <- function(tp,
 # ---- constructor + validator -------------------------------------------------
 
 #' @keywords internal
-validate_pop_projection <- function(x) {
+validate_poparray_projection <- function(x) {
   # ---- basic structure ----
-  if (!inherits(x, "pop_projection")) {
+  if (!inherits(x, "poparray_projection")) {
     cli::cli_abort(
-      "{.arg x} must inherit from {.cls pop_projection}.",
+      "{.arg x} must inherit from {.cls poparray_projection}.",
       call = rlang::caller_env()
     )
   }
   
   if (!is.list(x)) {
     cli::cli_abort(
-      "{.cls pop_projection} must be a list.",
+      "{.cls poparray_projection} must be a list.",
       call = rlang::caller_env()
     )
   }
   
-  req <- c("projected", "lower", "upper")
+  req <- "stat"
   missing_req <- setdiff(req, names(x))
   if (length(missing_req)) {
     cli::cli_abort(
       c(
-        "{.cls pop_projection} is missing required components.",
+        "{.cls poparray_projection} is missing required component.",
         "x" = "Missing: {.val {missing_req |> paste(collapse = ', ')}}."
       ),
       call = rlang::caller_env()
     )
   }
   
-  # ---- cube type checks ----
-  bad_tp <- c(
-    projected = !is.poparray(x$projected),
-    lower = !is.poparray(x$lower),
-    upper = !is.poparray(x$upper)
-  )
-  if (any(bad_tp)) {
-    cli::cli_abort(
-      c(
-        "All components of a {.cls pop_projection} must be {.cls poparray} objects.",
-        "x" = "Invalid: {.val {names(bad_tp)[bad_tp] |> paste(collapse = ', ')}}."
-      ),
-      call = rlang::caller_env()
-    )
-  }
-  
-  # ---- dimension consistency ----
-  if (!identical(tp_dim(x$projected), tp_dim(x$lower)) ||
-      !identical(tp_dim(x$projected), tp_dim(x$upper))) {
-    cli::cli_abort(
-      "{.cls pop_projection} cubes must have identical dimensions.",
-      call = rlang::caller_env()
-    )
-  }
-  
-  if (!tp_dimnames_equal(x$projected, x$lower) ||
-      !tp_dimnames_equal(x$projected, x$upper)) {
-    cli::cli_abort(
-      "{.cls pop_projection} cubes must have identical dimnames.",
-      call = rlang::caller_env()
-    )
-  }
-  
-  # Confirm required time dimension exists (currently hard-coded to `year`)
+  # Confirm required time dimension exists
   time_nm <- tp_time_dim_name(x$projected)
   years_avail <- tp_dimnames(x$projected)[[time_nm]]
   years_chr <- as.character(years_avail)
@@ -185,7 +154,7 @@ validate_pop_projection <- function(x) {
   level <- attr(x, "level", exact = TRUE)
   if (is.null(level)) {
     cli::cli_abort(
-      "{.cls pop_projection} is missing attribute {.field level}.",
+      "{.cls poparray_projection} is missing attribute {.field level}.",
       call = rlang::caller_env()
     )
   }
@@ -199,7 +168,7 @@ validate_pop_projection <- function(x) {
   method <- attr(x, "method", exact = TRUE)
   if (is.null(method)) {
     cli::cli_abort(
-      "{.cls pop_projection} is missing attribute {.field method}.",
+      "{.cls poparray_projection} is missing attribute {.field method}.",
       call = rlang::caller_env()
     )
   }
@@ -229,7 +198,7 @@ validate_pop_projection <- function(x) {
   base_years <- attr(x, "base_years", exact = TRUE)
   if (is.null(base_years)) {
     cli::cli_abort(
-      "{.cls pop_projection} is missing attribute {.field base_years}.",
+      "{.cls poparray_projection} is missing attribute {.field base_years}.",
       call = rlang::caller_env()
     )
   }
@@ -266,7 +235,7 @@ validate_pop_projection <- function(x) {
 
 
 #' @keywords internal
-new_pop_projection <- function(
+new_poparray_projection <- function(
     data,
     level,
     method,
@@ -279,7 +248,7 @@ new_pop_projection <- function(
   dn <- dimnames(data)
   
   if (is.null(dn) || !"stat" %in% names(dn)) {
-    cli::abort("Projection array must contain a 'stat' dimension.")
+    cli::cli_abort("Projection array must contain a 'stat' dimension.")
   }
   
   stat_levels <- dn[["stat"]]
@@ -287,7 +256,7 @@ new_pop_projection <- function(
   required_levels <- c("projection", "std_error")
   
   if (!identical(stat_levels, required_levels)) {
-    cli::abort(
+    cli::cli_abort(
       c(
         "The 'stat' dimension must be exactly:",
         "x projection",
@@ -330,16 +299,16 @@ poparray_projection <- function(
   checkmate::assert_class(std_error, "DelayedArray")
   
   if (!identical(dim(projection), dim(std_error))) {
-    cli::abort("projection and std_error must have identical dimensions.")
+    cli::cli_abort("projection and std_error must have identical dimensions.")
   }
   
   if (!identical(dimnames(projection), dimnames(std_error))) {
-    cli::abort("projection and std_error must have identical dimnames.")
+    cli::cli_abort("projection and std_error must have identical dimnames.")
   }
   
   # Ensure DelayedArray::abind exists
   if (!exists("abind", where = asNamespace("DelayedArray"))) {
-    cli::abort("DelayedArray::abind() is not available in this version.")
+    cli::cli_abort("DelayedArray::abind() is not available in this version.")
   }
   
   combined <- DelayedArray::abind(
@@ -353,7 +322,8 @@ poparray_projection <- function(
     list(stat = c("projection", "std_error"))
   )
   
-  new_pop_projection(
+  browser()
+  new_poparray_projection(
     data       = combined,
     level      = level,
     method     = method,
@@ -394,10 +364,10 @@ confint.poparray_projection <- function(x, level = 0.95, ...) {
 # print ------------------------------------------------------------------
 
 #' @export
-print.pop_projection <- function(x, ...) {
-  validate_pop_projection(x)
+print.poparray_projection <- function(x, ...) {
+  validate_poparray_projection(x)
   
-  cat("<pop_projection>\n")
+  cat("<poparray_projection>\n")
   cat("  method: ", attr(x, "method"), "\n", sep = "")
   cat("  level:  ", attr(x, "level"), "\n", sep = "")
   cat("  source: ", attr(x, "source"), "\n", sep = "")
@@ -426,6 +396,7 @@ print.pop_projection <- function(x, ...) {
 #' @export
 `[.poparray_projection` <- function(x, ..., drop = FALSE) {
   
+  
   # Subset underlying DelayedArray
   subset_data <- x$data[..., drop = drop]
   
@@ -433,9 +404,9 @@ print.pop_projection <- function(x, ...) {
   
   # If stat dimension still exists, return projection object
   if (!is.null(dn) && "stat" %in% names(dn)) {
-    
+    browser()
     return(
-      new_pop_projection(
+      new_poparray_projection(
         data       = subset_data,
         level      = attr(x, "level"),
         method     = attr(x, "method"),
@@ -452,7 +423,7 @@ print.pop_projection <- function(x, ...) {
 
 # ---- coercion ---------------------------------------------------------------
 
-#' Coerce a pop_projection to a poparray
+#' Coerce a poparray_projection to a poparray
 #' 
 #' at pop_projection consists of three poparray cubes, this coercion returns a single poparray object
 #' based on the which argument. 
@@ -466,17 +437,28 @@ print.pop_projection <- function(x, ...) {
 #'
 #' @export
 as.poparray.pop_projection <- function(x,
-                                        which = c("projected", "lower", "upper"),
+                                        which = c("projection", "std_error"),
                                         ...) {
-  validate_pop_projection(x)
-  which <- match.arg(which)
+  validate_poparray_projection(x)
+  pa <- x$handle
+  ndx_name      <- match.arg(which)
+  nms <- names(dimnames(pa))
+  names_length <- length(nms)
+  stat_position <- which(nms == "stat")
   
-  tp <- x[[which]]
+  indexed_list   <- vector("list", length = names_length)
+  indexed_list[] <- TRUE
+  indexed_list[stat_position] <- ndx_name
   
-  attr(tp, "projection_level") <- attr(x, "level")
-  attr(tp, "projection_method") <- attr(x, "method")
-  attr(tp, "projection_base_years") <- attr(x, "base_years")
-  attr(tp, "source") <- attr(x, "source")
+  res <- x[indexed_list, drop = TRUE]
+  
+  # index of stat dimension
+  new_poparray(res, dimnames_list = dimnames(res))
+  
+  attr(res, "projection_level") <- attr(x, "level")
+  attr(res, "projection_method") <- attr(x, "method")
+  attr(res, "projection_base_years") <- attr(x, "base_years")
+  attr(res, "source") <- attr(x, "source")
   
   tp
 }
