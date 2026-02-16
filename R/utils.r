@@ -265,7 +265,8 @@ dim_labels <- function(arr, dimname, remove = NULL){
   checkmate::assert_class(x = arr, classes = "poparray")
   checkmate::assert(
     check_string(dimname),
-    check_choice(dimname, names(dimnames(arr)))
+    check_choice(dimname, names(dimnames(arr))),
+    combine = "and"
   )
 
   ret <- dimnames(arr)[[dimname]]
