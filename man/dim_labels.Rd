@@ -4,17 +4,11 @@
 \alias{dim_labels}
 \alias{assign_label_factory}
 \alias{ages}
-\alias{ages<-}
 \alias{races}
-\alias{races<-}
 \alias{ethnicities}
-\alias{ethnicities<-}
 \alias{sexes}
-\alias{sexes<-}
 \alias{areas}
-\alias{areas<-}
 \alias{years}
-\alias{years<-}
 \title{Dimension Labels}
 \usage{
 dim_labels(arr, dimname, remove = NULL)
@@ -23,27 +17,15 @@ assign_label_factory(dim_name)
 
 ages(arr, ...)
 
-ages(x, values) <- value
-
 races(arr, ...)
-
-races(x, values) <- value
 
 ethnicities(arr, ...)
 
-ethnicities(x, values) <- value
-
 sexes(arr, ...)
-
-sexes(x, values) <- value
 
 areas(arr, ...)
 
-areas(x, values) <- value
-
 years(arr, ...)
-
-years(x, values) <- value
 }
 \arguments{
 \item{arr}{a tarr_pop array object}

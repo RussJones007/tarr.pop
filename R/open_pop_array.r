@@ -232,6 +232,7 @@ open_poparray <- function(series_id,
                           data_col = "population") {
   
   reg <- tarr_series_registry()
+  
   row <- reg[reg$series_id == series_id, , drop = FALSE]
   if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
   

@@ -202,7 +202,7 @@ assign_array_levels <- function(arr, dimname, char_vec){
   dim_ndx <- which(names(dimnames(arr)) %in% dimname)
   assertthat::assert_that(length(dim_ndx) > 0,
                           msg = str_glue("dimname '{dimname}' is not one of the dimensions for the array"))
-  assertthat::assert_that(is.array(arr))
+  assertthat::assert_that(is.poparray(arr))
   assertthat::assert_that(is.character(char_vec) & (length(char_vec) > 0),
                           msg = "char_vec must be a character vector with at least one entry")
 
@@ -314,50 +314,50 @@ assign_label_factory <- function(dim_name){
 #' @export
 ages <- label_factory("age.char")
 
-#' @rdname dim_labels
-#' @export
-`ages<-` <- assign_label_factory("age.char")
+# #' @rdname dim_labels
+# #' @export
+# `ages<-` <- assign_label_factory("age.char")
 
 
 #' @rdname dim_labels
 #' @export
 races <- label_factory("race")
 
-#' @rdname dim_labels
-#' @export
-`races<-` <- assign_label_factory("race")
+# #' @rdname dim_labels
+# #' @export
+# `races<-` <- assign_label_factory("race")
 
 #' @rdname dim_labels
 #' @export
 ethnicities <- label_factory("ethnicity")
 
-#' @rdname dim_labels
-#' @export
-`ethnicities<-` <- assign_label_factory("ethnicity")
+# #' @rdname dim_labels
+# #' @export
+# `ethnicities<-` <- assign_label_factory("ethnicity")
 
 #' @rdname dim_labels
 #' @export
 sexes <- label_factory("sex")
 
-#' @rdname dim_labels
-#' @export
-`sexes<-` <- assign_label_factory("sex")
+##' @rdname dim_labels
+##' @export
+#`sexes<-` <- assign_label_factory("sex")
 
 #' @rdname dim_labels
 #' @export
 areas <- label_factory("area.name")
 
-#' @rdname dim_labels
-#' @export
-`areas<-` <- assign_label_factory("area.name")
+# #' @rdname dim_labels
+# #' @export
+# `areas<-` <- assign_label_factory("area.name")
 
 #' @rdname dim_labels
 #' @export
 years <- label_factory("year")
 
-#' @rdname dim_labels
-#' @export
-`years<-` <- assign_label_factory("year")
+# #' @rdname dim_labels
+# #' @export
+# `years<-` <- assign_label_factory("year")
 
 
 # --- Convenience function to set source and url attributes for objects
