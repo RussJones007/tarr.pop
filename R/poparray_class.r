@@ -683,10 +683,42 @@ split.poparray <- function(x, f, drop = FALSE, ...) {
   
   out <- lapply(labs, \(lab) {
     # Named indexing, so dimension order doesn't matter
-    do.call(`[`, list(x, drop = drop, structure(list(lab), names = split_dim)))
+    do.call(`[`, c(list(x), stats::setNames(list(lab), split_dim), list(drop = drop)))
   })
   
-  purr::set_names(out, labs)
+  purrr::set_names(out, labs)
+}
+
+#' Apply a function by poparray dimension groups
+#'
+#' Splits a `poparray` by one dimension (or role alias) and applies `FUN`
+#' to each slice.
+#'
+#' @param data A `poparray`.
+#' @param INDICES Dimension selector used for grouping. Accepts a single
+#'   dimension name, role alias (`"time"` or `"area"`), or a single integer
+#'   dimension position.
+#' @param FUN Function applied to each grouped slice.
+#' @param ... Additional arguments passed to `FUN`.
+#' @param simplify Logical; if `TRUE` (default), attempt to simplify results
+#'   with `base::simplify2array()`.
+#' @param drop Logical; passed to [split.poparray()] and then `[.poparray` for
+#'   each slice.
+#'
+#' @return A named list of results, or a simplified array/vector when
+#'   `simplify = TRUE`.
+#' @export
+by.poparray <- function(data, INDICES, FUN, ..., simplify = TRUE, drop = FALSE) {
+  validate_poparray(data)
+  if (!is.function(FUN)) cli::cli_abort("{.arg FUN} must be a function.")
+  
+  slices <- split(data, f = INDICES, drop = drop)
+  out <- lapply(slices, FUN, ...)
+  
+  if (isTRUE(simplify)) {
+    return(base::simplify2array(out))
+  }
+  out
 }
 
 
@@ -850,4 +882,3 @@ polish_df <- function(df,
   
   df
 }
-
