@@ -114,3 +114,18 @@ test_that("tabular conversions include projection/std_error and keep attributes"
   expect_equal(attr(tb, "method", exact = TRUE), "ETS")
   expect_equal(attr(tb, "level", exact = TRUE), 0.95)
 })
+
+test_that("tabular conversions optionally include confidence limits", {
+  pr <- make_projection_fixture()
+  
+  df0 <- base::as.data.frame(pr, include_confidence = FALSE)
+  expect_false(any(c("lower", "upper") %in% names(df0)))
+  
+  df1 <- base::as.data.frame(pr, include_confidence = TRUE)
+  expect_true(all(c("lower", "upper") %in% names(df1)))
+  expect_true(all(df1$lower <= df1$projection))
+  expect_true(all(df1$upper >= df1$projection))
+  
+  tb1 <- tibble::as_tibble(pr, include_confidence = TRUE)
+  expect_true(all(c("lower", "upper") %in% names(tb1)))
+})
