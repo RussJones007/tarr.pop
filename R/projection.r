@@ -624,10 +624,9 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
   }
   
   source <- list(
-    note = paste0("Population projection based on data from ", as.character(orig_source$note %||% orig_source$source %||% "unknown")),
-    source = as.character(orig_source$source %||% "unknown"),
+    note = paste0("File used for projection: ", as.character(orig_source$note %||% orig_source$source %||% "unknown")),
+    source = paste0("Population projection based on data from ", as.character(orig_source$source %||% "unknown")),
     updated = as.character(Sys.Date()),
-    projected_from = orig_source,
     projection_method = as.character(method),
     projection_level = as.numeric(level)
   )
