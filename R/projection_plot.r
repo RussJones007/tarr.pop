@@ -96,7 +96,7 @@
 #'   dimnames = dn
 #' )
 #'
-#' tp <- new_poparray(
+#' parray <- new_poparray(
 #'   x = DelayedArray::DelayedArray(arr),
 #'   dimnames_list = dn,
 #'   data_col = "population",
@@ -104,7 +104,7 @@
 #' )
 #'
 #' \dontrun{
-#'   pr <- project(tp, h = 3, method = "auto")
+#'   pr <- project(parray, h = 3, method = "auto")
 #'
 #'   # Time series of total population with uncertainty ribbon
 #'   plot(pr, type = "ts", lwd = 2)
@@ -229,7 +229,7 @@ plot.poparray_projection <- function(x,
   }
   
   plot_pyramid_pop_projection(
-    tp = pa_proj,
+    parray = pa_proj,
     time_nm = time_nm,
     years = years_sel,
     areas = areas_sel,
@@ -264,10 +264,10 @@ tp_totals_by_time <- function(x, time_nm) {
 }
 
 #' @keywords internal
-subset_tp_named <- function(tp, selections, drop = FALSE) {
+subset_parray_named <- function(parray, selections, drop = FALSE) {
   # selections: named list where names are dimension names, values are
   #   character labels (or vectors of labels) to select.
-  dn <- dimnames(tp)
+  dn <- dimnames(parray)
   dnm <- names(dn)
   if (is.null(dnm)) {
     cli::cli_abort(
@@ -293,7 +293,7 @@ subset_tp_named <- function(tp, selections, drop = FALSE) {
     idx[[k]] <- selections[[nm]]
   }
   
-  do.call(`[`, c(list(tp), idx, list(drop = drop)))
+  do.call(`[`, c(list(parray), idx, list(drop = drop)))
 }
 
 # ---- plot implementations ----------------------------------------------------
@@ -395,7 +395,7 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
 }
 
 #' @keywords internal
-plot_pyramid_pop_projection <- function(tp, time_nm, years, areas, ...) {
+plot_pyramid_pop_projection <- function(parray, time_nm, years, areas, ...) {
   # Delegate to existing plot.poparray pyramid logic by subsetting projected cube
   # to the selected years × areas (and keeping all other dims).
   
@@ -404,12 +404,12 @@ plot_pyramid_pop_projection <- function(tp, time_nm, years, areas, ...) {
   sel[[time_nm]] <- years
   sel[["area.name"]] <- areas
   
-  tp_sub <- subset_tp_named(tp, selections = sel, drop = FALSE)
+  tp_sub <- subset_parray_named(parray, selections = sel, drop = FALSE)
   
   # Delegate (your plot.poparray already builds a year×area grid)
   plot(tp_sub, ...)
   
-  invisible(tp)
+  invisible(parray)
 }
 
 

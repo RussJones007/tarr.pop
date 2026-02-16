@@ -57,8 +57,8 @@ normalize_level <- function(level) {
   )
 }
 
-tp_dimnames <- function(tp) dimnames(tp)
-tp_dim <- function(tp) dim(tp)
+tp_dimnames <- function(parray) dimnames(parray)
+tp_dim <- function(parray) dim(parray)
 
 tp_dimnames_equal <- function(a, b) {
   da <- tp_dimnames(a)
@@ -66,22 +66,22 @@ tp_dimnames_equal <- function(a, b) {
   identical(da, db)
 }
 
-tp_time_dim_name <- function(tp) {
+tp_time_dim_name <- function(parray) {
   
-  dn <- tp_dimnames(tp)
-  time_dm <- time_role(tp)
+  dn <- tp_dimnames(parray)
+  time_dm <- time_role(parray)
   if (!is.null(names(dn)) && time_dm %in% names(dn)) return(time_dm)
   stop("poparray_projection requires a time role in poparray object", call. = FALSE)
 }
 
 # ---- scale guard -------------------------------------------------------------
 
-check_projection_scale <- function(tp,
+check_projection_scale <- function(parray,
                                    max_models = getOption("poparray.max_models", 1500L),
                                    ask = getOption("poparray.ask_before_large_projection", TRUE)) {
   
-  dn <- tp_dimnames(tp)
-  time_nm <- tp_time_dim_name(tp)
+  dn <- tp_dimnames(parray)
+  time_nm <- tp_time_dim_name(parray)
   
   if (is.null(names(dn))) return(invisible(TRUE))
   

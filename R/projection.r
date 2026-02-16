@@ -63,8 +63,8 @@ assign_year_slice <- function(arr, year_k, fixed_k_list, values) {
 }
 
 # Extract a single (base-years) series as a numeric vector for a fixed non-year cell
-extract_series <- function(tp, year_k, fixed_k_list) {
-  nd <- length(dim(tp))
+extract_series <- function(parray, year_k, fixed_k_list) {
+  nd <- length(dim(parray))
   idx <- vector("list", nd)
   for (k in seq_len(nd)) idx[[k]] <- TRUE
   idx[[year_k]] <- TRUE
@@ -74,7 +74,7 @@ extract_series <- function(tp, year_k, fixed_k_list) {
       idx[[k]] <- fixed_k_list[[nm]]
     }
   }
-  y <- do.call(`[`, c(list(tp), idx, list(drop = TRUE)))
+  y <- do.call(`[`, c(list(parray), idx, list(drop = TRUE)))
   as.numeric(y)
 }
 
@@ -500,9 +500,9 @@ engine_cagr <- function(y, years, h, level, ...) {
 # ---- cube runner --------------------------------------------------------------
 
 #' @keywords internal
-project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
-  if (!inherits(tp, "poparray")) {
-    stop("`tp` must be a poparray.", call. = FALSE)
+project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
+  if (!inherits(parray, "poparray")) {
+    stop("`parray` must be a poparray.", call. = FALSE)
   }
   
   h <- as.integer(h)
@@ -512,14 +512,14 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   
   level <- normalize_level(level)
   
-  if (isTRUE(guard)) check_projection_scale(tp)
+  if (isTRUE(guard)) check_projection_scale(parray)
   
-  dn <- dimnames(tp)
+  dn <- dimnames(parray)
   if (is.null(names(dn))) {
     stop("poparray must have named dimensions (including the time dimension).", call. = FALSE)
   }
   
-  time_nm <- tp_time_dim_name(tp)
+  time_nm <- tp_time_dim_name(parray)
   year_k  <- match(time_nm, names(dn))
   
   base_years_chr   <- as.character(dn[[time_nm]])
@@ -529,7 +529,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   out_dn <- dn
   out_dn[[time_nm]] <- future_years_chr
   
-  in_dim <- dim(tp)
+  in_dim <- dim(parray)
   out_dim <- in_dim
   out_dim[[year_k]] <- h
   
@@ -572,7 +572,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   
   if (is.null(grid)) {
     # 1D year-only cube
-    y <- extract_series(tp, year_k = year_k, fixed_k_list = list())
+    y <- extract_series(parray, year_k = year_k, fixed_k_list = list())
     res <- run_projection_engine(
       method = method,
       y = y,
@@ -595,7 +595,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
       fixed_k_list <- as.list(grid[i, , drop = FALSE])
       names(fixed_k_list) <- names(grid) # dim positions as character
       
-      y <- extract_series(tp, year_k = year_k, fixed_k_list = fixed_k_list)
+      y <- extract_series(parray, year_k = year_k, fixed_k_list = fixed_k_list)
       
       res <- run_projection_engine(
         method = method,
@@ -616,7 +616,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   }
   
   # Build projection provenance source string
-  orig_source <- attr(tp, "source", exact = TRUE)
+  orig_source <- attr(parray, "source", exact = TRUE)
   if (is.null(orig_source) || (is.character(orig_source) && !nzchar(orig_source))) {
     orig_source <- "unknown"
   }
@@ -629,8 +629,8 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
     method     = method,
     source     = source,
     base_years = base_years_used,
-    dimroles   = attr(tp, "dimroles", exact = TRUE),
-    data_col   = attr(tp, "data_col", exact = TRUE) %||% "population"
+    dimroles   = attr(parray, "dimroles", exact = TRUE),
+    data_col   = attr(parray, "data_col", exact = TRUE) %||% "population"
   )
 }
 
@@ -654,15 +654,15 @@ infer_projection_method <- function(n_base_years) {
 }
 
 #' @keywords internal
-infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
-  dn <- dimnames(tp)
+infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
+  dn <- dimnames(parray)
   if (is.null(names(dn))) {
     stop("poparray must have named dimensions to infer the time axis.", call. = FALSE)
   }
   
-  time_nm <- if (is.null(time_dim)) tp_time_dim_name(tp) else time_dim
+  time_nm <- if (is.null(time_dim)) tp_time_dim_name(parray) else time_dim
   if (!time_nm %in% names(dn)) {
-    stop("`time_dim` must match a dimension name in `tp`.", call. = FALSE)
+    stop("`time_dim` must match a dimension name in `parray`.", call. = FALSE)
   }
   
   n_base_years <- length(dn[[time_nm]])
@@ -713,13 +713,13 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' * **base_years** — The number of historical years used to fit the model.
 #' * **created** — Timestamp indicating when the projection was generated.
 #'
-#' @param tp A `poparray` object (filtered or unfiltered) containing a time
+#' @param parray A `poparray` object (filtered or unfiltered) containing a time
 #'   dimension.
 #' @param h Integer forecast horizon (number of future years).
 #' @param level Confidence level for interval estimation (default `0.95`).
 #'   Values such as `0.95` or `95` are both accepted.
 #' @param method The projection method: `"auto"`, `"ETS"`, `"CAGR"`, or `"ARIMA"`.
-#'   If `"auto"`, the method is inferred from the number of base years in `"tp"`:
+#'   If `"auto"`, the method is inferred from the number of base years in `"parray"`:
 #'
 #'   * 5-7 years uses `"ETS"`
 #'   * 8-10 years uses  `"CAGR"`
@@ -742,7 +742,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' )
 #' arr <- array(seq_along(dn$year), dim = c(7, 1, 1), dimnames = dn)
 #'
-#' tp <- new_poparray(
+#' parray <- new_poparray(
 #'   x = DelayedArray::DelayedArray(arr),
 #'   dimnames_list = dn,
 #'   data_col = "population",
@@ -750,7 +750,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' )
 #'
 #' \dontrun{
-#'   pr <- project(tp, h = 3, method = "auto", level = 0.95, guard = FALSE)
+#'   pr <- project(parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
 #'   pr
 #'   as.poparray(pr)
 #' }
@@ -762,7 +762,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' * [plot.poparray_projection()] for visualization.
 #' 
 #' @export
-project <- function(tp,
+project <- function(parray,
                     h,
                     level = 0.95,
                     method = c("auto", "ARIMA", "ETS", "CAGR"),
@@ -773,11 +773,11 @@ project <- function(tp,
   method <- match.arg(method)
   
   if (identical(method, "auto")) {
-    method <- infer_projection_method_from_tp(tp, time_dim = time_dim)
+    method <- infer_projection_method_from_tp(parray, time_dim = time_dim)
   }
   
   # validate poparray here, only needed  her and other functions can depend on getitng a poparray object
-  validate_poparray(tp)
+  validate_poparray(parray)
   
-  project_cube(tp = tp, h = h, level = level, method = method, guard = guard, ...)
+  project_cube(parray = parray, h = h, level = level, method = method, guard = guard, ...)
 }
