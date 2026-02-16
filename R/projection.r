@@ -15,14 +15,15 @@
 #   - no silent full realization (only per-series vectors are realized)
 #   - interactive guard for large unfiltered cubes
 # ------------------------------------------------------------------------------
-# NOTE: normalize_level(), check_projection_scale(), new_pop_projection()
-# are defined in projection_classes.R
+# NOTE: normalize_level(), check_projection_scale(), and new_poparray_projection()
+# are defined in projection_class.r
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 14, 2026
 # Revised:  Re-factored January 19, 2026
-# Changes from pop_projection to poparray_projection.  The class has one cube indexed on projection vs std_error
+# The projection class stores one delayed cube in `handle`, indexed by stat levels
+# `projection` and `std_error`.
 # -------------------------------------------------------------------------------------->
 
 # ---- helpers -----------------------------------------------------------------
@@ -234,7 +235,7 @@ tp_projection_hdf5_writer <- function(out_dim,
   
   as_handles <- function() {
     list(
-      data = HDF5Array::HDF5Array(path, dataset),
+      handle = HDF5Array::HDF5Array(path, dataset),
       path = path
     )
   }
@@ -547,7 +548,7 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   handles <- w$as_handles()
   # Expect ONE handle now (7D DelayedArray / HDF5Array)
   # Name can be "data" (recommended) or "projection" etc.
-  proj_da <- handles$data
+  proj_da <- handles$handle
   
   other_k <- setdiff(seq_along(in_dim), year_k)
   
@@ -620,13 +621,14 @@ project_cube <- function(tp, h, level, method, guard = TRUE, ...) {
   source <- paste0("Projection from ", orig_source[1])
   
   # NEW: projection object stores a single array with a stat dim
-  browser()
   new_poparray_projection(
-    data       = proj_da,
+    handle     = proj_da,
     level      = level,
     method     = method,
     source     = source,
-    base_years = base_years_used
+    base_years = base_years_used,
+    dimroles   = attr(tp, "dimroles", exact = TRUE),
+    data_col   = attr(tp, "data_col", exact = TRUE) %||% "population"
   )
 }
 
@@ -679,8 +681,8 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' For most use cases, `"auto"` is recommended and will select the appropriate
 #' engine based on the number of base years available in the input cube.
 #'
-#' The returned `pop_projection` object contains three `poparray` cubes:
-#' `projected`, `lower`, and `upper`, along with projection metadata.
+#' The returned `poparray_projection` object contains one delayed cube in
+#' `handle`, with a `stat` dimension containing `projection` and `std_error`.
 #'
 #' ## Engine methods
 #'
@@ -700,11 +702,10 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' ## Projection metadata
 #'
 #' The following metadata are stored as attributes on the returned
-#' `pop_projection` object:
+#' `poparray_projection` object:
 #'
 #' * **method** — The projection engine used (`"ETS"`, `"CAGR"`, or `"ARIMA"`).
-#' * **level** — The confidence level used when computing the `upper` and
-#'   `lower` bounds.
+#' * **level** — The confidence level used for uncertainty calculations.
 #' * **source** — A character string describing the projection origin, including
 #'   source information from the originating `poparray`.
 #' * **base_years** — The number of historical years used to fit the model.
@@ -729,7 +730,7 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #'   implied number of independent models is large.
 #' @param ... Additional arguments passed to the selected engine implementation.
 #'
-#' @return A `pop_projection` object.
+#' @return A `poparray_projection` object.
 #' @examples
 #' # A tiny synthetic 3D cube: year × area.name × sex
 #' dn <- list(
@@ -749,14 +750,14 @@ infer_projection_method_from_tp <- function(tp, time_dim = NULL) {
 #' \dontrun{
 #'   pr <- project(tp, h = 3, method = "auto", level = 0.95, guard = FALSE)
 #'   pr
-#'   as.poparray(pr, which = "projected")
+#'   as.poparray(pr)
 #' }
 #' 
 #' @seealso
-#' * [pop_projection] for the returned object structure.
-#' * [as.poparray.pop_projection()] to extract one of the three cubes.
-#' * [as.data.frame.pop_projection()] and [as_tibble.pop_projection()] for tabular output.
-#' * [plot.pop_projection()] for visualization (added in the next step).
+#' * [poparray_projection] for the returned object structure.
+#' * [as.poparray.poparray_projection()] to coerce to a role-aware poparray.
+#' * [as.data.frame.poparray_projection()] and [as_tibble.poparray_projection()] for tabular output.
+#' * [plot.poparray_projection()] for visualization.
 #' 
 #' @export
 project <- function(tp,

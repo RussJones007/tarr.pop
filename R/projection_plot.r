@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_plot.r
 # Description:
-#   the plot() funcion for class pop_projection 
+#   the plot() function for class poparray_projection 
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones with assistance from 
@@ -14,19 +14,18 @@
 
 #' Plot a population projection
 #'
-#' Visualizes a `pop_projection` object either as a time series of total
+#' Visualizes a `poparray_projection` object either as a time series of total
 #' population with uncertainty bounds or as a grid of population pyramids.
 #'
 #' ## Plot types
 #'
 #' * **`"ts"` (default)** — Plots the total projected population for each
 #'   time period as a line, aggregated across all non-time dimensions.
-#'   Uncertainty is shown as a shaded ribbon between the `lower` and `upper`
-#'   projection bounds. This plot always uses all three projection cubes and
-#'   ignores area-specific arguments.
+#'   Uncertainty is shown as a shaded ribbon between derived lower/upper bounds
+#'   computed from `projection`, `std_error`, and `level`.
 #'
 #' * **`"pyramid"`** — Displays population pyramids based on the
-#'   `projected` cube only. Pyramids are arranged in a grid with
+#'   `projection` values only. Pyramids are arranged in a grid with
 #'   **years in rows** and **areas in columns**.
 #'
 #' ## Area and year selection for population pyramids
@@ -63,7 +62,7 @@
 #' Other graphical parameters (e.g., `lwd`, `col`, `cex`) are passed to the
 #' base plotting functions.
 #'
-#' @param x A `pop_projection` object.
+#' @param x A `poparray_projection` object.
 #' @param type Plot type: `"ts"` for a time-series plot of total population
 #'   or `"pyramid"` for a grid of population pyramids.
 #' @param areas Optional character vector of area names to plot when
@@ -74,13 +73,13 @@
 #'   Defaults to 5 and may not exceed 5. The most recent years are used.
 #' @param ... Additional graphical parameters passed to the plotting functions.
 #'
-#' @return Invisibly returns the input `pop_projection` object.
+#' @return Invisibly returns the input `poparray_projection` object.
 #'
 #' @seealso
 #' * [project()] for creating population projections
-#' * [pop_projection] for the projection object structure
+#' * [poparray_projection] for the projection object structure
 #' * [plot.poparray()] for population pyramid plotting
-#' * [as.poparray.pop_projection()] to extract individual projection cubes
+#' * [as.poparray.poparray_projection()] to coerce to poparray
 #'
 #' @examples
 #' # Create a small synthetic projection example
@@ -115,13 +114,13 @@
 #' }
 #' 
 #' @export
-plot.pop_projection <- function(x,
+plot.poparray_projection <- function(x,
                                  type = c("ts", "pyramid"),
                                  areas = NULL,
                                  max_areas = 3,
                                  max_years = 5,
                                  ...) {
-  validate_pop_projection(x)
+  validate_poparray_projection(x)
   
   type <- match.arg(type)
   
@@ -142,8 +141,9 @@ plot.pop_projection <- function(x,
     )
   }
   
-  # Time dim name is centralized here (you removed the duplicate in projection.r)
-  time_nm <- tp_time_dim_name(x$projected)
+  pa <- as.poparray(x)
+  pa_proj <- pa[stat = "projection", drop = TRUE]
+  time_nm <- attr(pa_proj, "dimroles", exact = TRUE)$time
   
   if (identical(type, "ts")) {
     # "ts" ignores area selection by design; it plots totals over time with ribbon
@@ -158,7 +158,7 @@ plot.pop_projection <- function(x,
   }
   
   # ---- pyramid selection / checks ----
-  dn <- tp_dimnames(x$projected)
+  dn <- tp_dimnames(pa_proj)
   if (is.null(names(dn))) {
     cli::cli_abort(
       "{.cls poparray} cubes must have named dimensions to plot pyramids.",
@@ -229,7 +229,7 @@ plot.pop_projection <- function(x,
   }
   
   plot_pyramid_pop_projection(
-    x = x,
+    tp = pa_proj,
     time_nm = time_nm,
     years = years_sel,
     areas = areas_sel,
@@ -240,13 +240,13 @@ plot.pop_projection <- function(x,
 # ---- internal plot helpers --------------------------------------------------------
 
 #' @keywords internal
-tp_totals_by_time <- function(tp, time_nm) {
+tp_totals_by_time <- function(x, time_nm) {
   # Returns a numeric vector of totals by time dimension.
   # Only realizes length-n_time output (safe for HDF5-backed arrays).
-  dn <- dimnames(tp)
+  dn <- dimnames(x)
   if (is.null(names(dn)) || !time_nm %in% names(dn)) {
     cli::cli_abort(
-      "Time dimension {.val {time_nm}} not found in poparray dimnames.",
+      "Time dimension {.val {time_nm}} not found in dimnames.",
       call = rlang::caller_env()
     )
   }
@@ -255,7 +255,7 @@ tp_totals_by_time <- function(tp, time_nm) {
   
   # DelayedArray::apply will materialize only the result vector (length = n_time)
   out <- DelayedArray::apply(
-    tp$handle,
+    x,
     MARGIN = k_time,
     FUN = function(z) sum(z, na.rm = TRUE)
   )
@@ -312,11 +312,16 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
   dots$ribbon_border <- NULL
   
   # ---- totals by time (length-n_years only) ----
-  years_chr <- as.character(dimnames(x$projected)[[time_nm]])
+  pr <- projection(x)
+  se <- std_error(x)
   
-  y_hat <- tp_totals_by_time(x$projected, time_nm = time_nm)
-  y_lo  <- tp_totals_by_time(x$lower,     time_nm = time_nm)
-  y_hi  <- tp_totals_by_time(x$upper,     time_nm = time_nm)
+  years_chr <- as.character(dimnames(pr)[[time_nm]])
+  
+  y_hat <- tp_totals_by_time(pr, time_nm = time_nm)
+  z <- stats::qnorm(1 - (1 - attr(x, "level", exact = TRUE)) / 2)
+  y_se <- tp_totals_by_time(se, time_nm = time_nm)
+  y_lo <- y_hat - z * y_se
+  y_hi <- y_hat + z * y_se
   
   years_int <- suppressWarnings(as.integer(years_chr))
   is_num_year <- !anyNA(years_int)
@@ -390,10 +395,9 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
 }
 
 #' @keywords internal
-plot_pyramid_pop_projection <- function(x, time_nm, years, areas, ...) {
-  # Delegate to existing plot.poparray pyramid logic by subsetting forecast cube
+plot_pyramid_pop_projection <- function(tp, time_nm, years, areas, ...) {
+  # Delegate to existing plot.poparray pyramid logic by subsetting projected cube
   # to the selected years × areas (and keeping all other dims).
-  tp <- x$projected
   
   # Subset selected years (most recent) and areas
   sel <- list()
@@ -405,7 +409,7 @@ plot_pyramid_pop_projection <- function(x, time_nm, years, areas, ...) {
   # Delegate (your plot.poparray already builds a year×area grid)
   plot(tp_sub, ...)
   
-  invisible(x)
+  invisible(tp)
 }
 
 

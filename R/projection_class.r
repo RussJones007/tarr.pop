@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_class.r
 # Description:
-#   Defines the pop_projection class, constructor, validator, corcison, subsetting, and
+#   Defines the poparray_projection class, constructor, validator, coercion, subsetting, and
 #   print methods.  The plot method is defined in projection_plot.r script as it is quite long. 
 #
 # -------------------------------------------------------------------------------------->
@@ -11,18 +11,18 @@
 # -------------------------------------------------------------------------------------->
 
 
-# pop_projection class -------------------------------------------------------------------------------------------
+# poparray_projection class -------------------------------------------------------------------------------------------
 
 #' Projection class
 #'
 #' @description
-#' An S3 class representing a time-based projection. The class is a wrapper around an HDF5Array that contains the
-#' projected population and a dimension of the error. Objects of this class are typically created by [project()].  
+#' An S3 class representing a time-based projection. The class wraps a `DelayedArray`/`HDF5Array`
+#' in member `handle`, and stores uncertainty as a named `stat` dimension with levels
+#' `projection` and `std_error`. Objects are typically created by [project()].  
 #' 
 #' @section Structure:
-#' A `pop_projection` object is a list with a HDF5Array cube as a member. The cube is very similar to a poparray but
-#' wheres athe poparray figures are for population, these are projected population figures and another set of figures
-#' are added that represents the standard error and labeled as "stderr".
+#' A `poparray_projection` object is a list with delayed cube member `handle`.
+#' The cube includes time/area/strata dimensions plus `stat`.
 #'
 #' Attributes included:
 #' *   **level** is the confidence level used
@@ -34,9 +34,9 @@
 #'
 #' @seealso
 #' * [project()] to create a projection.
-#' * [as.poparray.pop_projection()] to select one of the poparray objects
+#' * [as.poparray.poparray_projection()] to coerce to a `poparray`
 #'
-#' @name pop_projection
+#' @name poparray_projection
 #' @docType class
 #' @keywords internal
 NULL
@@ -133,7 +133,7 @@ validate_poparray_projection <- function(x) {
     )
   }
   
-  req <- "stat"
+  req <- "handle"
   missing_req <- setdiff(req, names(x))
   if (length(missing_req)) {
     cli::cli_abort(
@@ -145,10 +145,35 @@ validate_poparray_projection <- function(x) {
     )
   }
   
-  # Confirm required time dimension exists
-  time_nm <- tp_time_dim_name(x$projected)
-  years_avail <- tp_dimnames(x$projected)[[time_nm]]
-  years_chr <- as.character(years_avail)
+  checkmate::assert_class(x$handle, "DelayedArray")
+  
+  dn <- dimnames(x$handle)
+  if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
+    cli::cli_abort(
+      "{.cls poparray_projection} must contain a named {.field stat} dimension in {.field handle}.",
+      call = rlang::caller_env()
+    )
+  }
+  if (!identical(as.character(dn[["stat"]]), c("projection", "std_error"))) {
+    cli::cli_abort(
+      "{.field handle} {.field stat} labels must be exactly {.val projection, std_error}.",
+      call = rlang::caller_env()
+    )
+  }
+  
+  roles <- attr(x, "dimroles", exact = TRUE)
+  if (is.null(roles) || !is.list(roles) || is.null(roles$time) || is.null(roles$area)) {
+    cli::cli_abort(
+      "{.cls poparray_projection} must include {.field dimroles} with {.field time} and {.field area}.",
+      call = rlang::caller_env()
+    )
+  }
+  if (!roles$time %in% names(dn) || !roles$area %in% names(dn)) {
+    cli::cli_abort(
+      "{.field dimroles$time} and {.field dimroles$area} must exist in {.field handle} dimension names.",
+      call = rlang::caller_env()
+    )
+  }
   
   # ---- attributes ----
   level <- attr(x, "level", exact = TRUE)
@@ -185,7 +210,7 @@ validate_poparray_projection <- function(x) {
   }
   
   
-  source <- get_source(x)[1]
+  source <- attr(x, "source", exact = TRUE)
   if (is.null(source) || length(source) != 1L || is.na(source) || !is.character(source)) {
     cli::cli_abort(
       "{.field source} must be a length-1 character value.",
@@ -234,16 +259,19 @@ validate_poparray_projection <- function(x) {
 
 #' @keywords internal
 new_poparray_projection <- function(
-    data,
+    handle,
     level,
     method,
     source,
-    base_years
+    base_years,
+    dimroles = NULL,
+    data_col = "population",
+    created = Sys.time()
 ) {
   
-  checkmate::assert_class(data, "DelayedArray")
+  checkmate::assert_class(handle, "DelayedArray")
   
-  dn <- dimnames(data)
+  dn <- dimnames(handle)
   
   if (is.null(dn) || !"stat" %in% names(dn)) {
     cli::cli_abort("Projection array must contain a 'stat' dimension.")
@@ -263,12 +291,26 @@ new_poparray_projection <- function(
     )
   }
   
+  if (is.null(dimroles)) {
+    dnn <- names(dn)
+    time_nm <- if ("year" %in% dnn) "year" else setdiff(dnn, "stat")[1]
+    area_nm <- if ("area.name" %in% dnn) "area.name" else setdiff(dnn, c(time_nm, "stat"))[1]
+    dimroles <- list(
+      time = time_nm,
+      area = area_nm,
+      strata = setdiff(dnn, c(time_nm, area_nm))
+    )
+  }
+  
   structure(
-    list(data = data),
+    list(handle = handle),
     level      = level,
     method     = method,
     source     = source,
     base_years = base_years,
+    dimroles   = dimroles,
+    data_col   = data_col,
+    created    = created,
     class = "poparray_projection"
   )
 }
@@ -290,7 +332,9 @@ poparray_projection <- function(
     level,
     method,
     source,
-    base_years
+    base_years,
+    dimroles = NULL,
+    data_col = "population"
 ) {
   
   checkmate::assert_class(projection, "DelayedArray")
@@ -320,13 +364,15 @@ poparray_projection <- function(
     list(stat = c("projection", "std_error"))
   )
   
-  browser()
+   
   new_poparray_projection(
-    data       = combined,
+    handle     = combined,
     level      = level,
     method     = method,
     source     = source,
-    base_years = base_years
+    base_years = base_years,
+    dimroles   = dimroles,
+    data_col   = data_col
   )
 }
 
@@ -336,12 +382,30 @@ poparray_projection <- function(
 
 #' @export
 projection <- function(x) {
-  x$data[,,,,,, "projection", drop = FALSE]
+  dn <- dimnames(x$handle)
+  if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
+    cli::abort("Projection data must contain a named 'stat' dimension.")
+  }
+  
+  stat_k <- match("stat", names(dn))
+  idx <- rep(list(TRUE), length(dim(x$handle)))
+  idx[[stat_k]] <- "projection"
+  
+  do.call(`[`, c(list(x$handle), idx, list(drop = FALSE)))
 }
 
 #' @export
 std_error <- function(x) {
-  x$data[,,,,,, "std_error", drop = FALSE]
+  dn <- dimnames(x$handle)
+  if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
+    cli::abort("Projection data must contain a named 'stat' dimension.")
+  }
+
+  stat_k <- match("stat", names(dn))
+  idx <- rep(list(TRUE), length(dim(x$handle)))
+  idx[[stat_k]] <- "std_error"
+
+  do.call(`[`, c(list(x$handle), idx, list(drop = FALSE)))
 }
 
 #' @export
@@ -376,8 +440,8 @@ print.poparray_projection <- function(x, ...) {
     sep = ""
   )
   
-  dn <- tp_dimnames(x$projected)
-  dims <- tp_dim(x$projected)
+  dn <- dimnames(x$handle)
+  dims <- dim(x$handle)
   
   if (!is.null(names(dn))) {
     cat("  dims:\n")
@@ -396,69 +460,72 @@ print.poparray_projection <- function(x, ...) {
   
   
   # Subset underlying DelayedArray
-  subset_data <- x$data[..., drop = drop]
+  subset_data <- x$handle[..., drop = drop]
   
   dn <- dimnames(subset_data)
   
   # If stat dimension still exists, return projection object
-  if (!is.null(dn) && "stat" %in% names(dn)) {
-    browser()
+  if (!is.null(dn) && !is.null(names(dn)) && "stat" %in% names(dn)) {
+     
     return(
       new_poparray_projection(
-        data       = subset_data,
+        handle     = subset_data,
         level      = attr(x, "level"),
         method     = attr(x, "method"),
         source     = attr(x, "source"),
-        base_years = attr(x, "base_years")
+        base_years = attr(x, "base_years"),
+        dimroles   = attr(x, "dimroles", exact = TRUE),
+        data_col   = attr(x, "data_col", exact = TRUE)
       )
     )
   }
   
-  # Otherwise stat dimension was removed → return poparray
-  # assuming poparray constructor exists
-  poparray(subset_data)
+  roles <- attr(x, "dimroles", exact = TRUE)
+  if (is.null(dn) || is.null(names(dn)) ||
+      !roles$time %in% names(dn) || !roles$area %in% names(dn)) {
+    return(subset_data)
+  }
+  
+  new_poparray(
+    x = subset_data,
+    dimnames_list = dn,
+    data_col = attr(x, "data_col", exact = TRUE) %||% "population",
+    source = attr(x, "source", exact = TRUE),
+    time_dim = roles$time,
+    area_dim = roles$area
+  )
 }
 
 # ---- coercion ---------------------------------------------------------------
 
 #' Coerce a poparray_projection to a poparray
-#' 
-#' at pop_projection consists of three poparray cubes, this coercion returns a single poparray object
-#' based on the which argument. 
 #'
-#' @param x a pop_projection object
-#' @param which whn x is pop_projection object, you choose which cube to make into a single poparray: 
-#'     *  projected
-#'     *  lower
-#'     *  upper
+#' Returns a `poparray` wrapping the same delayed backend in `handle`,
+#' preserving time/area roles and retaining the `stat` dimension.
+#'
+#' @param x a poparray_projection object
 #' @param ...
 #'
 #' @export
-as.poparray.pop_projection <- function(x,
-                                        which = c("projection", "std_error"),
-                                        ...) {
+as.poparray.poparray_projection <- function(x, ...) {
   validate_poparray_projection(x)
-  pa <- x$handle
-  ndx_name      <- match.arg(which)
-  nms <- names(dimnames(pa))
-  names_length <- length(nms)
-  stat_position <- which(nms == "stat")
-  
-  indexed_list   <- vector("list", length = names_length)
-  indexed_list[] <- TRUE
-  indexed_list[stat_position] <- ndx_name
-  
-  res <- x[indexed_list, drop = TRUE]
-  
-  # index of stat dimension
-  new_poparray(res, dimnames_list = dimnames(res))
+  roles <- attr(x, "dimroles", exact = TRUE)
+  dn <- dimnames(x$handle)
+  res <- new_poparray(
+    x = x$handle,
+    dimnames_list = dn,
+    data_col = attr(x, "data_col", exact = TRUE) %||% "population",
+    source = attr(x, "source", exact = TRUE),
+    time_dim = roles$time,
+    area_dim = roles$area
+  )
   
   attr(res, "projection_level") <- attr(x, "level")
   attr(res, "projection_method") <- attr(x, "method")
   attr(res, "projection_base_years") <- attr(x, "base_years")
   attr(res, "source") <- attr(x, "source")
   
-  tp
+  res
 }
 
 # ---- tabular coercion --------------------------------------------------------
@@ -467,25 +534,23 @@ projection_to_df <- function(x,
                              include_level = TRUE,
                              include_model = TRUE,
                              ...) {
+  validate_poparray_projection(x)
   
-  pf <- as.data.frame(x$projected, ...)
-  lo <- as.data.frame(x$lower, ...)
-  up <- as.data.frame(x$upper, ...)
+  arr <- as.array(x$handle)
+  dimnames(arr) <- dimnames(x$handle)
   
-  val_pf <- names(pf)[ncol(pf)]
-  val_lo <- names(lo)[ncol(lo)]
-  val_up <- names(up)[ncol(up)]
+  long <- as.data.frame(
+    as.table(arr),
+    stringsAsFactors = FALSE,
+    responseName = "value",
+    ...
+  )
   
-  dims <- names(pf)[-ncol(pf)]
-  
-  if (!identical(pf[dims], lo[dims]) || !identical(pf[dims], up[dims])) {
-    stop("Dimension rows are not aligned across forecast cubes.", call. = FALSE)
-  }
-  
-  out <- pf
-  names(out)[names(out) == val_pf] <- "projected"
-  out$lower <- lo[[val_lo]]
-  out$upper <- up[[val_up]]
+  out <- tidyr::pivot_wider(
+    long,
+    names_from = stat,
+    values_from = value
+  )
   
   if (isTRUE(include_level)) {
     out$level <- attr(x, "level")
@@ -500,12 +565,12 @@ projection_to_df <- function(x,
 
 
 
-#' Corerce pop_projection to a data frame 
+#' Coerce poparray_projection to a data frame 
 #' 
-#' Transforms the  poparray in x to a data frame or tibble.  Causes a realization of all data in the lower, upper,
-#'and  population_project cubes. 
+#' Transforms the delayed array in `x` to a data frame or tibble. This is an eager
+#' realization. The output contains `projection` and `std_error` columns.
 #'
-#' @param x a pop_projection object
+#' @param x a poparray_projection object
 #' @param ... 
 #' @param include_level the default TRUE means add a column with the confidence level used for the projection
 #' @param include_model the default TRUE causes a column has the model used fo the projection
@@ -515,13 +580,13 @@ projection_to_df <- function(x,
 #'
 #' @examples
 #' # TO DO
-as.data.frame.pop_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
+as.data.frame.poparray_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
   projection_to_df(x, include_level = include_level, ...)
 }
 
-#' @rdname as.data.frame.pop_projection
+#' @rdname as.data.frame.poparray_projection
 #' @export
-as_tibble.pop_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
+as_tibble.poparray_projection <- function(x, ..., include_level = TRUE, include_model = TRUE) {
   if (!requireNamespace("tibble", quietly = TRUE)) {
     stop("Package 'tibble' is required for as_tibble().", call. = FALSE)
   }
@@ -529,4 +594,3 @@ as_tibble.pop_projection <- function(x, ..., include_level = TRUE, include_model
     projection_to_df(x, include_level = include_level, ...)
   )
 }
-
