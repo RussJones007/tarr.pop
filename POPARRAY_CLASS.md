@@ -90,12 +90,11 @@ These dimensions:
 
 ## Attribute usage and semantic metadata
 
-`poparray` relies heavily on attributes to store meaning that should not be encoded structurally in the array. \###
-dim_roles
+`poparray` relies heavily on attributes to store meaning that should not be encoded structurally in the array.
+
+### dim_roles
 
 A named list describing the semantic role of each dimension:
-
-\`\`\`r attr(x, "dim_roles") \<- list( time = "year", area = "block", strata = c("age", "sex") )
 
 \`attr(x, "dim_roles") \<- list(\
 time = "year",\
@@ -134,19 +133,18 @@ These document where the data came from and how it should be interpreted, withou
 
 ## Storage and persistence model
 
-A poparray object typically consists of two files:
+A poparray object typically consists of one file:
 
 ### HDF5 file
 
 -   Stores the numeric array data.
+
 -   Handles chunking, compression, and on-disk access.
--   Contains no semantic metadata beyond dimnames.
 
-### RDS file
+-   Contains semantic metadata beyond dimnames in a separate group called "metadata/". Contains all attributes,
+    including lookup tables and provenance.
 
--   Stores the S3 poparray wrapper.
--   Contains all attributes, including lookup tables and provenance.
--   References (but does not embed) the HDF5 file.
+-   From this struture, the open_poparray() function creates a poparray object.
 
 This separation allows:
 

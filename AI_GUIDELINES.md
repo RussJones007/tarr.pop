@@ -34,11 +34,9 @@ When formulating answers or writing code, prioritize:
     -   Check Bioconductor docs for DelayedArray/HDF5Array
     -   If uncertain whether a function exists in DelayedArray (≥ 0.36.3) or HDF5Array (≥ 1.38.0) don’t claim it does—suggest an alternative or say how to verify
 
-2. use tidyr, tibble, and dplyr generics when those make sense for the API
-
+2.  use tidyr, tibble, and dplyr generics when those make sense for the API
 
 3.  Existing package source files in this repository
-
 
 ⚠️ Do **not** assume functions exist without verifying them in the specified versions.
 
@@ -102,18 +100,18 @@ Functions must:
 
 ### Naming
 
--   Methods: `foo.tarr_pop`
+-   Methods: `foo.poparray`
 -   Helpers: internal, prefixed or documented as non-exported
 -   Use snake case for function names, ideally using a verb as the first part of the name
--   Use snake case for variables.  Ideally objects should be nouns 
+-   Use snake case for variables. Ideally objects should be nouns
 -   For suggested file script names, end it with "r"
-- Prefer functional programming over for loops where possible.  Use purrr package functions or in simple cases lapply.
-- Use thr native pipe instead of the magrittr pipe.
-- Prefer the style guide found in the book "Advanced R"
+-   Prefer functional programming over for loops where possible. Use purrr package functions or in simple cases lapply.
+-   Use the native pipe instead of the magrittr pipe.
+-   Prefer the style guide found in the book "Advanced R"
 
 ### Indexing
 
--   `[.tarr_pop` must:
+-   `[.poparray` must:
 
     -   Preserve laziness
     -   Handle missing / NULL indices safely
@@ -128,9 +126,9 @@ When providing code or explanations:
 
 ### Always include
 
--   **Base R solution** when not delaing with a DelayArray or HDF5Array
+-   **Base R solution** when not delaying with a DelayArray or HDF5Array
 -   **Tidyverse solution** (if appropriate)
--   **HDF6Array and DelayedArray** when manipulating tarr_pop and tarr_projection classes/objects
+-   **HDF5Array and DelayedArray** when manipulating poparray and poparray_projection classes/objects
 -   Pros / cons of each approach
 
 ### Explain tradeoffs
@@ -184,11 +182,9 @@ All exported functions should have:
 -   Clear roxygen2 docs
 -   Explicit `@return` descriptions
 -   Examples that do **not** force realization unless intended
--   Helper functions should also be documented though not necessarily exported
+-   Helper functions should also be documented roxygen though not necessarily exported. The roxygen2 function is for developer benefit when coming back to parts of the packag.e
 
 If behavior is subtle, document it.
-
-------------------------------------------------------------------------
 
 ## 10. What NOT to Treat as Sources
 
@@ -214,8 +210,8 @@ This is a **production epidemiology package**, not a demo.
 
 ## 12. Function argument validation
 
--   Prefer to use the the cli::abort() and checkmate idioms
--   For user facing functions, you can use checkmate functions to check for correctness, the cli::import() for clear error messages
+-   Prefer to use the the cli::cli_abort() and checkmate idioms
+-   For user facing functions, you can use checkmate functions to check for correctness, the cli::cli_import() for clear error messages
 
 ------------------------------------------------------------------------
 
