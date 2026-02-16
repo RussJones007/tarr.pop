@@ -168,6 +168,22 @@ validate_poparray <- function(x) {
 }
 
 
+# Attribute retrieval helpers ------------------------------------------------------------------------------------------
+
+#' @export
+time_role <- function(x) {
+  validate_poparray(x)
+  roles <- attr(x, "dimroles", exact = TRUE)
+  return(roles$time)
+}
+
+#' @export
+area_role <- function(x) {
+  validate_poparray(x)
+  roles <- attr(x, "dimroles", exact = TRUE)
+  return(roles$area)
+}
+
 
 
 
