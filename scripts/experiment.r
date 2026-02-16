@@ -26,9 +26,10 @@ pa2 <- pa[1:2, 1:4, drop = FALSE]
 
 # Sanity checks
 inherits(pa2, "poparray")                # TRUE
+is.poparray(pa2)
 inherits(pa2$handle, "DelayedArray")     # TRUE
 !is.array(pa2$handle)                    # TRUE
-
+pa2$handle |> class()
 rm(pa, pa2, x)
 
 #zip <- open_tarr_pop(population$census.bureau$zcta)
@@ -72,7 +73,7 @@ cen_est <- cen_est  |>
          area.name  %in% c("Tarrant"), 
          race  %in% races(cen_est, remove = regex("combination$"))
          )
-cen_est$handle
+#cen_est$handle
 years(cen_est)
 areas(cen_est)
 as.data.frame(cen_est)
@@ -92,27 +93,8 @@ test_years <- cen_est |>
 test_sums <- map_int(2022:2024, ~ test_years |> filter(year == .x) |> sum()) |> set_names((2022:2024))
 test_sums
 
-# profile projection functions -----------------------------------------------
 
-#tic.clearlog()
-#debug(project_cube)
-# system.time(
-# res_arima <-  project(tp = base_years, h = 3, level = 0.95, method = "ARIMA")
-# )
-# res_ets <-  project(tp = base_years, h = 3, level = 0.95, method = "ETS")
-# res_cagr <-  project(tp = base_years, h = 3, level = 0.95, method = "CAGR")
-# plot(res_arima)
-# plot(res_ets)
-
-# split is not working
-# dimnames(test_years) |> names()
-# list_years <- split(test_years, f = "year")
-# undebug(split.poparray)
-# as.poparray(res_arima) |> 
-#   as.data.frame() |> 
-#   group_by(year) |> 
-#   summarise(pop = sum(population))
-
+proj_da |> attributes()
 
 res_list <- map(list(ARIMA = "ARIMA", CAGR = "CAGR", ETS = "ETS"), 
                 ~ project(tp = base_years, h = 3, level = 0.95, method = .x, guard = TRUE))
