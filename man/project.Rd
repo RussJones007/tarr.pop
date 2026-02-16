@@ -5,7 +5,7 @@
 \title{Project a population cube forward in time}
 \usage{
 project(
-  tp,
+  parray,
   h,
   level = 0.95,
   method = c("auto", "ARIMA", "ETS", "CAGR"),
@@ -15,7 +15,7 @@ project(
 )
 }
 \arguments{
-\item{tp}{A \code{poparray} object (filtered or unfiltered) containing a time
+\item{parray}{A \code{poparray} object (filtered or unfiltered) containing a time
 dimension.}
 
 \item{h}{Integer forecast horizon (number of future years).}
@@ -24,7 +24,7 @@ dimension.}
 Values such as \code{0.95} or \code{95} are both accepted.}
 
 \item{method}{The projection method: \code{"auto"}, \code{"ETS"}, \code{"CAGR"}, or \code{"ARIMA"}.
-If \code{"auto"}, the method is inferred from the number of base years in \code{"tp"}:
+If \code{"auto"}, the method is inferred from the number of base years in \code{"parray"}:
 \itemize{
 \item 5-7 years uses \code{"ETS"}
 \item 8-10 years uses  \code{"CAGR"}
@@ -42,7 +42,7 @@ implied number of independent models is large.}
 \item{...}{Additional arguments passed to the selected engine implementation.}
 }
 \value{
-A \code{pop_projection} object.
+A \code{poparray_projection} object.
 }
 \description{
 Fits independent time-series models for each non-time cell of a \code{poparray}
@@ -55,8 +55,8 @@ The projection method may be \code{"auto"}, \code{"ETS"}, \code{"CAGR"}, or \cod
 For most use cases, \code{"auto"} is recommended and will select the appropriate
 engine based on the number of base years available in the input cube.
 
-The returned \code{pop_projection} object contains three \code{poparray} cubes:
-\code{projected}, \code{lower}, and \code{upper}, along with projection metadata.
+The returned \code{poparray_projection} object contains one delayed cube in
+\code{handle}, with a \code{stat} dimension containing \code{projection} and \code{std_error}.
 \subsection{Engine methods}{
 \itemize{
 \item \strong{ETS} — \emph{Exponential Smoothing State-Space models} (Error–Trend–Seasonal).
@@ -75,11 +75,10 @@ and differencing can be reliably estimated.
 \subsection{Projection metadata}{
 
 The following metadata are stored as attributes on the returned
-\code{pop_projection} object:
+\code{poparray_projection} object:
 \itemize{
 \item \strong{method} — The projection engine used (\code{"ETS"}, \code{"CAGR"}, or \code{"ARIMA"}).
-\item \strong{level} — The confidence level used when computing the \code{upper} and
-\code{lower} bounds.
+\item \strong{level} — The confidence level used for uncertainty calculations.
 \item \strong{source} — A character string describing the projection origin, including
 source information from the originating \code{poparray}.
 \item \strong{base_years} — The number of historical years used to fit the model.
@@ -96,7 +95,7 @@ dn <- list(
 )
 arr <- array(seq_along(dn$year), dim = c(7, 1, 1), dimnames = dn)
 
-tp <- new_poparray(
+parray <- new_poparray(
   x = DelayedArray::DelayedArray(arr),
   dimnames_list = dn,
   data_col = "population",
@@ -104,17 +103,17 @@ tp <- new_poparray(
 )
 
 \dontrun{
-  pr <- project(tp, h = 3, method = "auto", level = 0.95, guard = FALSE)
+  pr <- project(parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
   pr
-  as.poparray(pr, which = "projected")
+  as.poparray(pr)
 }
 
 }
 \seealso{
 \itemize{
-\item \link{pop_projection} for the returned object structure.
-\item \code{\link[=as.poparray.pop_projection]{as.poparray.pop_projection()}} to extract one of the three cubes.
-\item \code{\link[=as.data.frame.pop_projection]{as.data.frame.pop_projection()}} and \code{\link[=as_tibble.pop_projection]{as_tibble.pop_projection()}} for tabular output.
-\item \code{\link[=plot.pop_projection]{plot.pop_projection()}} for visualization (added in the next step).
+\item \link{poparray_projection} for the returned object structure.
+\item \code{\link[=as.poparray.poparray_projection]{as.poparray.poparray_projection()}} to coerce to a role-aware poparray.
+\item \code{\link[=as.data.frame.poparray_projection]{as.data.frame.poparray_projection()}} and \code{\link[=as_tibble.poparray_projection]{as_tibble.poparray_projection()}} for tabular output.
+\item \code{\link[=plot.poparray_projection]{plot.poparray_projection()}} for visualization.
 }
 }
