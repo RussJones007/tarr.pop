@@ -57,6 +57,28 @@ normalize_level <- function(level) {
   )
 }
 
+normalize_projection_source <- function(source) {
+  if (is.null(source)) {
+    return(list(
+      note = "Projection from unknown source",
+      source = "unknown",
+      updated = "Unknown"
+    ))
+  }
+  
+  src <- if (is.list(source)) source else as.list(source)
+  
+  if (is.null(names(src))) {
+    cli::cli_abort("{.arg source} must be a named list (or named atomic vector coercible to list).")
+  }
+  
+  if (is.null(src$note) || !length(src$note)) src$note <- "Projection source"
+  if (is.null(src$source) || !length(src$source)) src$source <- "unknown"
+  if (is.null(src$updated) || !length(src$updated)) src$updated <- "Unknown"
+  
+  src
+}
+
 tp_dimnames <- function(parray) dimnames(parray)
 tp_dim <- function(parray) dim(parray)
 
@@ -213,9 +235,21 @@ validate_poparray_projection <- function(x) {
   
   
   source <- attr(x, "source", exact = TRUE)
-  if (is.null(source) || length(source) != 1L || is.na(source) || !is.character(source)) {
+  if (is.null(source)) {
     cli::cli_abort(
-      "{.field source} must be a length-1 character value.",
+      "{.field source} must be present and use poparray-style named source metadata.",
+      call = rlang::caller_env()
+    )
+  }
+  source <- if (is.list(source)) source else as.list(source)
+  req_source <- c("note", "source", "updated")
+  missing_source <- setdiff(req_source, names(source))
+  if (length(missing_source)) {
+    cli::cli_abort(
+      c(
+        "{.field source} is missing required fields.",
+        "x" = "Missing: {.val {missing_source |> paste(collapse = ', ')}}."
+      ),
       call = rlang::caller_env()
     )
   }
@@ -321,7 +355,8 @@ new_poparray_projection <- function(
 #' @param std_error A DelayedArray containing standard errors
 #' @param level Confidence level associated with standard errors (e.g., 0.95)
 #' @param method Projection method name
-#' @param source Data source description
+#' @param source Poparray-style source metadata (named list or named atomic vector coercible
+#'   to list). Expected fields include `note`, `source`, and `updated`.
 #' @param base_years Numeric vector of base years used in projection
 #'
 #' @return A poparray_projection object
@@ -434,11 +469,15 @@ confint.poparray_projection <- function(x, level = 0.95, ...) {
 #' @export
 print.poparray_projection <- function(x, ...) {
   validate_poparray_projection(x)
+  src <- get_source(x)
+  src <- if (is.list(src)) src else as.list(src)
   
   cat("<poparray_projection>\n")
   cat("  method: ", attr(x, "method"), "\n", sep = "")
   cat("  level:  ", attr(x, "level"), "\n", sep = "")
-  cat("  source: ", attr(x, "source"), "\n", sep = "")
+  cat("  source note: ", as.character(src$note %||% "Unknown"), "\n", sep = "")
+  cat("  source ref:  ", as.character(src$source %||% "Unknown"), "\n", sep = "")
+  cat("  source date: ", as.character(src$updated %||% "Unknown"), "\n", sep = "")
   cat(
     "  base years: ",
     paste0(range(attr(x, "base_years")), collapse = "–"),
@@ -589,6 +628,13 @@ projection_to_df <- function(x,
     out$model <- attr(x, "method")
   }
   
+  # Preserve projection metadata on tabular outputs for downstream provenance use.
+  attr(out, "source") <- attr(x, "source", exact = TRUE)
+  attr(out, "method") <- attr(x, "method", exact = TRUE)
+  attr(out, "level") <- attr(x, "level", exact = TRUE)
+  attr(out, "base_years") <- attr(x, "base_years", exact = TRUE)
+  attr(out, "created") <- attr(x, "created", exact = TRUE)
+  
   out
 }
 
@@ -619,7 +665,16 @@ as_tibble.poparray_projection <- function(x, ..., include_level = TRUE, include_
   if (!requireNamespace("tibble", quietly = TRUE)) {
     stop("Package 'tibble' is required for as_tibble().", call. = FALSE)
   }
-  tibble::as_tibble(
-    projection_to_df(x, include_level = include_level, ...)
-  )
+  df <- projection_to_df(x, include_level = include_level, ...)
+  out <- tibble::as_tibble(df)
+  
+  attr(out, "source") <- attr(df, "source", exact = TRUE)
+  attr(out, "method") <- attr(df, "method", exact = TRUE)
+  attr(out, "level") <- attr(df, "level", exact = TRUE)
+  attr(out, "base_years") <- attr(df, "base_years", exact = TRUE)
+  attr(out, "created") <- attr(df, "created", exact = TRUE)
+  
+  out
 }
+  source <- normalize_projection_source(source)
+  

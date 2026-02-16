@@ -617,10 +617,20 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
   
   # Build projection provenance source string
   orig_source <- attr(parray, "source", exact = TRUE)
-  if (is.null(orig_source) || (is.character(orig_source) && !nzchar(orig_source))) {
-    orig_source <- "unknown"
+  if (is.null(orig_source)) {
+    orig_source <- list(note = "Unknown", source = "unknown", updated = "Unknown")
+  } else if (!is.list(orig_source)) {
+    orig_source <- as.list(orig_source)
   }
-  source <- paste0("Populatin projection based on data from ", orig_source[1])
+  
+  source <- list(
+    note = paste0("Population projection based on data from ", as.character(orig_source$note %||% orig_source$source %||% "unknown")),
+    source = as.character(orig_source$source %||% "unknown"),
+    updated = as.character(Sys.Date()),
+    projected_from = orig_source,
+    projection_method = as.character(method),
+    projection_level = as.numeric(level)
+  )
   
   # NEW: projection object stores a single array with a stat dim
   new_poparray_projection(
