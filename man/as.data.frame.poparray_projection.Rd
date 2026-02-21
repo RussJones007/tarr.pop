@@ -5,18 +5,35 @@
 \alias{as_tibble.poparray_projection}
 \title{Coerce poparray_projection to a data frame}
 \usage{
-\method{as.data.frame}{poparray_projection}(x, ..., include_level = TRUE, include_model = TRUE)
+\method{as.data.frame}{poparray_projection}(
+  x,
+  ...,
+  include_level = FALSE,
+  include_model = FALSE,
+  include_confidence = FALSE
+)
 
-\method{as_tibble}{poparray_projection}(x, ..., include_level = TRUE, include_model = TRUE)
+\method{as_tibble}{poparray_projection}(
+  x,
+  ...,
+  include_level = FALSE,
+  include_model = FALSE,
+  include_confidence = FALSE
+)
 }
 \arguments{
 \item{x}{a poparray_projection object}
 
 \item{...}{}
 
-\item{include_level}{the default TRUE means add a column with the confidence level used for the projection}
+\item{include_level}{the default is FALSE. When TRUE means add a column with the confidence level used for the
+projection. The confidence level is also available in the attributes, attr(x, "level")}
 
-\item{include_model}{the default TRUE causes a column has the model used fo the projection}
+\item{include_model}{the default FALSE.  When TRUE causes a column with the model name used for the projection}
+
+\item{include_confidence}{default FALSE; when TRUE adds \code{lower} and \code{upper}
+confidence-limit columns computed from \code{projection}, \code{std_error}, and the
+object's confidence \code{level}.}
 }
 \value{
 a data frame for as.data.frame() and tibble for as_tibble()

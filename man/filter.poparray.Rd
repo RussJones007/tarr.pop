@@ -16,7 +16,7 @@ operators (see Details).}
 labels are dropped with a warning.}
 }
 \value{
-A delayed \code{poparray} (or \code{tarr_pop_view}) with updated dimension restrictions. No materialization occurs.
+A delayed \code{poparray} with updated dimension restrictions. No materialization occurs.
 }
 \description{
 \code{filter.poparray()} restricts a \code{poparray} object along one or more named dimensions using \strong{label-based

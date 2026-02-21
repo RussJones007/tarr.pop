@@ -1,262 +1,236 @@
-# ------------------------------------------------------------------------------------------------------------------->
-# Script: open_tarr_pop.r
-#
-# Assumptions:
-#   * HDF5 files live in inst/extdata/
-#   * Main dataset inside each file is "/pop"
-#   * dim order in all cubes is: year, county, age.char, sex, race, ethnicity
-#   * Canonical label vectors live in the package as small R objects and are lazily loaded
-#
+# -------------------------------------------------------------------------------------->
+# Script: open_pop_array.r
 # Description:
-#  Used when opening a tarr_pop to give the appropriate dimension names and labels.
-#  1. The tarr_series_registry is a data frame of cubes and associated file names.
-#  2. The Label getters section is where each dimension name is further defined with labels
-#  3. The Build dimnames handles building the names and labels for a population series
-#  4. Validation of names against open cubes ensures the number of dimensions and label match
-#  5. open_tarr_pop() is the function opens a cube and sets up the dimension names
-#
-#   Many of the functions were written with ChatGPT R Wizard assistance which saved time in coding.
-# ------------------------------------------------------------------------------------------------------------------->
-# Author: Russ Jones with AI assistance
-# Created: December 27, 2025
-# ------------------------------------------------------------------------------------------------------------------->
+#   Open poparray cubes using metadata stored inside each HDF5 file under:
+#   - cube/population
+#   - cube/metadata/*
+# -------------------------------------------------------------------------------------->
 
-# 1. Series registry ----------------------------------------------------
+#' Resolve extdata directory for this package
+#'
+#' @return Absolute path to extdata directory.
+#' @keywords internal
+resolve_extdata_dir <- function() {
+  pkg <- utils::packageName()
+  if (length(pkg) == 1L && !is.na(pkg) && nzchar(pkg)) {
+    ext <- system.file("extdata", package = pkg)
+    if (nzchar(ext) && dir.exists(ext)) {
+      return(ext)
+    }
+  }
 
-# Map "series_id" to filename and label-set keys.
+  local_ext <- file.path(getwd(), "inst", "extdata")
+  if (dir.exists(local_ext)) {
+    return(normalizePath(local_ext, winslash = "/", mustWork = TRUE))
+  }
+
+  stop("Could not locate package extdata directory.")
+}
+
+#' Read a scalar metadata value from HDF5
+#'
+#' @param path HDF5 file path.
+#' @param name HDF5 dataset path.
+#'
+#' @return Length-1 character scalar.
+#' @keywords internal
+h5_read_scalar_chr <- function(path, name) {
+  val <- rhdf5::h5read(path, name)
+  as.character(val[[1L]])
+}
+
+#' Check if a file has the cube metadata schema
+#'
+#' @param path HDF5 file path.
+#'
+#' @return Logical scalar.
+#' @keywords internal
+h5_has_cube_schema <- function(path) {
+  info <- rhdf5::h5ls(path)
+  has_pop <- any(info$group == "/cube" & info$name == "population")
+  has_meta <- any(info$group == "/cube/metadata" & info$name == "registry")
+  has_pop && has_meta
+}
+
+#' Read registry row from one migrated cube file
+#'
+#' @param path HDF5 file path.
+#'
+#' @return One-row data.frame.
+#' @keywords internal
+read_registry_row <- function(path) {
+  info <- rhdf5::h5ls(path)
+  reg <- info[info$group == "/cube/metadata/registry", , drop = FALSE]
+  if (nrow(reg) == 0L) {
+    stop("No /cube/metadata/registry datasets found in: ", basename(path))
+  }
+
+  row <- lapply(reg$name, function(k) h5_read_scalar_chr(path, paste0("cube/metadata/registry/", k)))
+  names(row) <- reg$name
+  row <- as.data.frame(row, stringsAsFactors = FALSE, check.names = FALSE)
+  if (!"filename" %in% names(row)) {
+    row$filename <- basename(path)
+  }
+  row
+}
+
+#' Series registry read from migrated HDF5 metadata
+#'
+#' Scans `inst/extdata/*.h5` and builds the registry from
+#' `cube/metadata/registry/*` datasets in migrated files.
+#'
+#' @return data.frame of available series.
+#' @keywords internal
 tarr_series_registry <- function() {
-  data.frame(
-    series_id = c(
-      "census_decennial_county_1y",
-      "census_estimates_county_5y",
-      "census_estimates_zcta_5y",
-      "tdc_estimates_county_mixed",
-      "tdc_projections_county_1y",
-      "seer_estimates_county_1y",
-      "seer_estimates_county_5y"
-    ),
-    filename = c(
-      "census_decennial_county_1y.h5",
-      "census_estimates_county_5y.h5",
-      "census_estimates_zcta_5y.h5",
-      "tdc_estimates_county_mixed.h5",
-      "tdc_projections_county_1y.h5",
-      "seer_estimates_county_1y.h5",
-      "seer_estimates_county_5y.h5"
-    ),
-    geo = c("county", "county", "zcta", "county", "county", "county", "county"),
-    age_scheme = c("census_1y", "census_5y", "census_5y", "tdc_mixed", "tdc_1y", "seer_1y", "seer_5y"),
-    year_scheme = c("census_decennial", "census_est_2001_2023", "census_est_2001_2023",
-                    "tdc_est_2001_2023", "tdc_proj_2010_2050", "seer_2000_2024", "seer_2000_2024"),
-    stringsAsFactors = FALSE
-  )
-}
-
-# 2. Label getters (package-level) ----------------------------
-
-# Years: keep these as small package objects or compute deterministically.
-years_for <- function(year_scheme) {
-  switch(
-    year_scheme,
-    census_decennial      = c("2000", "2010", "2020"),
-    census_est_2001_2023  = as.character(2010:2024),
-    tdc_est_2001_2023     = as.character(2001:2023),
-    tdc_proj_2010_2050    = as.character(2010:2050),
-    seer_2000_2024        = as.character(2000:2024),
-    stop("Unknown year_scheme: ", year_scheme)
-  )
-}
-
-# Geography labels:
-county_levels <- function() {
-  # Example: use county names stored as names(county_fips)
-  # Replace with your actual canonical vector.
-  if (exists("county_fips", envir = parent.frame(), inherits = TRUE)) {
-    return(names(get("county_fips", envir = parent.frame(), inherits = TRUE)))
+  ext_dir <- resolve_extdata_dir()
+  files <- sort(Sys.glob(file.path(ext_dir, "*.h5")))
+  if (length(files) == 0L) {
+    return(data.frame(stringsAsFactors = FALSE))
   }
-  stop("county_fips not found; implement county_levels() to return your canonical county labels.")
+
+  keep <- vapply(files, h5_has_cube_schema, logical(1))
+  files <- files[keep]
+  if (length(files) == 0L) {
+    stop("No migrated cubes with /cube/metadata were found in extdata.")
+  }
+
+  rows <- lapply(files, read_registry_row)
+  reg <- dplyr::bind_rows(rows)
+  if ("series_id" %in% names(reg)) {
+    reg <- reg[order(reg$series_id), , drop = FALSE]
+  }
+  rownames(reg) <- NULL
+  reg
 }
 
-zcta_levels <- function() {
-  # Replace with your package object if you have one:
-  if (exists("zcta_levels", envir = parent.frame(), inherits = TRUE)) {
-    return(get("zcta_levels", envir = parent.frame(), inherits = TRUE))
-  }
-  stop("Implement zcta_levels() to return your canonical ZCTA labels.")
+#' Read dimnames metadata from migrated cube
+#'
+#' @param path HDF5 file path.
+#'
+#' @return Named list of character vectors.
+#' @keywords internal
+read_dimnames_from_cube <- function(path) {
+  dim_order <- as.character(rhdf5::h5read(path, "cube/metadata/dim_order"))
+  out <- lapply(dim_order, function(d) {
+    as.character(rhdf5::h5read(path, paste0("cube/metadata/dimnames/", d)))
+  })
+  names(out) <- dim_order
+  out
 }
 
-# Age label sets: implement these using your existing age label objects.
-age_levels_for <- function(age_scheme) {
-  switch(
-    age_scheme,
-    census_1y  = get("ages_census_1y",  envir = parent.frame(), inherits = TRUE),
-    census_5y  = get("ages_census_5y",  envir = parent.frame(), inherits = TRUE),
-    tdc_1y     = get("ages_tdc_1y",     envir = parent.frame(), inherits = TRUE),
-    tdc_mixed  = get("ages_tdc_mixed",  envir = parent.frame(), inherits = TRUE),
-    seer_1y    = get("ages_seer_1y",    envir = parent.frame(), inherits = TRUE),
-    seer_5y    = get("ages_seer_5y",    envir = parent.frame(), inherits = TRUE),
-    stop("Unknown age_scheme: ", age_scheme)
-  )
-}
-
-# Sex/race/ethnicity label sets can vary by series (esp. race/eth in your docs).
-sex_levels_for <- function(series_id) {
-  # Most datasets allow Female/Male/All; SEER has Female/Male only.
-  if (grepl("^seer_", series_id)) return(c("Female", "Male"))
-  c("Female", "Male")
-}
-
-race_levels_for <- function(series_id) {
-  if (grepl("^seer_", series_id)) {
-    # bridged categories per your docs
-    return(c("American Indian/Alaskan Native", "Asian or Pacific Islander", "Black", "White"))
-  }
-  if (grepl("^tdc_", series_id)) {
-    return(c("Asian", "Black", "Other", "White", "All")) # include "All" if your cube includes it
-  }
-  if (grepl("^census_estimates_", series_id)) {
-    # include the "or in combination" set if that’s how your cube is labeled
-    return(get("race_levels_census_estimates", envir = parent.frame(), inherits = TRUE))
-  }
-  # census decennial
-  get("race_levels_census", envir = parent.frame(), inherits = TRUE)
-}
-
-ethnicity_levels_for <- function(series_id) {
-  if (grepl("^seer_", series_id)) return(c("Hispanic", "Non-Hispanic"))
-  c("Hispanic", "Non-Hispanic")
-}
-
-# Source metadata (whatever your existing get_source()/print method expects)
-source_for <- function(series_id) {
-  if (startsWith(series_id, "census_")) {
-    return(list(source = "US Census Bureau", note = series_id))
-  }
-  if (startsWith(series_id, "tdc_")) {
-    return(list(source = "Texas Demographic Center", note = series_id))
-  }
-  if (startsWith(series_id, "seer_")) {
-    return(list(source = "National Cancer Institute; SEER Program", note = series_id))
-  }
-  list(source = "unknown", note = series_id)
-}
-
-# 3. Build dimnames for a given series ----------------------------------
-
-labels_for_series <- function(series_id) {
-  reg <- tarr_series_registry()
-  row <- reg[reg$series_id == series_id, , drop = FALSE]
-  if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
-
-  year <- years_for(row$year_scheme)
-  geo  <- if (row$geo == "county") county_levels() else zcta_levels()
-  age  <- age_levels_for(row$age_scheme)
-
-  sex       <- sex_levels_for(series_id)
-  race      <- race_levels_for(series_id)
-  ethnicity <- ethnicity_levels_for(series_id)
-
-  # IMPORTANT: dim order year, county/zcta, sex, age.char, race, ethnicity
+#' Read dimension roles metadata from migrated cube
+#'
+#' @param path HDF5 file path.
+#'
+#' @return Named list with time, area, strata.
+#' @keywords internal
+read_roles_from_cube <- function(path) {
   list(
-    year      = year,
-    area.name = geo,
-    sex       = sex,
-    age.char  = age,
-    race      = race,
-    ethnicity = ethnicity
+    time = h5_read_scalar_chr(path, "cube/metadata/roles/time"),
+    area = h5_read_scalar_chr(path, "cube/metadata/roles/area"),
+    strata = as.character(rhdf5::h5read(path, "cube/metadata/roles/strata"))
   )
 }
 
-# 4. Validation helpers --------------------------------------------------
+#' Read source metadata from migrated cube
+#'
+#' @param path HDF5 file path.
+#'
+#' @return Named character vector with source fields.
+#' @keywords internal
+read_source_from_cube <- function(path) {
+  c(
+    note = h5_read_scalar_chr(path, "cube/metadata/source/note"),
+    source = h5_read_scalar_chr(path, "cube/metadata/source/source"),
+    updated = h5_read_scalar_chr(path, "cube/metadata/source/updated"),
+    population_type = h5_read_scalar_chr(path, "cube/metadata/source/population_type")
+  )
+}
 
+#' Validate migrated dimnames against cube dimensions
+#'
+#' @param h5_handle Delayed HDF5Array handle.
+#' @param dimn Named dimnames list.
+#' @param series_id Series identifier.
+#'
+#' @return Invisibly TRUE.
+#' @keywords internal
 validate_labels_against_cube <- function(h5_handle, dimn, series_id) {
   d <- dim(h5_handle)
-
-  if (length(d) != 6L) {
-    stop("Expected 6D cube for series '", series_id, "'. Got: ", length(d), "D.")
-  }
-
-  # Match expected order: year, area.name, sex, age.char, race, ethnicity
-  expected <- c("year", "area.name", "sex", "age.char", "race", "ethnicity")
-  if (!all(expected %in% names(dimn))) {
-    stop("dimn must contain names: ", paste(expected, collapse = ", "))
-  }
-
-  lens <- vapply(dimn[expected], length, integer(1))
-  if (!all(lens == d)) {
-    msg <- paste0(
-      "Dimension length mismatch for series '", series_id, "':\n",
-      "  cube dim():      ", paste(d, collapse = " x "), "\n",
-      "  label lengths:   ", paste(lens, collapse = " x "), "\n",
-      "  order:           ", paste(expected, collapse = ", ")
+  if (length(d) != length(dimn)) {
+    stop(
+      "Dimension count mismatch for series '", series_id,
+      "': cube=", length(d), ", metadata=", length(dimn), "."
     )
-    stop(msg)
   }
-
+  lens <- vapply(dimn, length, integer(1))
+  if (!all(as.integer(d) == as.integer(lens))) {
+    stop(
+      "Dimension length mismatch for series '", series_id, "': cube dim() ",
+      paste(d, collapse = " x "), " vs metadata ",
+      paste(lens, collapse = " x "), "."
+    )
+  }
   invisible(TRUE)
 }
 
-# 5. Opener: HDF5 -> HDF5Array -> tarr_pop ------------------------------
-
-#' #' Open population series
-#' #'
-#' #' Using the name of a population series that exists on disk,  open it and retunr as a tarr_pop object.
-#' #'
-#' #' @param series_id name of the population series.  See the population list variable for easier selection in the IDE.
-#' #' @param dataset path to the data in the HDF5Array file
-#' #' @param data_col name of the column with the population figures when array is transoformed into a data frame.
-#' #'
-#' #' @returns the selected population series as a tarr_pop object
-# Optional backwards-compatible alias (consider deprecating)
+#' Backward-compatible alias for open_poparray()
+#'
+#' @inheritParams open_poparray
+#' @rdname open_poparray
 #' @export
 open_tarr_pop <- function(...) {
   open_poparray(...)
 }
 
-
-# 5. Opener: HDF5 -> HDF5Array -> poparray ------------------------------
-
-#' Open population series
+#' Open a migrated population cube
 #'
-#' Using the name of a population series that exists on disk, open it and return
-#' as a poparray object.
+#' Opens a population series from HDF5 and constructs a `poparray` using
+#' metadata stored in the same file under `cube/metadata`.
 #'
 #' @param series_id Name of the population series.
-#' @param dataset Path to the data in the HDF5 file.
+#' @param dataset HDF5 dataset path for numeric cube data.
+#'   Defaults to `"cube/population"` for the migrated cube schema.
 #' @param data_col Name of the value column when coercing to a data frame.
 #'
-#' @returns A poparray
+#' @details
+#' The function reads all semantic metadata from the same HDF5 file:
+#' - dimension order and labels from `cube/metadata/dim_order` and
+#'   `cube/metadata/dimnames/*`,
+#' - dimension roles from `cube/metadata/roles/*`,
+#' - source/provenance fields from `cube/metadata/source/*`.
+#'
+#' @returns A poparray.
 #' @export
 open_poparray <- function(series_id,
-                          dataset = "/pop",
+                          dataset = "cube/population",
                           data_col = "population") {
-  
   reg <- tarr_series_registry()
-  
   row <- reg[reg$series_id == series_id, , drop = FALSE]
-  if (nrow(row) != 1L) stop("Unknown series_id: ", series_id)
-  
-  path <- system.file("extdata", row$filename, package = utils::packageName())
-  if (!nzchar(path)) {
-    stop("HDF5 file not found for series '", series_id,
-         "'. Expected in inst/extdata/: ", row$filename)
+  if (nrow(row) != 1L) {
+    stop("Unknown series_id: ", series_id)
   }
-  
+
+  ext_dir <- resolve_extdata_dir()
+  path <- file.path(ext_dir, row$filename[[1L]])
+  if (!file.exists(path)) {
+    stop("HDF5 file not found for series '", series_id, "': ", path)
+  }
+
   h5 <- HDF5Array::HDF5Array(filepath = path, name = dataset)
-  
-  dimn <- labels_for_series(series_id)
+  dimn <- read_dimnames_from_cube(path)
+  roles <- read_roles_from_cube(path)
+  src <- read_source_from_cube(path)
+
   validate_labels_against_cube(h5, dimn, series_id)
-  
-  # Attach dimnames onto the handle (cheap; does not read the whole dataset)
   dimnames(h5) <- dimn
-  
+
   new_poparray(
-    x             = h5,
+    x = h5,
     dimnames_list = dimn,
-    data_col      = data_col,
-    source        = source_for(series_id),
-    time_dim      = "year",
-    area_dim      = "area.name"
+    data_col = data_col,
+    source = src,
+    time_dim = roles$time,
+    area_dim = roles$area
   )
 }
-

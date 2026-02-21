@@ -119,33 +119,45 @@ candidate_dimnames <- function(series_id, meta) {
   )
 }
 
-normalize_dimnames_to_cube <- function(dimn, cube_dim, series_id) {
-  out <- dimn
-  nm <- names(out)
-  if (length(out) != length(cube_dim)) {
+align_cube_to_dimnames <- function(cube, dimn, series_id) {
+  cube_dim <- dim(cube)
+  if (length(dimn) != length(cube_dim)) {
     stop(
       "Dim count mismatch for ", series_id, ": metadata has ",
-      length(out), " dims, cube has ", length(cube_dim), "."
+      length(dimn), " dims, cube has ", length(cube_dim), "."
     )
   }
+
   for (i in seq_along(cube_dim)) {
-    n_target <- cube_dim[[i]]
-    vec <- as.character(out[[i]])
-    if (length(vec) == n_target) {
-      out[[i]] <- vec
+    target_len <- length(dimn[[i]])
+    current_len <- cube_dim[[i]]
+    dim_name <- names(dimn)[[i]]
+
+    if (current_len == target_len) next
+
+    if (current_len == target_len + 1L) {
+      # Legacy cubes may include one extra aggregate level that is not
+      # represented in metadata vectors. Drop the terminal level.
+      drop_idx <- current_len
+      keep_idx <- setdiff(seq_len(current_len), drop_idx)
+      subs <- rep(list(TRUE), length(cube_dim))
+      subs[[i]] <- keep_idx
+      cube <- do.call(`[`, c(list(cube), subs, list(drop = FALSE)))
+      cube_dim <- dim(cube)
+      message(
+        "[INFO] ", series_id, ": removed terminal level index ", drop_idx,
+        " from dim '", dim_name, "'."
+      )
       next
     }
-    # Legacy cubes sometimes carry a physical "All" level not in .rda vectors.
-    if (length(vec) + 1L == n_target && !any(tolower(vec) == "all")) {
-      out[[i]] <- c(vec, "All")
-      next
-    }
+
     stop(
-      "Label length mismatch for ", series_id, " dim ", nm[[i]],
-      ": labels=", length(vec), ", cube=", n_target, "."
+      "Label length mismatch for ", series_id, " dim ", dim_name,
+      ": labels=", target_len, ", cube=", current_len, "."
     )
   }
-  out
+
+  list(cube = cube, dimn = dimn)
 }
 
 roles_for_dimnames <- function(dimn) {
@@ -231,9 +243,15 @@ migrate_one <- function(row, meta, extdata_dir, backup_dir, apply_mode = FALSE) 
 
   old_dataset <- as.character(row$dataset)
   cube <- HDF5Array::HDF5Array(file_path, old_dataset)
-  cube_dim <- dim(cube)
   dimn <- candidate_dimnames(as.character(row$series_id), meta)
-  dimn <- normalize_dimnames_to_cube(dimn, cube_dim = cube_dim, series_id = as.character(row$series_id))
+  aligned <- align_cube_to_dimnames(
+    cube = cube,
+    dimn = dimn,
+    series_id = as.character(row$series_id)
+  )
+  cube <- aligned$cube
+  dimn <- aligned$dimn
+  cube_dim <- dim(cube)
 
   if (!apply_mode) {
     message("[DRY RUN] ", row$series_id, " validated: ", paste(cube_dim, collapse = " x "))

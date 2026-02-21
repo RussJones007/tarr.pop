@@ -40,6 +40,6 @@ Metadata source of truth is the `.rda` objects under `data/`, especially:
 
 ## Legacy compatibility note
 
-Some legacy TDC cubes include a physical `"All"` level in dimensions where the `.rda`
-vector omits it. The migration script auto-appends `"All"` when cube length is exactly
-`length(.rda_labels) + 1`.
+Some legacy cubes include one extra terminal level in dimensions where `.rda`
+metadata has one fewer labels. During migration, the script drops that terminal
+level from `cube/population` so `"All"` is not stored in the cube.
