@@ -78,7 +78,7 @@
 #' @seealso
 #' * [project()] for creating population projections
 #' * [poparray_projection] for the projection object structure
-#' * [plot.poparray()] for population pyramid plotting
+#' * [plot()] for plotting methods
 #' * [as.poparray.poparray_projection()] to coerce to poparray
 #'
 #' @examples
@@ -143,7 +143,7 @@ plot.poparray_projection <- function(x,
   
   pa <- as.poparray(x)
   pa_proj <- pa[stat = "projection", drop = FALSE]
-  time_nm <- attr(pa, "dimroles", exact = TRUE)$time
+  time_nm <- time_role(pa)
   
   if (identical(type, "ts")) {
     # "ts" ignores area selection by design; it plots totals over time with ribbon

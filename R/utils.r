@@ -340,8 +340,8 @@ ethnicities <- label_factory("ethnicity")
 #' @export
 sexes <- label_factory("sex")
 
-##' @rdname dim_labels
-##' @export
+# @rdname dim_labels
+# @export
 #`sexes<-` <- assign_label_factory("sex")
 
 #' @rdname dim_labels
@@ -373,12 +373,14 @@ years <- label_factory("year")
 #' @return the object with the source attribute set to include name of source,
 #' url, and the date the object was last created/revised set to today()
 set_source_url <- function(obj, nm, url, pop_type = NULL) {
-  attr(obj, "source") <- c(
+  src <- c(
     note = nm,
     population_type = pop_type,
     source = url,
     updated = as.character(today())
   )
+  if (is(obj, "poparray")) obj@source <- as.list(src)
+  attr(obj, "source") <- src
   obj
 }
 
@@ -393,7 +395,7 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
 #' @keywords internal
 #' @export
 get_source <- function(obj){
-  ret <- attr(obj, which = "source", exact = TRUE)
+  ret <- if (is(obj, "poparray")) obj@source else attr(obj, which = "source", exact = TRUE)
   if(is.null(ret)) ret <- c(note = "", source = "Not given", updated = "Unknown", population_type = "Unknown")
   ret
 }
@@ -403,4 +405,3 @@ get_source <- function(obj){
 # Checks if an expression is missing, such as missing arguments or when looking for missing
 # in ... type arguments
 is_missing_arg <- function(e){identical (e, quote(expr=))}
-

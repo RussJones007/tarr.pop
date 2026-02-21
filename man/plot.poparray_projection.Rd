@@ -122,7 +122,7 @@ parray <- new_poparray(
 \itemize{
 \item \code{\link[=project]{project()}} for creating population projections
 \item \link{poparray_projection} for the projection object structure
-\item \code{\link[=plot.poparray]{plot.poparray()}} for population pyramid plotting
+\item \code{\link[=plot]{plot()}} for plotting methods
 \item \code{\link[=as.poparray.poparray_projection]{as.poparray.poparray_projection()}} to coerce to poparray
 }
 }

@@ -15,10 +15,10 @@
 #' Population Tables/Arrays
 #'
 #' The `population` object is a named catalog of population cubes grouped by source agency and table type. Each entry
-#' points to a delayed, disk-backed cube that can be opened as a [poparray] with [open_poparray()] (or the legacy alias
+#' points to a delayed, disk-backed cube that can be opened as a `poparray` with [open_poparray()] (or the legacy alias
 #' [open_tarr_pop()]).
 #'
-#' A `poparray` wraps a `DelayedArray`/`HDF5Array` backend and stores explicit dimension labels and role metadata
+#' A `poparray` extends `DelayedArray` (typically HDF5-backed) and stores explicit dimension labels and role metadata
 #' (`time`, `area`, optional `strata`). This allows filtering and aggregation before realization, reducing memory use.
 #'
 #' Available series include decennial census counts, annual estimates, and projections from:
@@ -50,6 +50,6 @@
 #'
 #' Some tables may use a reduced schema (for example, `zcta` without ASRE
 #' stratification). Use [dimnames()], [names()], and role helpers
-#' [time_role()] / [area_role()] on the loaded `poparray` to inspect the exact
+#' `time_role()` / `area_role()` on the loaded `poparray` to inspect the exact
 #' structure.
 "population"

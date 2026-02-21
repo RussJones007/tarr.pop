@@ -217,20 +217,20 @@ open_poparray <- function(series_id,
     stop("HDF5 file not found for series '", series_id, "': ", path)
   }
 
-  h5 <- HDF5Array::HDF5Array(filepath = path, name = dataset)
-  dimn <- read_dimnames_from_cube(path)
+  h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)
+  dimn  <- read_dimnames_from_cube(path)
   roles <- read_roles_from_cube(path)
-  src <- read_source_from_cube(path)
+  src   <- read_source_from_cube(path)
 
   validate_labels_against_cube(h5, dimn, series_id)
   dimnames(h5) <- dimn
 
   new_poparray(
-    x = h5,
+    x             = h5,
     dimnames_list = dimn,
-    data_col = data_col,
-    source = src,
-    time_dim = roles$time,
-    area_dim = roles$area
+    data_col      = data_col,
+    source        = src,
+    time_dim      = roles$time,
+    area_dim      = roles$area
   )
 }

@@ -15,79 +15,200 @@ This will involve placing meta data for a population cube in the same HDF5 file 
 -   Once migrated, I will update all code to read metadata from the HDF5 file, not RDS.
 -   Finally, I will confirm that the final HDF5 file holds both data and metadata, and that the RDS files are no longer needed.
 
-## 2. Change the poparray class inheritance.
+## 2. Change the poparray class inheritance (Revised for S4 Migration)
 
-Convert the `poparray` class to extend `DelayedArray` (not `HDF5Array`).
+Convert the poparray class to extend DelayedArray (not HDF5Array).
 
--   First, I will convert the `poparray` class so it extends `"DelayedArray"` using `setClass()`.\
+All internal helpers must assume x is already a DelayedArray and operate directly on it without extracting a seed unless absolutely necessary.
 
-    > `setClass( "poparray", contains = "DelayedArray", slots = c( roles = "list") \# e.g., time, area dimension mapping )`
+### Step 1 — Define the S4 class
 
--   Next, I will remove the old “has-a” logic where `poparray` wrapped an `HDF5Array` inside a list or `handle` element.\
-    Then, I will adjust the constructor so it:
+-   Define poparray as an S4 class that:
 
-    -   Accepts a `DelayedArray` object.
-    -   Verifies that the underlying seed is an `HDF5Array`.
-    -   Attaches metadata read from the HDF5 file.
+-   Contains "DelayedArray"
 
-    Something like :\
-    `new_poparray <- function(x, roles) { stopifnot(is(x, "DelayedArray"))`
+-   Does NOT redefine or duplicate DelayedArray slots
 
-    `if (!is(DelayedArray::seed(x), "HDF5Array")) { cli::abort("poparray must be backed by an HDF5Array seed.") }`
+-   Adds only minimal additional slots required for domain roles
 
-    `new("poparray", x, roles = roles) }`
+-   Example:
 
-    -   I will not manually copy slots from DelayedArray — let inheritance handle that.
+`setClass(`
 
-        Replace print.poparray with setMethod("show", "poparray", ...)
+`"poparray",`
 
-        Replace S3 generics with setGeneric() + setMethod()
+`contains = "DelayedArray",`
 
-        Do NOT redefine arithmetic or [
+`slots = c(`
 
-        Let DelayedArray handle those.
+`roles = "list" # e.g., list(time = "year", area = "county")`
 
-        In short, I will shift from wrapping an HDF5Array to inheriting from DelayedArray and enforcing HDF5 backing at construction time.
+`)`
 
--   After that, I will implement a `setValidity()` method to enforce:
+`)`
 
-    -   Required dimension roles (time and area).
-    -   Dimensional integrity.
-    -   Consistency between metadata and the underlying array.
-    -   Similar to this:\
-        setValidity("poparray", function(object) {\
-        \# check:\
-        \# - roles\$time exists and is valid dimension name \# - roles\$area exists\
-        \# - dimnames match metadata\
-        \# - no missing dimension names })
+Do not redefine slots already defined by DelayedArray.
 
--   Then, I will override or extend only what is unique to `poparray`, such as:
+### Step 2 — Implement a constructor
 
-    -   Custom `show()` method.
-    -   Domain-specific helpers.
-    -   Metadata accessors.
+-   Create a constructor new_poparray() that:
 
-Finally, I will ensure all `poparray` operations (subsetting, collapsing, arithmetic, etc.) operate directly on the inherited `DelayedArray` structure and do not rebuild wrapper objects.
+    -   Accepts a DelayedArray object
 
+    -   Verifies DelayedArray::seed(x) is an "HDF5Array"
 
-Replace print.poparray with setMethod("show", "poparray", ...)
+    -   Validates required metadata
 
-Replace S3 generics with setGeneric() + setMethod()
+    -   Does NOT copy DelayedArray slots manually
 
-Do NOT redefine arithmetic or '[' Let DelayedArray handle those.
+    -   Uses new("poparray", x, roles = roles)
 
-Ensure:
-- [.poparray returns a poparray
+    -   Example logic:
 
-- Metadata and roles are preserved
+        ``` r
+        new_poparray <- function(x, roles) {
+        ```
 
--   drop = FALSE is respected
+``` r
+stopifnot(is(x, "DelayedArray"))
+```
 
-In short, I will shift from wrapping an HDF5Array to inheriting from DelayedArray and enforcing HDF5 backing at construction time.
+``` r
+if (!is(DelayedArray::seed(x), "HDF5Array")) {
+```
 
-Guradrails:
-Do not realize the array during migration.
-Do not use as.array() anywhere.
+``` r
+cli::abort("poparray must be backed by an HDF5Array seed.")
+```
 
-Do not duplicate DelayedArray slot definitions.
-Do not reimplement arithmetic operators.
+``` r
+}
+```
+
+``` r
+new("poparray", x, roles = roles)
+```
+
+``` r
+}
+```
+
+### Step 3 — Implement setValidity()
+
+Add a setValidity("poparray", ...) method that enforces:
+
+-   roles\$time exists and matches a dimension name
+
+-   roles\$area exists and matches a dimension name
+
+-   No duplicated roles
+
+-   dimnames exist
+
+-   Metadata in HDF5 matches dimensional structure
+
+-   Do not realize the array during validation.
+
+### Step 4 — Replace S3 methods with S4 methods
+
+Replace print.poparray with:
+
+-   setMethod("show", "poparray", function(object) { ...
+    })
+
+-   Replace S3 generics with S4 generics using:
+
+-   setGeneric("collapse_dim", function(x, ...) standardGeneric("collapse_dim"))
+
+-   setMethod("collapse_dim", "poparray", function(x, ...) { ...
+    })
+
+-   Do not reimplement:
+
+    -   \+
+
+    -   \-
+
+    -   \*
+
+    -   sum
+
+    -   aperm
+
+    -   dim
+
+    -   dimnames
+
+Let DelayedArray handle these.
+
+### Step 5 — Override subsetting safely
+
+Override [ for poparray so it:
+
+`Calls callNextMethod()`
+
+`Wraps the result back into a poparray`
+
+`Preserves roles`
+
+`Respects drop = FALSE`
+
+`Example pattern:`
+
+``` r
+setMethod(
+```
+
+``` r
+"[",
+```
+
+``` r
+signature(x = "poparray"),
+```
+
+``` r
+function(x, i, j, ..., drop = FALSE) {
+```
+
+``` r
+out <- callNextMethod()
+```
+
+``` r
+new("poparray", out, roles = x@roles)
+```
+
+``` r
+}
+```
+
+``` r
+)
+```
+
+Do not manually rebuild arrays.
+
+### Step 6 — Remove wrapper logic
+
+Remove:
+
+-   \$handle
+
+-   manual forwarding methods
+
+-   any logic that rebuilds DelayedArray objects
+
+-   duplicated dim/dimnames methods
+
+### Guardrails
+
+-   Do NOT realize the array.
+
+-   Do NOT use as.array().
+
+-   Do NOT duplicate DelayedArray slot definitions.
+
+-   Do NOT reimplement arithmetic operators.
+
+-   Do NOT override DelayedArray math generics.

@@ -81,11 +81,12 @@ extract_series <- function(parray, year_k, fixed_k_list) {
 # Build a poparray from an in-memory array, inheriting basic metadata
 # (we keep this small and explicit; you can later swap to HDF5-backed outputs).
 poparray_from_array_like <- function(arr, template, dimnames_list) {
-  src <- attr(template, "source", exact = TRUE)
-  dc  <- attr(template, "data_col", exact = TRUE) %||% "population"
+  src <- get_source(template)
+  dc  <- data_col(template) %||% "population"
+  h5  <- HDF5Array::writeHDF5Array(arr)
   
   new_poparray(
-    x = DelayedArray::DelayedArray(arr),
+    x = h5,
     dimnames_list = dimnames_list,
     data_col = dc,
     source = src

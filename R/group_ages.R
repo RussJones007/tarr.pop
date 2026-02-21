@@ -268,7 +268,7 @@ group_array_by_levels <- function(arr,
   arr_out <- aperm(arr_out_last, inv_perm)
   dimnames(arr_out) <- new_dimnames
   ret <- new_tarr_pop(x = arr_out, dimnames_list = new_dimnames, 
-               data_col = attr(arr, "data_col"), source = get_source(arr))
+               data_col = data_col(arr), source = get_source(arr))
   #attr(arr_out, "data_col") <- attr(arr, "data_col")
   #class(arr_out) <- class(arr)
   
