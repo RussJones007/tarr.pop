@@ -4,7 +4,8 @@
 
 **Project: tarr.pop**
 
-These guidelines define how code, explanations, and recommendations should be formulated for the **tarr.pop** R package. They apply to both human contributors and AI-assisted development.
+These guidelines define how code, explanations, and recommendations should be formulated for the **tarr.pop** R package.
+They apply to both human contributors and AI-assisted development.
 
 ------------------------------------------------------------------------
 
@@ -217,10 +218,12 @@ This is a **production epidemiology package**, not a demo.
 
 ## 13. Response Skeleton
 
+For interactive use, here is the response skeleton:
+
 1.  Interpretation / assumptions
 2.  Lazy-first solution (recommended)
 3.  Base R alternative (warn if eager)
 4.  Tidyverse alternative (warn if eager / NSE)
 5.  Tests to add
 6.  Docs notes
-7.  Function existence check snippet (for Bioconcutor versions)
+7.  Function existence check snippet (for Bioconductor versions)
