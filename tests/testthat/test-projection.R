@@ -7,22 +7,16 @@ make_poparray_fixture <- function() {
     sex = c("Female", "Male")
   )
   arr <- array(
-    as.numeric(seq_len(prod(lengths(dn)))),
+    as.numeric(seq_len(prod(unname(lengths(dn))))),
     dim = unname(lengths(dn)),
     dimnames = dn
   )
-  
-  pa <- ns_fun("new_poparray")(
-    x = DelayedArray::DelayedArray(arr),
-    dimnames_list = dn,
-    data_col = "population",
-    source = list(
-      note = "Fixture source",
-      source = "fixture://source",
-      updated = "2026-02-16"
-    )
+
+  as.poparray(
+    arr,
+    filepath = tempfile("projection_pop_fixture_", fileext = ".h5"),
+    data_col = "population"
   )
-  pa
 }
 
 test_that("writer creates single handle with named stat dimension", {
@@ -83,27 +77,34 @@ test_that("infer_projection_method_from_tp uses poparray time dimension", {
 
 test_that("project returns poparray_projection with one-cube handle and source metadata", {
   pa <- make_poparray_fixture()
-  
+
   pr <- tarr.pop::project(pa, h = 2, method = "CAGR", level = 0.95, guard = FALSE)
-  
-  expect_s3_class(pr, "poparray_projection")
-  expect_s4_class(pr$handle, "DelayedArray")
-  expect_true("stat" %in% names(dimnames(pr$handle)))
-  expect_equal(dimnames(pr$handle)$stat, c("projection", "std_error"))
-  
-  src <- attr(pr, "source", exact = TRUE)
+
+  expect_s4_class(pr, "poparray_projection")
+  expect_s4_class(pr, "DelayedArray")
+  expect_true("stat" %in% names(dimnames(pr)))
+  expect_equal(dimnames(pr)$stat, c("projection", "std_error"))
+
+  src <- pr@source
   expect_true(is.list(src))
-  expect_true(all(c("note", "source", "updated", "projected_from") %in% names(src)))
-  expect_true(is.list(src$projected_from))
+  expect_true(all(c("note", "source", "updated", "projection_method", "projection_level") %in% names(src)))
 })
 
-test_that("project enforces named dimensions defensively", {
-  pa <- make_poparray_fixture()
-  pa_bad <- pa
-  names(pa_bad$dimn) <- NULL
-  
+test_that("project enforces numeric-like time labels for horizon generation", {
+  dn <- list(
+    year = paste0("Y", 2018:2022),
+    area.name = c("A", "B"),
+    sex = c("Female", "Male")
+  )
+  arr <- array(
+    as.numeric(seq_len(prod(unname(lengths(dn))))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+  pa_bad <- as.poparray(arr, filepath = tempfile("projection_bad_years_", fileext = ".h5"))
+
   expect_error(
-    ns_fun("project_cube")(pa_bad, h = 2, level = 0.95, method = "CAGR", guard = FALSE),
-    "no valid dimn dimnames metadata"
+    tarr.pop::project(pa_bad, h = 2, method = "CAGR", level = 0.95, guard = FALSE),
+    "coercible to integer"
   )
 })
