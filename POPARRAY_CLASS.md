@@ -52,13 +52,14 @@ The design of `poparray` is governed by the following principles:
     be collapsed into coarser (larger) geographies, e.g., block -\> tract -\> county -\> state.
 
 5.  **Delayed computation by default**\
-    Operations preserve 'laziness' whenever possible and avoid realizing large arrays in memory.
+    Operations preserve `laziness` whenever possible and avoid realizing large arrays in memory.
 
 ------------------------------------------------------------------------------------------------------------------------
 
 ## What a poparray object contains
 
-A `poparray` object is an S3 wrapper around a multi-dimensional array (often HDF5-backed) plus semantic metadata.
+A `poparray` is an S4 object that extends `DelayedArray` around a multi-dimensional array (typically HDF5-backed) plus
+semantic metadata slots.
 
 ### Numeric data
 
@@ -88,48 +89,23 @@ These dimensions:
 
 ------------------------------------------------------------------------------------------------------------------------
 
-## Attribute usage and semantic metadata
+## Metadata model (current implementation)
 
-`poparray` relies heavily on attributes to store meaning that should not be encoded structurally in the array.
+The current class contract stores core semantics in S4 slots:
 
-### dim_roles
+-   `time_role` - name of the time dimension
+-   `area_role` - name of the area dimension
+-   `strata_roles` - character vector of all non-time/non-area dimensions
+-   `data_col` - value column name used for tabular coercion
+-   `source` - named provenance list (e.g. `note`, `source`, `updated`, `population_type`)
 
-A named list describing the semantic role of each dimension:
+For compatibility with older S3-era helpers, transitional attributes are still written by the constructor:
 
-\`attr(x, "dim_roles") \<- list(\
-time = "year",\
-area = "block",\
-strata = c("age", "sex") )'
+-   `attr(x, "dimroles")`
+-   `attr(x, "data_col")`
+-   `attr(x, "source")`
 
-This allows methods to operate based on role, rather than hard-coded dimension names or positions.
-
-### area_lookup
-
-A data frame describing hierarchical geographic relationships for the area dimension. Example:
-
-attr(x, "area_lookup") \<- data.frame(\
-block = "...",\
-tract = "...",\
-county = "...", state = "TX" )
-
-This table:
-
--   has one row per area level in the array,
--   encodes many-to-one relationships,
--   is used for aggregation and reconciliation,
--   is never treated as an array dimension.
-
-### Source and provenance metadata
-
-Attributes such as:
-
--   source
--   series_spec
--   release year
--   Census vintage
--   differential privacy notes
-
-These document where the data came from and how it should be interpreted, without affecting array mechanics.
+Methods should treat the S4 slots as authoritative.
 
 ## Storage and persistence model
 
@@ -141,10 +117,17 @@ A poparray object typically consists of one file:
 
 -   Handles chunking, compression, and on-disk access.
 
--   Contains semantic metadata beyond dimnames in a separate group called "metadata/". Contains all attributes,
-    including lookup tables and provenance.
+-   The file group structure is `cube`, with subgroups `population` and `metadata`.
 
--   From this struture, the open_poparray() function creates a poparray object.
+-   Contains semantic metadata in `cube/metadata/*`:
+
+    -   roles (`time`, `area`, `strata`)
+    -   `data_col`
+    -   source/provenance fields
+    -   dimension order and per-dimension labels
+    -   optional registry fields
+
+-   From this structure, the `open_poparray()` function creates a poparray object.
 
 This separation allows:
 
@@ -155,18 +138,18 @@ This separation allows:
 ## Supported operations
 
 Operations may return realized R objects only when explicitly documented (e.g., summaries, plots). Functions that
-realize the array are tagged with **Eager**.
+realize the array are tagged with **EAGER**.
 
 ### Basic array interface
 
-These operations behave like the corresponding base R generics and are expected to be cheap (metadata-only)
-wherepossible.
+These operations behave like the corresponding base R generics and are expected to be cheap (metadata-only) where
+possible.
 
 -   `length(x)` Returns the total number of cells (`prod(dim(x))`).
 
--   `dim(x)`Returns the array dimensions (delegates to the delayed backend).
+-   `dim(x)` Returns the array dimensions (delegates to the delayed backend).
 
--   `dimnames(x)` and `names(x)`Returns dimension names and per-dimension labels (stored/maintained explicitly).
+-   `dimnames(x)` and `names(x)` Returns dimension names and per-dimension labels (stored/maintained explicitly).
 
 ### Printing
 
@@ -179,14 +162,13 @@ wherepossible.
 -   Maintains dimensional integrity.
 -   Updates metadata consistently.
 -   Defaults to drop = FALSE.
--   sulting object is a poparray.
+-   Resulting object is a poparray.
 
 ### Collapsing dimensions
 
 -   Stratification dimensions may be collapsed freely.
 -   Area and time dimensions may be collapsed only explicitly, with clear intent.
--   Area collapsing uses lookup tables and replaces (not adds) the area dimension.
--   Geographic aggregation Fine-to-coarse aggregation (e.g. block → county) is supported via lookup-driven collapsing.
+-   Geographic aggregation behavior depends on available dimension labels/inputs used by collapse helpers.
 -   The resulting object remains a valid poparray.
 
 ### Coercion to tabular formats (EAGER)
@@ -216,9 +198,16 @@ first (e.g., subset years/areas) before converting.
 -   summary(x) / sum(x) / min(x) / max(x) / range(x) / etc. Summary-group generics are supported in some by coercing
     values to numeric, which can be EAGER for large arrays.
 
-Recommendation: summary operations should prefer delayed reductions when feasible (e.g.,DelayedArray::DelayedReduce) and
-only realize small results. If a method realizes, it must be explicit in documentation and (ideally) warn for large
-objects.
+Recommendation: summary operations should prefer delayed reductions when feasible (e.g.,
+`DelayedArray::DelayedReduce()`) and only realize small results. If a method realizes, it must be explicit in
+documentation and (ideally) warn for large objects.
+
+### Saving and persistence helpers
+
+-   `save_poparray(x, filepath, ...)` writes a `poparray` to the canonical cube schema.
+-   `create_poparray(x, filepath, series_id, ...)` is a convenience wrapper that adds `series_id` to registry metadata.
+-   These functions read `data_col`, `source`, `time_role`, and `area_role` from `x`; callers do not pass those
+    separately.
 
 ### Benchmark reconciliation (optional)
 
@@ -228,8 +217,10 @@ When fine-level data are subject to differential privacy noise:
 -   Reconciliation methods (e.g. benchmarking or raking) may be applied explicitly.
 -   Provenance of reconciliation is recorded in metadata.
 
-Plotting and summaries - Methods may impose constraints on remaining stratification dimensions. - All plotting and
-summaries respect dimension roles and metadata.
+Plotting and summaries:
+
+-   Methods may impose constraints on remaining stratification dimensions.
+-   All plotting and summaries respect dimension roles and metadata.
 
 ### What poparray deliberately does not do
 
@@ -251,4 +242,4 @@ summaries respect dimension roles and metadata.
 A poparray is a lazy, role-aware population cube\
 where arrays store values,\
 metadata stores meaning,\
-and hierarchy is expressed through lookup tables, not dimensions
+and role-aware methods enforce dimensional contracts
