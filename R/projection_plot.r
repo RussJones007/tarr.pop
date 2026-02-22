@@ -318,7 +318,7 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
   years_chr <- as.character(dimnames(pr)[[time_nm]])
   
   y_hat <- tp_totals_by_time(pr, time_nm = time_nm)
-  z <- stats::qnorm(1 - (1 - attr(x, "level", exact = TRUE)) / 2)
+  z <- stats::qnorm(1 - (1 - pp_level(x)) / 2)
   y_se <- tp_totals_by_time(se, time_nm = time_nm)
   y_lo <- y_hat - z * y_se
   y_hi <- y_hat + z * y_se
@@ -383,8 +383,8 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
   }
   
   # ---- titles ----
-  lvl <- attr(x, "level", exact = TRUE)
-  mth <- attr(x, "method", exact = TRUE)
+  lvl <- pp_level(x)
+  mth <- pp_method(x)
   
   graphics::title(
     main = "Projected total population",

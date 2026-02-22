@@ -639,8 +639,12 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
     method     = method,
     source     = source,
     base_years = base_years_used,
-    dimroles   = attr(parray, "dimroles", exact = TRUE),
-    data_col   = attr(parray, "data_col", exact = TRUE) %||% "population"
+    dimroles   = list(
+      time = time_role(parray),
+      area = area_role(parray),
+      strata = setdiff(names(dimnames(parray)), c(time_role(parray), area_role(parray)))
+    ),
+    data_col   = data_col(parray) %||% "population"
   )
 }
 
