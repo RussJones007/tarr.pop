@@ -792,7 +792,7 @@ as_tibble.poparray <- function(x,
 split.poparray <- function(x, f, drop = FALSE, ...) {
   validate_poparray(x)
   
-  dim_names <- names(x)
+  dim_names <- names(dimnames(x))
   nd <- length(dim(x))
   roles <- list(time = time_role(x), area = area_role(x))
   
@@ -827,8 +827,9 @@ split.poparray <- function(x, f, drop = FALSE, ...) {
   if (length(labs) == 0) return(stats::setNames(list(), character(0)))
   
   out <- lapply(labs, \(lab) {
-    # Named indexing, so dimension order doesn't matter
-    do.call(`[`, c(list(x), stats::setNames(list(lab), split_dim), list(drop = drop)))
+    ndx <- rep(list(TRUE), nd)
+    ndx[[split_pos]] <- lab
+    do.call(`[`, c(list(x), unname(ndx), list(drop = drop)))
   })
   
   purrr::set_names(out, labs)
