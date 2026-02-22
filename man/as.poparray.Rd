@@ -2,9 +2,20 @@
 % Please edit documentation in R/poparray_class.r
 \name{as.poparray}
 \alias{as.poparray}
+\alias{as.poparray.array}
 \title{Coerce to a poparray Object}
 \usage{
 as.poparray(x, data_col = "population", ...)
+
+\method{as.poparray}{array}(
+  x,
+  data_col = "population",
+  filepath = NULL,
+  name = "cube/population",
+  chunkdim = "auto",
+  level = 6L,
+  ...
+)
 }
 \arguments{
 \item{x}{object to coerce like a data frame or a table/array.}
@@ -12,6 +23,16 @@ as.poparray(x, data_col = "population", ...)
 \item{data_col}{single character string with the population column name.}
 
 \item{...}{additional arguments to pass (see methods).}
+
+\item{filepath}{Optional HDF5 file path used to persist the array before
+constructing a \code{poparray}. If \code{NULL}, \code{HDF5Array} uses its default.}
+
+\item{name}{Dataset path. Must be \code{"cube/population"} for the canonical
+poparray cube schema.}
+
+\item{chunkdim}{Optional HDF5 chunk dimensions, or \code{"auto"}.}
+
+\item{level}{Compression level (0-9) passed to \code{writeHDF5Array()}.}
 }
 \value{
 a poparray classed object

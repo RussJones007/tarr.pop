@@ -612,17 +612,19 @@ as.poparray.default <- function(x, data_col = "population", ...) {
 #                ...)
 # }
 
+#' @rdname as.poparray
 #' @param filepath Optional HDF5 file path used to persist the array before
 #'   constructing a `poparray`. If `NULL`, `HDF5Array` uses its default.
-#' @param name Dataset name written inside the HDF5 file.
-#' @param chunkdim Optional HDF5 chunk dimensions.
+#' @param name Dataset path. Must be `"cube/population"` for the canonical
+#'   poparray cube schema.
+#' @param chunkdim Optional HDF5 chunk dimensions, or `"auto"`.
 #' @param level Compression level (0-9) passed to `writeHDF5Array()`.
 #' @export
 as.poparray.array <- function(x,
                               data_col = "population",
                               filepath = NULL,
-                              name = "poparray_data",
-                              chunkdim = NULL,
+                              name = "cube/population",
+                              chunkdim = "auto",
                               level = 6L,
                               ...) {
   checkmate::assert_character(data_col, len = 1, any.missing = FALSE)
@@ -636,18 +638,40 @@ as.poparray.array <- function(x,
   if (length(missing_dims) > 0) {
     cli::cli_abort("Missing required dimensions in {.arg x}: {paste(missing_dims, collapse = ', ')}")
   }
+  if (!identical(name, "cube/population")) {
+    cli::cli_abort("{.arg name} must be {.val cube/population} for poparray cubes.")
+  }
 
-  delayed_x <- HDF5Array::writeHDF5Array(
+  dots <- list(...)
+  time_dim <- dots$time_dim %||% "year"
+  area_dim <- dots$area_dim %||% "area.name"
+  src <- dots$source %||% list()
+  if (is.null(filepath)) {
+    filepath <- tempfile("poparray_cube_", fileext = ".h5")
+  }
+
+  pa_write_poparray_cube(
     x = x,
     filepath = filepath,
-    name = name,
+    dimnames_list = dn,
+    overwrite = FALSE,
     chunkdim = chunkdim,
-    level = level
+    level = level,
+    time_dim = time_dim,
+    area_dim = area_dim,
+    source = src,
+    data_col = data_col
   )
+
+  delayed_x <- HDF5Array::HDF5Array(filepath = filepath, name = "cube/population")
+  dimnames(delayed_x) <- dn
 
   new_poparray(x = delayed_x,
                dimnames_list = dn,
                data_col = data_col,
+               source = src,
+               time_dim = time_dim,
+               area_dim = area_dim,
                ...)
 }
 
