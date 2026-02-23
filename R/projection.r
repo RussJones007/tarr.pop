@@ -81,11 +81,12 @@ extract_series <- function(parray, year_k, fixed_k_list) {
 # Build a poparray from an in-memory array, inheriting basic metadata
 # (we keep this small and explicit; you can later swap to HDF5-backed outputs).
 poparray_from_array_like <- function(arr, template, dimnames_list) {
-  src <- attr(template, "source", exact = TRUE)
-  dc  <- attr(template, "data_col", exact = TRUE) %||% "population"
+  src <- get_source(template)
+  dc  <- data_col(template) %||% "population"
+  h5  <- HDF5Array::writeHDF5Array(arr)
   
   new_poparray(
-    x = DelayedArray::DelayedArray(arr),
+    x = h5,
     dimnames_list = dimnames_list,
     data_col = dc,
     source = src
@@ -638,8 +639,12 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
     method     = method,
     source     = source,
     base_years = base_years_used,
-    dimroles   = attr(parray, "dimroles", exact = TRUE),
-    data_col   = attr(parray, "data_col", exact = TRUE) %||% "population"
+    dimroles   = list(
+      time = time_role(parray),
+      area = area_role(parray),
+      strata = setdiff(names(dimnames(parray)), c(time_role(parray), area_role(parray)))
+    ),
+    data_col   = data_col(parray) %||% "population"
   )
 }
 

@@ -14,7 +14,7 @@ Typical county-level ASRE cubes include dimensions:
 
 Some tables may use a reduced schema (for example, \code{zcta} without ASRE
 stratification). Use \code{\link[=dimnames]{dimnames()}}, \code{\link[=names]{names()}}, and role helpers
-\code{\link[=time_role]{time_role()}} / \code{\link[=area_role]{area_role()}} on the loaded \code{poparray} to inspect the exact
+\code{time_role()} / \code{area_role()} on the loaded \code{poparray} to inspect the exact
 structure.
 }
 \usage{
@@ -22,11 +22,11 @@ population
 }
 \description{
 The \code{population} object is a named catalog of population cubes grouped by source agency and table type. Each entry
-points to a delayed, disk-backed cube that can be opened as a \link{poparray} with \code{\link[=open_poparray]{open_poparray()}} (or the legacy alias
+points to a delayed, disk-backed cube that can be opened as a \code{poparray} with \code{\link[=open_poparray]{open_poparray()}} (or the legacy alias
 \code{\link[=open_tarr_pop]{open_tarr_pop()}}).
 }
 \details{
-A \code{poparray} wraps a \code{DelayedArray}/\code{HDF5Array} backend and stores explicit dimension labels and role metadata
+A \code{poparray} extends \code{DelayedArray} (typically HDF5-backed) and stores explicit dimension labels and role metadata
 (\code{time}, \code{area}, optional \code{strata}). This allows filtering and aggregation before realization, reducing memory use.
 
 Available series include decennial census counts, annual estimates, and projections from:

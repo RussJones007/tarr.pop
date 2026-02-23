@@ -11,60 +11,132 @@
 # Revised: Feb 16, 2026 - multiple bug fixes nd term updates
 # -------------------------------------------------------------------------------------->
 
+setClass(
+  "poparray",
+  contains = "DelayedArray",
+  slots = c(
+    time_role = "character",
+    area_role = "character",
+    strata_roles = "character",
+    data_col = "character",
+    source = "list"
+  )
+)
+
+#' Poparray class
+#'
+#' S4 class for population cubes. `poparray` extends `DelayedArray` and adds
+#' explicit role and metadata slots.
+#'
+#' @slot time_role Name of the time dimension.
+#' @slot area_role Name of the area dimension.
+#' @slot strata_roles Character vector of optional stratification dimensions.
+#' @slot data_col Name used for value column in tabular coercions.
+#' @slot source Provenance metadata as a named list.
+#'
+#' @name poparray
+#' @docType class
+NULL
+
+is_hdf5_backed_delayed <- function(x) {
+  if (!is(x, "DelayedArray")) return(FALSE)
+  if (is(x, "HDF5Array")) return(TRUE)
+  sd <- tryCatch(DelayedArray::seed(x), error = function(e) NULL)
+  seed_has_hdf5 <- function(obj) {
+    if (is.null(obj)) return(FALSE)
+    if (is(obj, "HDF5ArraySeed") || is(obj, "HDF5Array")) return(TRUE)
+    if (isS4(obj)) {
+      for (sn in methods::slotNames(obj)) {
+        v <- methods::slot(obj, sn)
+        if (seed_has_hdf5(v)) return(TRUE)
+      }
+    }
+    if (is.list(obj)) {
+      for (v in obj) {
+        if (seed_has_hdf5(v)) return(TRUE)
+      }
+    }
+    FALSE
+  }
+  seed_has_hdf5(sd)
+}
+
+validate_hdf5_metadata_shape <- function(x) {
+  sd <- tryCatch(DelayedArray::seed(x), error = function(e) NULL)
+  if (is.null(sd) || !is(sd, "HDF5ArraySeed")) return(TRUE)
+  fp <- tryCatch(sd@filepath, error = function(e) "")
+  ds <- tryCatch(sd@name, error = function(e) "")
+  if (!nzchar(fp) || !file.exists(fp) || !nzchar(ds)) return(TRUE)
+  if (!grepl("^cube/population$", ds) && !grepl("^/cube/population$", ds)) return(TRUE)
+  info <- tryCatch(rhdf5::h5ls(fp), error = function(e) NULL)
+  if (is.null(info)) return("Unable to inspect HDF5 metadata layout.")
+  has_meta_group <- any(info$group == "/cube" & info$name == "metadata")
+  has_dim_order <- any(info$group == "/cube/metadata" & info$name == "dim_order")
+  has_dimnames_group <- any(info$group == "/cube/metadata" & info$name == "dimnames")
+  if (!has_meta_group) return("Missing required HDF5 metadata group: cube/metadata")
+  if (!has_dim_order) return("Missing required HDF5 dataset: cube/metadata/dim_order")
+  if (!has_dimnames_group) return("Missing required HDF5 group: cube/metadata/dimnames")
+  dim_order <- as.character(rhdf5::h5read(fp, "cube/metadata/dim_order"))
+  dn <- dimnames(x)
+  nms <- names(dn)
+  if (is.null(nms) || !identical(as.character(dim_order), as.character(nms))) {
+    return("HDF5 cube/metadata/dim_order does not match object dimension names.")
+  }
+  TRUE
+}
+
+setValidity("poparray", function(object) {
+  dn <- dimnames(object)
+  if (is.null(dn) || is.null(names(dn))) {
+    return("dimnames must exist and be named.")
+  }
+  if (length(object@time_role) != 1L || !nzchar(object@time_role)) {
+    return("slot 'time_role' must be a single non-empty character string.")
+  }
+  if (length(object@area_role) != 1L || !nzchar(object@area_role)) {
+    return("slot 'area_role' must be a single non-empty character string.")
+  }
+  if (identical(object@time_role, object@area_role)) {
+    return("time_role and area_role must be different.")
+  }
+  if (!object@time_role %in% names(dn)) {
+    return("time_role must match a dimension name.")
+  }
+  if (!object@area_role %in% names(dn)) {
+    return("area_role must match a dimension name.")
+  }
+  if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
+    return("Roles cannot contain duplicates.")
+  }
+  d <- lengths(dn)
+  if (length(dn) != length(d)) {
+    return("dimnames must align with dimensions.")
+  }
+  for (k in seq_along(d)) {
+    lbl <- dn[[k]]
+    if (is.null(lbl) || length(lbl) != d[[k]]) {
+      return("Each dimnames entry must have length matching the dimension extent.")
+    }
+  }
+  h5_meta_chk <- validate_hdf5_metadata_shape(object)
+  if (!isTRUE(h5_meta_chk)) return(h5_meta_chk)
+  TRUE
+})
+
 #' Construct a poparray
 #'
-#' Creates a poparray object: a lazy, role-aware population cube backed by a `DelayedArray` (often an `HDF5Array`) with
-#' explicit dimension labels.  Dimensions representing time and area are required (invariants). 
+#' Creates a role-aware `poparray` that extends `DelayedArray` and stores role and
+#' provenance metadata in slots.
 #'
-#' A poparray must include exactly one time dimension and one area dimension (by default `"year"` and `"area.name"`),
-#' and all other dimensions are treated as optional stratification dimensions.
-#'
-#' The constructor is lazy-first: it wraps non-delayed inputs in `DelayedArray::DelayedArray()` and does not realize the
-#' full array in memory.
-#'
-#' @param x A `DelayedArray`-compatible object (e.g., `HDF5Array`, `DelayedArray`, or an in-memory array/matrix that can
-#'   be wrapped).
-#' @param dimnames_list Named list of dimension labels. Must have the same number of elements as `dim(x)`, and each
-#'   element length must match the corresponding dimension extent. Dimension labels must be unique within each
-#'   dimension.
-#' @param data_col Single character string giving the value-column name to use when coercing to tabular formats (e.g.,
-#'   via `as.data.frame()`/`as_tibble()` methods).
-#' @param source Optional metadata describing the data source/provenance (character or list).
-#' @param time_dim Single character string naming the time dimension. Defaults to `"year"`. If not `"year"`, it must be
-#'   supplied explicitly and must exist in `names(dimnames_list)`. The labels for this dimension must be ordered.
-#' @param area_dim Single character string naming the area dimension. Defaults to `"area.name"`. Must exist in
-#'   `names(dimnames_list)`.
+#' @param x A `DelayedArray` object.
+#' @param dimnames_list Named list of dimension labels.
+#' @param data_col Single character string giving the value-column name.
+#' @param source Optional metadata describing provenance.
+#' @param time_dim Single character string naming the time dimension.
+#' @param area_dim Single character string naming the area dimension.
 #' @param ... Reserved for future use.
 #'
-#' @details The resulting object stores:
-#' - `handle`: the delayed backend (numeric array-like data),
-#' - `dimn`: the explicit dimnames list,
-#' - attributes including `dimroles` (a named list with `time`, `area`, and
-#' `strata`) and `data_col`.
-#'
-#' @return An S3 object of class `"poparray"`.
-#'
-#' @examples
-#' \dontrun{
-#' library(DelayedArray)
-#'
-#' arr <- array(1:12, dim = c(3, 4))
-#' dimnames(arr) <- list(
-#'   year = c("2020", "2021", "2022"),
-#'   area.name = paste0("A", 1:4)
-#' )
-#' 
-#' pa <- new_poparray(arr)
-#' pa
-#'
-#' # Non-default roles (must be explicit and ordered)
-#' dimnames(arr) <- list(
-#'   time = c("2020", "2021", "2022"),
-#'   area.name = paste0("A", 1:4)
-#' )
-#' pa2 <- new_poparray(arr, time_dim = "time", area_dim = "area.name")
-#' }
-#'
+#' @return An S4 object of class `"poparray"`.
 #' @export
 new_poparray <- function(x,
                          dimnames_list = dimnames(x),
@@ -73,37 +145,83 @@ new_poparray <- function(x,
                          time_dim = "year",
                          area_dim = "area.name",
                          ...) {
-  
-  if (!inherits(x, "DelayedArray")) x <- DelayedArray::DelayedArray(x)
-  
+  if (!is(x, "DelayedArray")) {
+    cli::cli_abort("{.arg x} must be a {.cls DelayedArray}.")
+  }
+  if (!is_hdf5_backed_delayed(x)) {
+    cli::cli_abort("poparray must be backed by an HDF5Array seed.")
+  }
   if (is.null(dimnames_list) || !is.list(dimnames_list) || is.null(names(dimnames_list))) {
     cli::cli_abort("{.arg dimnames_list} must be a named list of dimension labels.")
   }
-  
+  if (length(data_col) != 1 || is.na(data_col) || !is.character(data_col)) {
+    cli::cli_abort("{.arg data_col} must be length 1 and not NA.")
+  }
   nms <- names(dimnames_list)
-  
-  if (!is.character(time_dim) || length(time_dim) != 1) cli::cli_abort("{.arg time_dim} must be length 1.")
-  if (!is.character(area_dim) || length(area_dim) != 1) cli::cli_abort("{.arg area_dim} must be length 1.")
-  if (!time_dim %in% nms) cli::cli_abort("Time dim {.val {time_dim}} not found in dimnames_list.")
-  if (!area_dim %in% nms) cli::cli_abort("Area dim {.val {area_dim}} not found in dimnames_list.")
-  if (identical(time_dim, area_dim)) cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
-  if(length(data_col) !=1 || is.na(data_col) || ! is.character(data_col) )   cli::cli_abort("{.arg data_col} must be length 1 and not NA")
-  
-  obj <- list(handle = x, dimn = dimnames_list)
-  
-  
-  attr(obj, "data_col") <- data_col
-  attr(obj, "source")   <- source
-  attr(obj, "dimroles") <- list(
-    time   = time_dim,
-    area   = area_dim,
-    strata = setdiff(nms, c(time_dim, area_dim))
+  if (!is.character(time_dim) || length(time_dim) != 1 || !time_dim %in% nms) {
+    cli::cli_abort("{.arg time_dim} must be a dimension name in {.arg dimnames_list}.")
+  }
+  if (!is.character(area_dim) || length(area_dim) != 1 || !area_dim %in% nms) {
+    cli::cli_abort("{.arg area_dim} must be a dimension name in {.arg dimnames_list}.")
+  }
+  if (identical(time_dim, area_dim)) {
+    cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
+  }
+  dimnames(x) <- dimnames_list
+  src <- if (is.null(source)) list() else as.list(source)
+  obj <- new(
+    "poparray",
+    x,
+    time_role = time_dim,
+    area_role = area_dim,
+    strata_roles = setdiff(nms, c(time_dim, area_dim)),
+    data_col = data_col,
+    source = src
   )
-  
-  class(obj) <- "poparray"
-  validate_poparray(obj)
+  # Transitional compatibility for remaining S3 wrappers/shims.
+  attr(obj, "data_col") <- data_col
+  attr(obj, "source") <- src
+  attr(obj, "dimroles") <- list(time = time_dim, area = area_dim, strata = setdiff(nms, c(time_dim, area_dim)))
   obj
 }
+
+setMethod("show", "poparray", function(object) {
+  src <- get_source(object)
+  dms <- dimnames(object)
+  dms_sizes <- lengths(dms)
+  names(dms_sizes) <- names(dms)
+  dimensions <- paste(paste0(names(dms_sizes), " (", dms_sizes, ")"), collapse = ", ")
+  cat("<poparray>\n")
+  cat("Series: ", src[["note"]] %||% "", "\n", sep = "")
+  cat("Sourced: ", src[["source"]] %||% "Not given", "\n", sep = "")
+  cat("Updated: ", src[["updated"]] %||% "Unknown", "\n", sep = "")
+  cat("Length: ", format(as.numeric(prod(dim(object))), big.mark = ","), "\n", sep = "")
+  cat("Roles: time = '", object@time_role, "', area = '", object@area_role, "'\n", sep = "")
+  cat("Dimensions: ", dimensions, "\n", sep = "")
+  cat("Data column as data frame: '", object@data_col, "'\n", sep = "")
+  invisible(object)
+})
+
+setMethod("collapse_dim", "poparray", collapse_dim_poparray_impl)
+
+setMethod(
+  "[",
+  signature(x = "poparray"),
+  function(x, ..., drop = FALSE) {
+    out <- callNextMethod()
+    if (isTRUE(drop) || !is(out, "DelayedArray")) {
+      return(out)
+    }
+    new_poparray(
+      x = out,
+      dimnames_list = dimnames(out),
+      data_col = x@data_col,
+      source = x@source,
+      time_dim = x@time_role,
+      area_dim = x@area_role
+    )
+  }
+)
 
 
 #' Validate poparray object
@@ -113,54 +231,26 @@ new_poparray <- function(x,
 #' @returns x, otherwise throws an error
 #' @keywords internal
 validate_poparray <- function(x) {
-  if (!inherits(x, "poparray")) {
+  if (!is(x, "poparray")) {
     cli::cli_abort("{.arg x} must be a {.cls poparray}.")
   }
-  
-  d <- dim(x$handle)
-  if (is.null(d)) cli::cli_abort("poparray backend has no dimensions.")
-  
-  dn <- x$dimn
-  if (!is.list(dn) || is.null(names(dn))) {
-    cli::cli_abort("{.arg dimnames_list} must be a named list.")
-  }
-  if (length(dn) != length(d)) {
-    cli::cli_abort("dimnames_list has {length(dn)} dims but backend has {length(d)}.")
-  }
-  
-  for (k in seq_along(d)) {
-    nm <- names(dn)[k]
-    if (length(dn[[k]]) != d[[k]]) {
-      cli::cli_abort("Dim {.val {nm}} labels have length {length(dn[[k]])} but extent is {d[[k]]}.")
-    }
-    if (anyDuplicated(dn[[k]]) > 0) {
-      cli::cli_abort("Dim {.val {nm}} has duplicated labels; labels must be unique.")
-    }
-  }
-  
-  roles <- attr(x, "dimroles", exact = TRUE)
-  if (is.null(roles) || is.null(roles$time) || is.null(roles$area)) {
-    cli::cli_abort("poparray must have {.field dimroles} with {.field time} and {.field area}.")
-  }
-  if (!is.character(roles$time) || length(roles$time) != 1) cli::cli_abort("{.field dimroles$time} must be length 1.")
-  if (!is.character(roles$area) || length(roles$area) != 1) cli::cli_abort("{.field dimroles$area} must be length 1.")
-  if (identical(roles$time, roles$area)) cli::cli_abort("Time and area dims must be different.")
-  if (!roles$time %in% names(dn)) cli::cli_abort("Time dim {.val {roles$time}} not found in dimnames.")
-  if (!roles$area %in% names(dn)) cli::cli_abort("Area dim {.val {roles$area}} not found in dimnames.")
+  msg <- methods::validObject(x, test = TRUE)
+  if (!isTRUE(msg)) cli::cli_abort(msg)
+  dn <- dimnames(x)
   
   # Ordered time labels
-  tlab <- dn[[roles$time]] |> as.character()
-  if(anyNA(tlab)) cli::cli_abort("Time dim {.val {roles$time}} cannot have any NA values.")
+  tlab <- dn[[x@time_role]] |> as.character()
+  if(anyNA(tlab)) cli::cli_abort("Time dim {.val {x@time_role}} cannot have any NA values.")
   
   
   if (all(grepl("^[-+]?[0-9]+$", tlab))) {
     tnum <- as.integer(tlab)
     if (is.unsorted(tnum, strictly = FALSE)) {
-      cli::cli_abort("Time dim {.val {roles$time}} labels must be ordered (increasing).")
+      cli::cli_abort("Time dim {.val {x@time_role}} labels must be ordered (increasing).")
     }
   } else {
     if (is.unsorted(tlab, strictly = FALSE)) {
-      cli::cli_abort("Time dim {.val {roles$time}} labels must be ordered.")
+      cli::cli_abort("Time dim {.val {x@time_role}} labels must be ordered.")
     }
   }
   
@@ -170,81 +260,34 @@ validate_poparray <- function(x) {
 
 # Attribute retrieval helpers ------------------------------------------------------------------------------------------
 
+#' Get the time role name for a poparray
+#'
+#' @param x A poparray.
+#' @return A single character string naming the time dimension.
 #' @export
 time_role <- function(x) {
   validate_poparray(x)
-  roles <- attr(x, "dimroles", exact = TRUE)
-  return(roles$time)
+  return(x@time_role)
 }
 
+#' Get the area role name for a poparray
+#'
+#' @param x A poparray.
+#' @return A single character string naming the area dimension.
 #' @export
 area_role <- function(x) {
   validate_poparray(x)
-  roles <- attr(x, "dimroles", exact = TRUE)
-  return(roles$area)
+  return(x@area_role)
 }
 
 
 
 
 #' @export
-is.poparray <- function(x) inherits(x, "poparray")
+is.poparray <- function(x) is(x, "poparray")
 
 
 #  dim,  names, labels, and length  -----------------------
-
-#' Get dimensions of a poparray
-#'
-#' Returns the array dimensions of a `poparray`. This delegates to the delayed
-#' backend and is a cheap, metadata-only operation (it does not realize the
-#' full array).
-#'
-#' @param x A poparray.
-#'
-#' @return An integer vector giving the extents of each dimension.
-#' @export
-dim.poparray <- function(x) {
-  d <- base::dim(x$handle)
-  
-  if (is.null(d)) {
-    cli::cli_abort("poparray backend has no dimensions.")
-  }
-  
-  dn <- dimnames(x)
-  if (!is.null(dn) && length(dn) != length(d)) {
-    cli::cli_abort("poparray dimnames ({length(dn)}) do not match backend dims ({length(d)}).")
-  }
-  
-  d
-}
-
-
-
-#' Get dimension names for a poparray
-#' 
-#'
-#' Returns the named list of dimension labels stored in the poparray metadata.
-#' This is a metadata-only operation and does not realize the delayed backend.
-#'
-#' @param x A poparray.
-#' @param ... Unused.
-#'
-#' @return A named list of dimension labels (one character vector per dimension).
-#' @export
-dimnames.poparray <- function(x, ...) {
-  dn <- x$dimn
-  
-  if (is.null(dn) || !is.list(dn) || is.null(names(dn))) {
-    cli::cli_abort("poparray has no valid {.field dimn} dimnames metadata.")
-  }
-  
-  d <- dim(x$handle)
-  if (!is.null(d) && length(dn) != length(d)) {
-    cli::cli_abort("poparray dimnames ({length(dn)}) do not match backend dims ({length(d)}).")
-  }
-  
-  dn
-}
 
 #' @export
 names.poparray <- function(x) {
@@ -270,36 +313,6 @@ length.poparray <- function(x) {
 
 # Print and summary methods -----------------------------------------------------------------------------------------
 
-#' @exportS3Method base::print
-print.poparray <- function(x, ...) {
-  src <- get_source(x)
-  roles <- attr(x, "dimroles", exact = TRUE)
-  
-  dms <- dimnames(x)
-  dms_names <- names(dms)
-  
-  dms_sizes <- lengths(dms)
-  names(dms_sizes) <- dms_names
-  
-  dimensions <- paste(
-    paste0(names(dms_sizes), " (", dms_sizes, ")"),
-    collapse = ", "
-  )
-  
-  recs <- length(x)
-  
-  cat("<poparray>\n")
-  cat("Series: ", src[["note"]], "\n", sep = "")
-  cat("Sourced: ", src[["source"]], "\n", sep = "")
-  cat("Updated: ", src[["updated"]], "\n", sep = "")
-  cat("Length: ", format(recs, big.mark = ","), "\n", sep = "")
-  cat("Roles: time = '", roles$time, "', area = '", roles$area, "'\n", sep = "")
-  cat("Dimensions: ", dimensions, "\n", sep = "")
-  cat("Data column as data frame: '", data_col(x), "'\n", sep = "")
-  
-  invisible(x)
-}
-
 #' Summary of a poparray (may scan backend)
 #'
 #' Computes basic summaries of the numeric values in a poparray. This operation
@@ -316,7 +329,7 @@ summary.poparray <- function(object, ...) {
   x <- object
   validate_poparray(x)
   
-  h <- x$handle
+  h <- x
   
   # Prefer DelayedArray reductions (avoid as.array())
   # NOTE: these return small realized scalars.
@@ -355,99 +368,6 @@ summary.poparray <- function(object, ...) {
 #'   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
 #' @param drop Logical; passed to the backend `[` call.
 #'
-#' @return A `poparray` or (if `drop = TRUE` drops time/area) a `DelayedArray`.
-#' @export
-`[.poparray` <- function(x, ..., drop = FALSE) {
-  dim_names <- names(x)
-  
-  # check that the poparry object has the proper roles available.  This handles manually made poparrays that are missing
-  # required attributes
-  validate_poparray((x))
-  
-  roles <- attr(x, "dimroles", exact = TRUE)
-  
-  nd <- length(dim(x$handle))
-  if (length(dim_names) != nd) {
-    cli::cli_abort("poparray dimnames are inconsistent with backend dimensions.")
-  }
-  
-  # Capture and evaluate indices; treat "missing" in ... as TRUE (select all)
-  dots <- as.list(substitute(list(...)))[-1L]
-  idx <- lapply(dots, \(e) {
-    if (is_missing_arg(e)) TRUE else eval(e, parent.frame())
-  })
-  
-  ndx <- rep(list(TRUE), nd)
-  
-  index_names <- names(idx)
-  if (is.null(index_names)) index_names <- character(0)
-  
-  # Named vs positional dispatch
-  if (length(index_names) > 0) {
-    bad <- setdiff(index_names, dim_names)
-    if (length(bad) > 0) {
-      cli::cli_abort(c(
-        "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
-        "i" = "Valid dimensions are: {paste(dim_names, collapse = ', ')}."
-      ))
-    }
-    ndx[match(index_names, dim_names)] <- idx
-  } else {
-    if (length(idx) > nd) cli::cli_abort("Too many indices for poparray.")
-    ndx[seq_along(idx)] <- idx
-  }
-  
-  # Subset delayed backend (still lazy)
-  h_sub <- do.call(`[`, c(list(x$handle), ndx, list(drop = drop)))
-  
-  # Rebuild dimnames metadata to reflect the selection
-  dn0 <- dimnames(x)
-  dn <- dn0
-  
-  for (k in seq_len(nd)) {
-    sel <- ndx[[k]]
-    nm <- dim_names[[k]]
-    this <- dn0[[nm]]
-    
-    if (isTRUE(identical(sel, TRUE))) next
-    
-    if (is.numeric(sel) || is.logical(sel)) {
-      dn[[nm]] <- this[sel]
-    } else {
-      sel_chr  <- as.character(sel)
-      this_chr <- as.character(this)
-      # check that selected labesl actually exist, if not indicates an error. 
-      unknown  <- setdiff(sel_chr, this_chr)
-      if(length(unknown) > 0){
-        cli::cli_abort(c(
-          "Unknown label(s) in dim {.val {nm}}.",
-          "i" = "Unknown: {paste(utils::head(unknown, 10), collapse = ', ')}{if (length(unknown) > 10) ', ...' else ''}.",
-          "i" = "Valid labels example: {paste(utils::head(this_chr, 10), collapse = ', ')}{if (length(this_chr) > 10) ', ...' else ''}."
-        ))
-      }
-      dn[[nm]] <- sel_chr
-    }
-  }
-  
-  # If drop=TRUE would drop time or area, return the raw subsetted DelayedArray
-  if (isTRUE(drop)) {
-    if (length(dn[[roles$time]]) == 1L || length(dn[[roles$area]]) == 1L) {
-      return(h_sub)
-    }
-  }
-  
-  # Otherwise return a valid poparray slice, preserving metadata/roles
-  new_poparray(
-    x = h_sub,
-    dimnames_list = dn,
-    data_col = attr(x, "data_col", exact = TRUE),
-    source = attr(x, "source", exact = TRUE),
-    time_dim = roles$time,
-    area_dim = roles$area
-  )
-}
-
-
 # Coerce to poparray' ---------------------------------------------------------------------------------------------
 
 #' Coerce to a poparray Object
@@ -514,19 +434,66 @@ as.poparray.default <- function(x, data_col = "population", ...) {
 #                ...)
 # }
 
+#' @rdname as.poparray
+#' @param filepath Optional HDF5 file path used to persist the array before
+#'   constructing a `poparray`. If `NULL`, `HDF5Array` uses its default.
+#' @param name Dataset path. Must be `"cube/population"` for the canonical
+#'   poparray cube schema.
+#' @param chunkdim Optional HDF5 chunk dimensions, or `"auto"`.
+#' @param level Compression level (0-9) passed to `writeHDF5Array()`.
 #' @export
-as.poparray.array <- function(x, data_col = "population", ...) {
-  assert_that(is_scalar_character(data_col))
+as.poparray.array <- function(x,
+                              data_col = "population",
+                              filepath = NULL,
+                              name = "cube/population",
+                              chunkdim = "auto",
+                              level = 6L,
+                              ...) {
+  checkmate::assert_character(data_col, len = 1, any.missing = FALSE)
   assert_that(is.numeric(x))
-  assert_that(
-    dimnames(x) %has_names%
-      c("year", "area.name", "sex", "age.char", "race", "ethnicity")
+  req_dims <- c("year", "area.name")
+  dn <- dimnames(x)
+  if (is.null(dn) || is.null(names(dn))) {
+    cli::cli_abort("{.arg x} must have named dimnames.")
+  }
+  missing_dims <- setdiff(req_dims, names(dn))
+  if (length(missing_dims) > 0) {
+    cli::cli_abort("Missing required dimensions in {.arg x}: {paste(missing_dims, collapse = ', ')}")
+  }
+  if (!identical(name, "cube/population")) {
+    cli::cli_abort("{.arg name} must be {.val cube/population} for poparray cubes.")
+  }
+
+  dots <- list(...)
+  time_dim <- dots$time_dim %||% "year"
+  area_dim <- dots$area_dim %||% "area.name"
+  src <- dots$source %||% list()
+  if (is.null(filepath)) {
+    filepath <- tempfile("poparray_cube_", fileext = ".h5")
+  }
+
+  pa_write_poparray_cube(
+    x = x,
+    filepath = filepath,
+    dimnames_list = dn,
+    overwrite = FALSE,
+    chunkdim = chunkdim,
+    level = level,
+    time_dim = time_dim,
+    area_dim = area_dim,
+    source = src,
+    data_col = data_col
   )
-  
-  handle <- DelayedArray::DelayedArray(x)
-  new_poparray(x = handle,
-               dimnames_list = dimnames(x),
+
+  delayed_x <- HDF5Array::HDF5Array(filepath = filepath, name = "cube/population")
+  dimnames(delayed_x) <- dn
+
+  new_poparray(x = delayed_x,
+               dimnames_list = dn,
                data_col = data_col,
+               source = src,
+               time_dim = time_dim,
+               area_dim = area_dim,
                ...)
 }
 
@@ -547,15 +514,15 @@ as.poparray.array <- function(x, data_col = "population", ...) {
 as.double.poparray <- function(x, ...) {
   validate_poparray(x)
   
-  h2 <- as.double(x$handle)  # should remain delayed if DelayedArray supports it
+  h2 <- as.double(methods::as(x, "DelayedArray"))  # should remain delayed if DelayedArray supports it
   
   new_poparray(
     x = h2,
     dimnames_list = dimnames(x),
-    data_col = attr(x, "data_col", exact = TRUE),
-    source = attr(x, "source", exact = TRUE),
-    time_dim = attr(x, "dimroles", exact = TRUE)$time,
-    area_dim = attr(x, "dimroles", exact = TRUE)$area
+    data_col = data_col(x),
+    source = get_source(x),
+    time_dim = time_role(x),
+    area_dim = area_role(x)
   )
 }
 
@@ -585,7 +552,7 @@ as.data.frame.poparray <- function(x,
   warn_if_realization_large(x, bytes_threshold = bytes_threshold)
   
   # EAGER: materialize the current slice
-  arr <- as.array(x$handle)
+  arr <- as.array(x)
   dimnames(arr) <- dimnames(x)
   
   df <- as.data.frame(
@@ -597,7 +564,7 @@ as.data.frame.poparray <- function(x,
 
   polish_df(df = df, 
             stringsAsFactors = stringsAsFactors, 
-            time_dim = attr(x, "dimroles", exact = TRUE)$time)
+            time_dim = time_role(x))
 }
 
 #' Coerce poparray to tibble (EAGER)
@@ -647,9 +614,9 @@ as_tibble.poparray <- function(x,
 split.poparray <- function(x, f, drop = FALSE, ...) {
   validate_poparray(x)
   
-  dim_names <- names(x)
-  nd <- length(dim(x$handle))
-  roles <- attr(x, "dimroles", exact = TRUE)
+  dim_names <- names(dimnames(x))
+  nd <- length(dim(x))
+  roles <- list(time = time_role(x), area = area_role(x))
   
   # Resolve split dimension name + position
   if (is.character(f) && length(f) == 1) {
@@ -682,8 +649,9 @@ split.poparray <- function(x, f, drop = FALSE, ...) {
   if (length(labs) == 0) return(stats::setNames(list(), character(0)))
   
   out <- lapply(labs, \(lab) {
-    # Named indexing, so dimension order doesn't matter
-    do.call(`[`, c(list(x), stats::setNames(list(lab), split_dim), list(drop = drop)))
+    ndx <- rep(list(TRUE), nd)
+    ndx[[split_pos]] <- lab
+    do.call(`[`, c(list(x), unname(ndx), list(drop = drop)))
   })
   
   purrr::set_names(out, labs)
@@ -725,44 +693,13 @@ by.poparray <- function(data, INDICES, FUN, ..., simplify = TRUE, drop = FALSE) 
 # Operators -------------------------------------------------------------------------------------------------------
 
 #' @export
-sum.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$handle
-  # sum() on DelayedArray triggers block processing / delayed reduction
-  base::sum(a, ..., na.rm = na.rm)
-}
-
-#' @export
-mean.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$handle
-  base::mean(a, ..., na.rm = na.rm)
-}
-
-#' @export
 sd.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- x$handle
+  a <- methods::as(x, "DelayedArray")
   # For general DelayedArray, sd() may or may not be specialized;
   # safest is a two-pass block reduction if you need guaranteed behavior.
   # (See next section.)
   stats::sd(as.vector(a), na.rm = na.rm)
 }
-
-#' @export
-Summary.poparray <- function(..., na.rm = FALSE) {
-  args <- list(...)
-  # Support min(x) / max(x) where first arg is poparray
-  x <- args[[1L]]
-  a <- x$handle
-  
-  fun <- .Generic
-    do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
-  # if (fun %in% c("min", "max", "range")) {
-  #   do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
-  # } else {
-  #   stop(sprintf("Summary(%s) not implemented for poparray.", fun), call. = FALSE)
-  # }
-}
-
-
 
 # Accessors / helpers ----------------------------------------------------------
 
@@ -775,12 +712,18 @@ Summary.poparray <- function(..., na.rm = FALSE) {
 #' @param x a tarr_pop object
 #' @return character string
 #' @export
-data_col <- purrr::attr_getter("data_col")
+data_col <- function(x) {
+  if (is(x, "poparray")) return(x@data_col)
+  attr(x, "data_col", exact = TRUE)
+}
 
 #' @rdname data_col
 #' @export
 `data_col<-` <- function(x, values) {
   checkmate::assert_character(values, len = 1, any.missing = FALSE)
+  if (is(x, "poparray")) {
+    x@data_col <- values
+  }
   attr(x, "data_col") <- values
   x
 }
@@ -797,7 +740,7 @@ data_col <- purrr::attr_getter("data_col")
 warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
   validate_poparray(x)
   
-  t <- tolower(DelayedArray::type(x$handle))
+  t <- tolower(DelayedArray::type(x))
   
   bytes_per_cell <- switch(
     t,

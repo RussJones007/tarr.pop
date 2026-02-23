@@ -16,21 +16,24 @@
 #' Projection class
 #'
 #' @description
-#' An S3 class representing a time-based projection. The class wraps a `DelayedArray`/`HDF5Array`
-#' in member `handle`, and stores uncertainty as a named `stat` dimension with levels
-#' `projection` and `std_error`. Objects are typically created by [project()].  
+#' An S4 class representing a time-based projection. The class extends
+#' `DelayedArray` and stores uncertainty as a named `stat` dimension with levels
+#' `projection` and `std_error`. Objects are typically created by [project()].
 #' 
 #' @section Structure:
-#' A `poparray_projection` object is a list with delayed cube member `handle`.
+#' A `poparray_projection` object is an S4 subclass of `DelayedArray`.
 #' The cube includes time/area/strata dimensions plus `stat`.
 #'
-#' Attributes included:
-#' *   **level** is the confidence level used
-#' *   **methods_used** are the unique time series forecasting methods used across all cells
-#' *   **n_fallback** are the number of cells that required fallback as the forecasting method .
-#' *   **source** is the  "projected from" plus the original poparray source
-#' *   **base_years** are the base years or time unit used to project/forecast
-#' *   **created** is the date and time stamp at time the object was created. 
+#' Slots included:
+#' *   **time_role** time dimension name.
+#' *   **area_role** area dimension name.
+#' *   **strata_roles** non-time/non-area/non-stat dimensions.
+#' *   **level** confidence level used by the projection.
+#' *   **method** projection method (ARIMA/ETS/CAGR).
+#' *   **source** provenance metadata list.
+#' *   **base_years** base years or time units used for projection/forecast.
+#' *   **data_col** value column name for tabular coercion.
+#' *   **created** creation timestamp.
 #'
 #' @seealso
 #' * [project()] to create a projection.
@@ -40,6 +43,84 @@
 #' @docType class
 #' @keywords internal
 NULL
+
+setClass(
+  "poparray_projection",
+  contains = "DelayedArray",
+  slots = c(
+    time_role = "character",
+    area_role = "character",
+    strata_roles = "character",
+    level = "numeric",
+    method = "character",
+    source = "list",
+    base_years = "vector",
+    data_col = "character",
+    created = "POSIXct"
+  )
+)
+
+setValidity("poparray_projection", function(object) {
+  dn <- dimnames(object)
+  if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
+    return("poparray_projection must contain named dimnames with a 'stat' dimension.")
+  }
+
+  stat_levels <- as.character(dn[["stat"]])
+  allowed_levels <- c("projection", "std_error")
+  if (!length(stat_levels) || anyNA(stat_levels) || any(!stat_levels %in% allowed_levels)) {
+    return("The 'stat' dimension must contain a non-empty subset of: projection, std_error.")
+  }
+
+  if (length(object@time_role) != 1L || !nzchar(object@time_role)) {
+    return("slot 'time_role' must be a single non-empty character string.")
+  }
+  if (length(object@area_role) != 1L || !nzchar(object@area_role)) {
+    return("slot 'area_role' must be a single non-empty character string.")
+  }
+  if (identical(object@time_role, object@area_role)) {
+    return("time_role and area_role must be different.")
+  }
+  if (!object@time_role %in% names(dn) || !object@area_role %in% names(dn)) {
+    return("time_role and area_role must exist in projection dimnames.")
+  }
+  if ("stat" %in% c(object@time_role, object@area_role, object@strata_roles)) {
+    return("'stat' cannot be assigned as time, area, or strata role.")
+  }
+  if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
+    return("time/area/strata roles cannot contain duplicates.")
+  }
+
+  if (length(object@level) != 1L || is.na(object@level) || object@level < 0.5 || object@level > 0.99) {
+    return("slot 'level' must be a single numeric value between 0.5 and 0.99.")
+  }
+
+  method_choices <- c("ARIMA", "ETS", "CAGR")
+  if (length(object@method) != 1L || is.na(object@method) || !(toupper(object@method) %in% method_choices)) {
+    return("slot 'method' must be one of: ARIMA, ETS, CAGR.")
+  }
+
+  if (length(object@data_col) != 1L || is.na(object@data_col) || !nzchar(object@data_col)) {
+    return("slot 'data_col' must be a single non-empty character string.")
+  }
+
+  req_source <- c("note", "source", "updated")
+  missing_source <- setdiff(req_source, names(object@source))
+  if (length(missing_source)) {
+    return("slot 'source' must include fields: note, source, updated.")
+  }
+
+  msg <- checkmate::check_atomic_vector(object@base_years, min.len = 1, any.missing = FALSE)
+  if (!identical(msg, TRUE)) {
+    return("slot 'base_years' must be a non-empty atomic vector with no missing values.")
+  }
+
+  if (!inherits(object@created, "POSIXt")) {
+    return("slot 'created' must be a POSIXct/POSIXlt timestamp.")
+  }
+
+  TRUE
+})
 
 # ---- small utilities ---------------------------------------------------------
 
@@ -77,6 +158,53 @@ normalize_projection_source <- function(source) {
   if (is.null(src$updated) || !length(src$updated)) src$updated <- "Unknown"
   
   src
+}
+
+pp_handle <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) {
+    return(methods::as(x, "DelayedArray"))
+  }
+  if (is.list(x) && !is.null(x$handle) && is(x$handle, "DelayedArray")) {
+    return(x$handle)
+  }
+  cli::cli_abort("Expected a poparray_projection object with a DelayedArray backend.")
+}
+
+pp_roles <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) {
+    return(list(time = x@time_role, area = x@area_role, strata = x@strata_roles))
+  }
+  attr(x, "dimroles", exact = TRUE)
+}
+
+pp_level <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@level)
+  attr(x, "level", exact = TRUE)
+}
+
+pp_method <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@method)
+  attr(x, "method", exact = TRUE)
+}
+
+pp_source <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@source)
+  attr(x, "source", exact = TRUE)
+}
+
+pp_base_years <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@base_years)
+  attr(x, "base_years", exact = TRUE)
+}
+
+pp_data_col <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@data_col)
+  attr(x, "data_col", exact = TRUE)
+}
+
+pp_created <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) return(x@created)
+  attr(x, "created", exact = TRUE)
 }
 
 tp_dimnames <- function(parray) dimnames(parray)
@@ -138,8 +266,105 @@ check_projection_scale <- function(parray,
 
 # ---- constructor + validator -------------------------------------------------
 
+infer_projection_roles <- function(dn_names, dimroles = NULL) {
+  if (is.null(dimroles)) {
+    non_stat <- setdiff(dn_names, "stat")
+    if (!length(non_stat)) cli::cli_abort("Projection dimnames must include at least one non-'stat' dimension.")
+    time_nm <- if ("year" %in% non_stat) "year" else non_stat[[1L]]
+    area_candidates <- setdiff(non_stat, time_nm)
+    area_nm <- if ("area.name" %in% area_candidates) "area.name" else area_candidates[[1L]]
+    if (is.na(area_nm) || !length(area_nm)) {
+      cli::cli_abort("Projection dimnames must include both time and area dimensions.")
+    }
+    return(list(time = time_nm, area = area_nm, strata = setdiff(non_stat, c(time_nm, area_nm))))
+  }
+
+  if (!is.list(dimroles) || is.null(dimroles$time) || is.null(dimroles$area)) {
+    cli::cli_abort("{.arg dimroles} must be a list with {.field time} and {.field area}.")
+  }
+  if (!dimroles$time %in% dn_names || !dimroles$area %in% dn_names) {
+    cli::cli_abort("{.arg dimroles$time} and {.arg dimroles$area} must exist in projection dimension names.")
+  }
+  if (identical(dimroles$time, dimroles$area)) {
+    cli::cli_abort("{.arg dimroles$time} and {.arg dimroles$area} must be different.")
+  }
+
+  list(
+    time = as.character(dimroles$time)[1L],
+    area = as.character(dimroles$area)[1L],
+    strata = as.character(dimroles$strata %||% setdiff(dn_names, c(dimroles$time, dimroles$area, "stat")))
+  )
+}
+
+new_poparray_projection_s4 <- function(
+    x,
+    level,
+    method,
+    source,
+    base_years,
+    time_dim,
+    area_dim,
+    data_col = "population",
+    created = Sys.time()
+) {
+  checkmate::assert_class(x, "DelayedArray")
+
+  dn <- dimnames(x)
+  if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
+    cli::cli_abort("Projection array must contain named dimnames with a 'stat' dimension.")
+  }
+
+  stat_levels <- as.character(dn[["stat"]])
+  required_levels <- c("projection", "std_error")
+  if (!length(stat_levels) || anyNA(stat_levels) || any(!stat_levels %in% required_levels)) {
+    cli::cli_abort(
+      c(
+        "The {.field stat} dimension must contain valid levels.",
+        "x" = "Allowed levels: {.val projection}, {.val std_error}."
+      )
+    )
+  }
+
+  lvl <- normalize_level(level)
+  mth <- toupper(as.character(method)[1L])
+  if (!mth %in% c("ARIMA", "ETS", "CAGR")) {
+    cli::cli_abort("{.arg method} must be one of {.val ARIMA}, {.val ETS}, {.val CAGR}.")
+  }
+  src <- normalize_projection_source(source)
+  checkmate::assert_atomic_vector(base_years, min.len = 1, any.missing = FALSE)
+  checkmate::assert_string(data_col, min.chars = 1)
+
+  nms <- names(dn)
+  if (!time_dim %in% nms || !area_dim %in% nms) {
+    cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be present in projection dimnames.")
+  }
+  if (identical(time_dim, area_dim)) {
+    cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
+  }
+
+  new(
+    "poparray_projection",
+    x,
+    time_role = as.character(time_dim),
+    area_role = as.character(area_dim),
+    strata_roles = setdiff(nms, c(time_dim, area_dim, "stat")),
+    level = as.numeric(lvl),
+    method = as.character(mth),
+    source = src,
+    base_years = base_years,
+    data_col = as.character(data_col),
+    created = as.POSIXct(created)
+  )
+}
+
 #' @keywords internal
 validate_poparray_projection <- function(x) {
+  if (isS4(x) && is(x, "poparray_projection")) {
+    msg <- methods::validObject(x, test = TRUE)
+    if (!isTRUE(msg)) cli::cli_abort(msg, call = rlang::caller_env())
+    return(invisible(TRUE))
+  }
+
   # ---- basic structure ----
   if (!inherits(x, "poparray_projection")) {
     cli::cli_abort(
@@ -304,48 +529,22 @@ new_poparray_projection <- function(
     data_col = "population",
     created = Sys.time()
 ) {
-  
-  checkmate::assert_class(handle, "DelayedArray")
-  
   dn <- dimnames(handle)
-  
-  if (is.null(dn) || !"stat" %in% names(dn)) {
-    cli::cli_abort("Projection array must contain a 'stat' dimension.")
+  if (is.null(dn) || is.null(names(dn))) {
+    cli::cli_abort("Projection array must have named dimnames.")
   }
-  
-  stat_levels <- dn[["stat"]]
-  
-  required_levels <- c("projection", "std_error")
-  if (!length(stat_levels) || anyNA(stat_levels) || any(!stat_levels %in% required_levels)) {
-    cli::cli_abort(
-      c(
-        "The {.field stat} dimension must contain valid levels.",
-        "x" = "Allowed levels: {.val projection}, {.val std_error}."
-      )
-    )
-  }
-  
-  if (is.null(dimroles)) {
-    dnn <- names(dn)
-    time_nm <- if ("year" %in% dnn) "year" else setdiff(dnn, "stat")[1]
-    area_nm <- if ("area.name" %in% dnn) "area.name" else setdiff(dnn, c(time_nm, "stat"))[1]
-    dimroles <- list(
-      time = time_nm,
-      area = area_nm,
-      strata = setdiff(dnn, c(time_nm, area_nm))
-    )
-  }
-  
-  structure(
-    list(handle = handle),
-    level      = level,
-    method     = method,
-    source     = source,
+  roles <- infer_projection_roles(names(dn), dimroles = dimroles)
+
+  new_poparray_projection_s4(
+    x = handle,
+    level = level,
+    method = method,
+    source = source,
     base_years = base_years,
-    dimroles   = dimroles,
-    data_col   = data_col,
-    created    = created,
-    class = "poparray_projection"
+    time_dim = roles$time,
+    area_dim = roles$area,
+    data_col = data_col,
+    created = created
   )
 }
 
@@ -399,15 +598,17 @@ poparray_projection <- function(
     list(stat = c("projection", "std_error"))
   )
   
-   
-  new_poparray_projection(
-    handle     = combined,
-    level      = level,
-    method     = method,
-    source     = source,
+  roles <- infer_projection_roles(names(dimnames(combined)), dimroles = dimroles)
+
+  new_poparray_projection_s4(
+    x = combined,
+    level = level,
+    method = method,
+    source = source,
     base_years = base_years,
-    dimroles   = dimroles,
-    data_col   = data_col
+    time_dim = roles$time,
+    area_dim = roles$area,
+    data_col = data_col
   )
 }
 
@@ -426,7 +627,8 @@ poparray_projection <- function(
 #' restricted to `"projection"` (`drop = FALSE`).
 #' @export
 projection <- function(x) {
-  dn <- dimnames(x$handle)
+  h <- pp_handle(x)
+  dn <- dimnames(h)
   if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
     cli::abort("Projection data must contain a named 'stat' dimension.")
   }
@@ -435,10 +637,10 @@ projection <- function(x) {
   }
   
   stat_k <- match("stat", names(dn))
-  idx <- rep(list(TRUE), length(dim(x$handle)))
+  idx <- rep(list(TRUE), length(dim(h)))
   idx[[stat_k]] <- "projection"
   
-  do.call(`[`, c(list(x$handle), idx, list(drop = FALSE)))
+  do.call(`[`, c(list(h), idx, list(drop = FALSE)))
 }
 
 #' Extract standard errors from a poparray_projection
@@ -452,7 +654,8 @@ projection <- function(x) {
 #' restricted to `"std_error"` (`drop = FALSE`).
 #' @export
 std_error <- function(x) {
-  dn <- dimnames(x$handle)
+  h <- pp_handle(x)
+  dn <- dimnames(h)
   if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
     cli::abort("Projection data must contain a named 'stat' dimension.")
   }
@@ -461,10 +664,10 @@ std_error <- function(x) {
   }
 
   stat_k <- match("stat", names(dn))
-  idx <- rep(list(TRUE), length(dim(x$handle)))
+  idx <- rep(list(TRUE), length(dim(h)))
   idx[[stat_k]] <- "std_error"
 
-  do.call(`[`, c(list(x$handle), idx, list(drop = FALSE)))
+  do.call(`[`, c(list(h), idx, list(drop = FALSE)))
 }
 
 #' @export
@@ -484,54 +687,130 @@ confint.poparray_projection <- function(x, level = 0.95, ...) {
 
 # print ------------------------------------------------------------------
 
-#' @export
-print.poparray_projection <- function(x, ...) {
-  validate_poparray_projection(x)
-  src <- get_source(x)
+setMethod("show", "poparray_projection", function(object) {
+  validate_poparray_projection(object)
+  src <- pp_source(object)
   src <- if (is.list(src)) src else as.list(src)
-  
+
   cat("<poparray_projection>\n")
-  cat("  method: ", attr(x, "method"), "\n", sep = "")
-  cat("  level:  ", attr(x, "level"), "\n", sep = "")
+  cat("  method: ", pp_method(object), "\n", sep = "")
+  cat("  level:  ", pp_level(object), "\n", sep = "")
   cat("  source note: ", as.character(src$note %||% "Unknown"), "\n", sep = "")
   cat("  source ref:  ", as.character(src$source %||% "Unknown"), "\n", sep = "")
   cat("  source date: ", as.character(src$updated %||% "Unknown"), "\n", sep = "")
+  byr <- pp_base_years(object)
   cat(
     "  base years: ",
-    paste0(range(attr(x, "base_years")), collapse = "–"),
-    " (n=", length(attr(x, "base_years")), ")\n",
+    paste0(range(byr), collapse = "–"),
+    " (n=", length(byr), ")\n",
     sep = ""
   )
-  
-  dms <- dimnames(x$handle)
-  dms_names <- names(dms)
-  #dn <- dimnames(x$handle)
-  #dms <- dim(x$handle)
+
+  dms <- dimnames(pp_handle(object))
   dms_sizes <- lengths(dms)
-  names(dms_sizes) <- dms_names
-  
-  dimensions <- paste(
-    paste0(names(dms_sizes), " (", dms_sizes, ")"),
-    collapse = ", "
-  )
-  
+  names(dms_sizes) <- names(dms)
+  dimensions <- paste(paste0(names(dms_sizes), " (", dms_sizes, ")"), collapse = ", ")
   cat("Dimensions: ", dimensions, "\n", sep = "")
-  # 
-  # if (!is.null(names(dms))) {
-  #   cat("  dims:\n")
-  #   for (i in seq_along(dims)) {
-  #     cat("    - ", names(dn)[i], ": ", dims[i], "\n", sep = "")
-  #   }
-  # }
-  # 
+  invisible(object)
+})
+
+#' @export
+print.poparray_projection <- function(x, ...) {
+  .Deprecated(msg = "print.poparray_projection() is deprecated; use show() dispatch for S4 poparray_projection.")
+  if (isS4(x) && is(x, "poparray_projection")) return(show(x))
+  validate_poparray_projection(x)
+  src <- pp_source(x)
+  src <- if (is.list(src)) src else as.list(src)
+  cat("<poparray_projection>\n")
+  cat("  method: ", pp_method(x), "\n", sep = "")
+  cat("  level:  ", pp_level(x), "\n", sep = "")
+  cat("  source note: ", as.character(src$note %||% "Unknown"), "\n", sep = "")
+  cat("  source ref:  ", as.character(src$source %||% "Unknown"), "\n", sep = "")
+  cat("  source date: ", as.character(src$updated %||% "Unknown"), "\n", sep = "")
+  byr <- pp_base_years(x)
+  cat("  base years: ", paste0(range(byr), collapse = "–"), " (n=", length(byr), ")\n", sep = "")
+  dms <- dimnames(pp_handle(x))
+  dms_sizes <- lengths(dms)
+  names(dms_sizes) <- names(dms)
+  cat("Dimensions: ", paste(paste0(names(dms_sizes), " (", dms_sizes, ")"), collapse = ", "), "\n", sep = "")
   invisible(x)
 }
 
 # ---- subsetting --------------------------------------------------------------
 
+setMethod(
+  "[",
+  signature(x = "poparray_projection"),
+  function(x, ..., drop = FALSE) {
+    dn0 <- dimnames(x)
+    dnm <- names(dn0)
+    nd <- length(dn0)
+
+    dots <- as.list(substitute(list(...)))[-1L]
+    idx <- lapply(dots, \(e) {
+      if (identical(e, quote(expr = ))) TRUE else eval(e, parent.frame())
+    })
+
+    ndx <- rep(list(TRUE), nd)
+    idx_names <- names(idx)
+    if (is.null(idx_names)) idx_names <- character(0)
+
+    if (length(idx_names) > 0) {
+      bad <- setdiff(idx_names, dnm)
+      if (length(bad) > 0) {
+        cli::cli_abort(c(
+          "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
+          "i" = "Valid dimensions are: {paste(dnm, collapse = ', ')}."
+        ))
+      }
+      ndx[match(idx_names, dnm)] <- idx
+    } else {
+      if (length(idx) > nd) cli::cli_abort("Too many indices for projection object.")
+      ndx[seq_along(idx)] <- idx
+    }
+
+    subset_data <- do.call(`[`, c(list(methods::as(x, "DelayedArray")), ndx, list(drop = drop)))
+    dn <- dimnames(subset_data)
+
+    if (!is.null(dn) && !is.null(names(dn)) && "stat" %in% names(dn)) {
+      return(
+        new_poparray_projection_s4(
+          x = subset_data,
+          level = x@level,
+          method = x@method,
+          source = x@source,
+          base_years = x@base_years,
+          time_dim = x@time_role,
+          area_dim = x@area_role,
+          data_col = x@data_col,
+          created = x@created
+        )
+      )
+    }
+
+    if (is.null(dn) || is.null(names(dn)) ||
+        !x@time_role %in% names(dn) || !x@area_role %in% names(dn)) {
+      return(subset_data)
+    }
+
+    new_poparray(
+      x = subset_data,
+      dimnames_list = dn,
+      data_col = x@data_col %||% "population",
+      source = x@source,
+      time_dim = x@time_role,
+      area_dim = x@area_role
+    )
+  }
+)
+
 #' @export
 `[.poparray_projection` <- function(x, ..., drop = FALSE) {
-  dn0 <- dimnames(x$handle)
+  if (isS4(x) && is(x, "poparray_projection")) {
+    cli::cli_abort("S3 `[.poparray_projection` should not be used for S4 projection objects.")
+  }
+  h <- pp_handle(x)
+  dn0 <- dimnames(h)
   dnm <- names(dn0)
   nd <- length(dn0)
   
@@ -558,7 +837,7 @@ print.poparray_projection <- function(x, ...) {
     ndx[seq_along(idx)] <- idx
   }
   
-  subset_data <- do.call(`[`, c(list(x$handle), ndx, list(drop = drop)))
+  subset_data <- do.call(`[`, c(list(h), ndx, list(drop = drop)))
   dn <- dimnames(subset_data)
   
   # If stat dimension still exists, return projection object
@@ -567,17 +846,17 @@ print.poparray_projection <- function(x, ...) {
     return(
       new_poparray_projection(
         handle     = subset_data,
-        level      = attr(x, "level"),
-        method     = attr(x, "method"),
-        source     = attr(x, "source"),
-        base_years = attr(x, "base_years"),
-        dimroles   = attr(x, "dimroles", exact = TRUE),
-        data_col   = attr(x, "data_col", exact = TRUE)
+        level      = pp_level(x),
+        method     = pp_method(x),
+        source     = pp_source(x),
+        base_years = pp_base_years(x),
+        dimroles   = pp_roles(x),
+        data_col   = pp_data_col(x)
       )
     )
   }
   
-  roles <- attr(x, "dimroles", exact = TRUE)
+  roles <- pp_roles(x)
   if (is.null(dn) || is.null(names(dn)) ||
       !roles$time %in% names(dn) || !roles$area %in% names(dn)) {
     return(subset_data)
@@ -586,8 +865,8 @@ print.poparray_projection <- function(x, ...) {
   new_poparray(
     x = subset_data,
     dimnames_list = dn,
-    data_col = attr(x, "data_col", exact = TRUE) %||% "population",
-    source = attr(x, "source", exact = TRUE),
+    data_col = pp_data_col(x) %||% "population",
+    source = pp_source(x),
     time_dim = roles$time,
     area_dim = roles$area
   )
@@ -606,21 +885,22 @@ print.poparray_projection <- function(x, ...) {
 #' @export
 as.poparray.poparray_projection <- function(x, ...) {
   validate_poparray_projection(x)
-  roles <- attr(x, "dimroles", exact = TRUE)
-  dn <- dimnames(x$handle)
+  roles <- pp_roles(x)
+  h <- pp_handle(x)
+  dn <- dimnames(h)
   res <- new_poparray(
-    x = x$handle,
+    x = h,
     dimnames_list = dn,
-    data_col = attr(x, "data_col", exact = TRUE) %||% "population",
-    source = attr(x, "source", exact = TRUE),
+    data_col = pp_data_col(x) %||% "population",
+    source = pp_source(x),
     time_dim = roles$time,
     area_dim = roles$area
   )
   
-  attr(res, "projection_level") <- attr(x, "level")
-  attr(res, "projection_method") <- attr(x, "method")
-  attr(res, "projection_base_years") <- attr(x, "base_years")
-  attr(res, "source") <- attr(x, "source")
+  attr(res, "projection_level") <- pp_level(x)
+  attr(res, "projection_method") <- pp_method(x)
+  attr(res, "projection_base_years") <- pp_base_years(x)
+  attr(res, "source") <- pp_source(x)
   
   res
 }
@@ -633,9 +913,9 @@ projection_to_df <- function(x,
                              include_confidence = FALSE,
                              ...) {
   validate_poparray_projection(x)
-  
-  arr <- as.array(x$handle)
-  dimnames(arr) <- dimnames(x$handle)
+  h <- pp_handle(x)
+  arr <- as.array(h)
+  dimnames(arr) <- dimnames(h)
   
   long <- as.data.frame(
     as.table(arr),
@@ -651,26 +931,26 @@ projection_to_df <- function(x,
   )
   
   if (isTRUE(include_confidence)) {
-    lvl <- attr(x, "level", exact = TRUE)
+    lvl <- pp_level(x)
     z <- stats::qnorm(1 - (1 - lvl) / 2)
     out$lower <- out$projection - z * out$std_error
     out$upper <- out$projection + z * out$std_error
   }
   
   if (isTRUE(include_level)) {
-    out$level <- attr(x, "level")
+    out$level <- pp_level(x)
   }
   
   if(isTRUE(include_model)) {
-    out$model <- attr(x, "method")
+    out$model <- pp_method(x)
   }
   
   # Preserve projection metadata on tabular outputs for downstream provenance use.
-  attr(out, "source") <- attr(x, "source", exact = TRUE)
-  attr(out, "method") <- attr(x, "method", exact = TRUE)
-  attr(out, "level") <- attr(x, "level", exact = TRUE)
-  attr(out, "base_years") <- attr(x, "base_years", exact = TRUE)
-  attr(out, "created") <- attr(x, "created", exact = TRUE)
+  attr(out, "source") <- pp_source(x)
+  attr(out, "method") <- pp_method(x)
+  attr(out, "level") <- pp_level(x)
+  attr(out, "base_years") <- pp_base_years(x)
+  attr(out, "created") <- pp_created(x)
   
   out
 }

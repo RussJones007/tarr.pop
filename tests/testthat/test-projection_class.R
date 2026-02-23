@@ -8,13 +8,18 @@ make_projection_fixture <- function() {
     stat = c("projection", "std_error")
   )
   arr <- array(
-    as.numeric(seq_len(prod(lengths(dn)))),
+    as.numeric(seq_len(prod(unname(lengths(dn))))),
     dim = unname(lengths(dn)),
     dimnames = dn
   )
-  
+
+  fp <- tempfile("projection_fixture_", fileext = ".h5")
+  HDF5Array::writeHDF5Array(arr, filepath = fp, name = "proj")
+  h <- HDF5Array::HDF5Array(filepath = fp, name = "proj")
+  dimnames(h) <- dn
+
   ns_fun("new_poparray_projection")(
-    handle = DelayedArray::DelayedArray(arr),
+    handle = h,
     level = 0.95,
     method = "ETS",
     source = list(
@@ -36,11 +41,11 @@ make_projection_fixture <- function() {
 
 test_that("constructor and validator support one-cube handle design", {
   pr <- make_projection_fixture()
-  
-  expect_s3_class(pr, "poparray_projection")
-  expect_s4_class(pr$handle, "DelayedArray")
-  expect_true("stat" %in% names(dimnames(pr$handle)))
-  expect_equal(dimnames(pr$handle)$stat, c("projection", "std_error"))
+
+  expect_s4_class(pr, "poparray_projection")
+  expect_s4_class(pr, "DelayedArray")
+  expect_true("stat" %in% names(dimnames(pr)))
+  expect_equal(dimnames(pr)$stat, c("projection", "std_error"))
   expect_true(ns_fun("validate_poparray_projection")(pr))
 })
 
@@ -72,30 +77,30 @@ test_that("confint returns delayed lower and upper arrays", {
 
 test_that("subsetting keeps projection class when stat remains", {
   pr <- make_projection_fixture()
-  
+
   y <- pr[year = "2030", drop = FALSE]
-  expect_s3_class(y, "poparray_projection")
-  expect_true("stat" %in% names(dimnames(y$handle)))
-  expect_equal(dimnames(y$handle)$stat, c("projection", "std_error"))
+  expect_s4_class(y, "poparray_projection")
+  expect_true("stat" %in% names(dimnames(y)))
+  expect_equal(dimnames(y)$stat, c("projection", "std_error"))
 })
 
 test_that("subsetting can return poparray when stat is removed", {
   pr <- make_projection_fixture()
-  
+
   y <- pr[stat = "projection", drop = TRUE]
-  expect_s3_class(y, "poparray")
+  expect_s4_class(y, "poparray")
   expect_false("stat" %in% names(dimnames(y)))
 })
 
 test_that("as.poparray preserves stat and role metadata", {
   pr <- make_projection_fixture()
   pa <- tarr.pop::as.poparray(pr)
-  
-  expect_s3_class(pa, "poparray")
+
+  expect_s4_class(pa, "poparray")
   expect_true("stat" %in% names(dimnames(pa)))
   expect_equal(dimnames(pa)$stat, c("projection", "std_error"))
-  expect_equal(attr(pa, "dimroles")$time, "year")
-  expect_equal(attr(pa, "dimroles")$area, "area.name")
+  expect_equal(time_role(pa), "year")
+  expect_equal(area_role(pa), "area.name")
 })
 
 test_that("tabular conversions include projection/std_error and keep attributes", {

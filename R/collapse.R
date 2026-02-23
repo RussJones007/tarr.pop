@@ -32,12 +32,11 @@
 #'
 #' @return A new poparray with the chosen dimension collapsed by sum.
 #' @export
-collapse_dim <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
-  UseMethod("collapse_dim")
-}
+setGeneric("collapse_dim", function(x, dim, groups, keep_empty = FALSE, name = NULL) {
+  standardGeneric("collapse_dim")
+})
 
-#' @export
-collapse_dim.poparray <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
+collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -102,7 +101,7 @@ collapse_dim.poparray <- function(x, dim, groups, keep_empty = FALSE, name = NUL
   )
   
   # ---- 4) Permute so target dim is last, and subset to kept labels ----
-  a <- x$handle
+  a <- x
   nd <- length(dim(a))
   
   perm <- c(setdiff(seq_len(nd), k), k)
@@ -165,17 +164,17 @@ collapse_dim.poparray <- function(x, dim, groups, keep_empty = FALSE, name = NUL
   }
   
   # Preserve time/area role metadata from the original object, adjusting for rename().
-  roles <- attr(x, "dimroles", exact = TRUE)
-  time_dim_out <- roles$time
-  area_dim_out <- roles$area
+  time_dim_out <- time_role(x)
+  area_dim_out <- area_role(x)
   if (!is.null(name) && is.character(name) && length(name) == 1L) {
-    if (identical(roles$time, dim_nm)) time_dim_out <- name
-    if (identical(roles$area, dim_nm)) area_dim_out <- name
+    if (identical(time_role(x), dim_nm)) time_dim_out <- name
+    if (identical(area_role(x), dim_nm)) area_dim_out <- name
   }
   
   # ---- 10) Wrap into a new poparray ----
+  h5_out <- HDF5Array::writeHDF5Array(arr_new)
   out <- new_poparray(
-    x = arr_new,
+    x = h5_out,
     dimnames_list = dn_new,
     data_col = data_col(x),
     source = get_source(x),

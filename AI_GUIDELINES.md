@@ -14,7 +14,7 @@ They apply to both human contributors and AI-assisted development.
 `tarr.pop` is an R package for working with **multi-dimensional population data** stored primarily as:
 
 -   `DelayedArray` / `HDF5Array`-backed arrays
--   wrapped in a custom S3 class (`tarr_pop`)
+-   wrapped in custom S4 classes (`poparray`, `poparray_projection`)
 -   with strong guarantees around **laziness**, **dimensional integrity**, and **metadata correctness**
 
 ### Core principles
@@ -35,7 +35,7 @@ When formulating answers or writing code, prioritize:
     -   Check Bioconductor docs for DelayedArray/HDF5Array
     -   If uncertain whether a function exists in DelayedArray (≥ 0.36.3) or HDF5Array (≥ 1.38.0) don’t claim it does—suggest an alternative or say how to verify
 
-2.  use tidyr, tibble, and dplyr generics when those make sense for the API
+2.  Use tidyr, tibble, and dplyr generics when those make sense for the API
 
 3.  Existing package source files in this repository
 
@@ -91,28 +91,28 @@ Functions must:
 
 ------------------------------------------------------------------------
 
-## 5. S3 Design Conventions
+## 5. Class and Method Design Conventions
 
 ### Generics first
 
 -   For generics, if a function may have other methods implemented, make a generic (e.g., `collapse_dim()`)
 
--   Then implement (e.g., `collapse_dim.tarr_pop() )`
+-   Then implement class methods (S4 `setMethod()` or S3 `foo.poparray` where still used)
 
 ### Naming
 
 -   Methods: `foo.poparray`
 -   Helpers: internal, prefixed or documented as non-exported
--   Use snake case for function names, ideally using a verb as the first part of the name
--   Use snake case for variables. Ideally objects should be nouns
--   For suggested file script names, end it with "r"
--   Prefer functional programming over for loops where possible. Use purrr package functions or in simple cases lapply.
--   Use the native pipe instead of the magrittr pipe.
--   Prefer the style guide found in the book "Advanced R"
+-   Use snake case for function names, ideally with a verb as the first part of the name.
+-   Use snake case for variables. Ideally, objects should be nouns.
+-   For suggested script file names, end with `.r`.
+-   Prefer functional programming over for loops where possible. Use `purrr` functions or, in simple cases, `lapply()`.
+-   Use the native pipe instead of the magrittr pipe (`%>%`).
+-   Prefer the style guide found in the book `Advanced R`.
 
 ### Indexing
 
--   `[.poparray` must:
+-   Subsetting methods for `poparray` (`setMethod("[", "poparray", ...)` and compatibility wrappers) must:
 
     -   Preserve laziness
     -   Handle missing / NULL indices safely
@@ -127,7 +127,7 @@ When providing code or explanations:
 
 ### Always include
 
--   **Base R solution** when not delaying with a DelayArray or HDF5Array
+-   **Base R solution** when not delaying with a DelayedArray or HDF5Array
 -   **Tidyverse solution** (if appropriate)
 -   **HDF5Array and DelayedArray** when manipulating poparray and poparray_projection classes/objects
 -   Pros / cons of each approach
@@ -183,7 +183,7 @@ All exported functions should have:
 -   Clear roxygen2 docs
 -   Explicit `@return` descriptions
 -   Examples that do **not** force realization unless intended
--   Helper functions should also be documented roxygen though not necessarily exported. The roxygen2 function is for developer benefit when coming back to parts of the packag.e
+-   Helper functions should also use roxygen documentation, even when not exported. This helps future maintenance.
 
 If behavior is subtle, document it.
 
@@ -209,10 +209,10 @@ This is a **production epidemiology package**, not a demo.
 
 ------------------------------------------------------------------------
 
-## 12. Function argument validation
+## 12. Function Argument Validation
 
--   Prefer to use the the cli::cli_abort() and checkmate idioms
--   For user facing functions, you can use checkmate functions to check for correctness, the cli::cli_import() for clear error messages
+-   Prefer `cli::cli_abort()` and checkmate idioms.
+-   For user-facing functions, use checkmate for validation and `cli::cli_abort()` for clear error messages.
 
 ------------------------------------------------------------------------
 

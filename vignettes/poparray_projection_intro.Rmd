@@ -1,0 +1,188 @@
+---
+title: "Projection Workflow with poparray: Dallas, Tarrant, and Travis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Projection Workflow with poparray: Dallas, Tarrant, and Travis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Goal
+
+This vignette extends the introductory workflow by projecting forward county totals for:
+
+- Dallas
+- Tarrant
+- Travis
+
+You will:
+
+1. Build a county-total `poparray` for recent base years.
+2. Run `project()` to create a `poparray_projection`.
+3. Extract projected values and uncertainty.
+4. Plot historical and projected county trends together.
+
+```{r setup}
+library(tarr.pop)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+```
+
+## 1) Open a county-level cube and define the analysis subset
+
+```{r open-and-filter}
+pop <- open_poparray("tdc_estimates_county")
+
+target_counties <- c("Dallas", "Tarrant", "Travis")
+
+year_labels <- as.integer(as.character(dimnames(pop)[[time_role(pop)]]))
+base_years <- sort(year_labels, decreasing = TRUE)[1:7] |> sort()
+
+pop_base <- dplyr::filter(
+  pop,
+  area.name %in% target_counties,
+  year %in% base_years
+)
+
+pop_base
+```
+
+## 2) Collapse strata to county totals
+
+`project()` can run on stratified cubes, but for this example we project total county population.
+
+```{r collapse-to-totals}
+strata_dims <- setdiff(
+  names(dimnames(pop_base)),
+  c(time_role(pop_base), area_role(pop_base))
+)
+
+pop_totals <- pop_base
+for (dm in strata_dims) {
+  labs <- dimnames(pop_totals)[[dm]]
+  groups <- stats::setNames(rep("All", length(labs)), labs)
+  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
+}
+
+pop_totals
+```
+
+## 3) Run a projection
+
+Project 5 years ahead with automatic method selection and 95% intervals.
+
+```{r run-projection}
+pr <- project(
+  pop_totals,
+  h = 5,
+  method = "auto",
+  level = 0.95,
+  guard = FALSE
+)
+
+show(pr)
+```
+
+## 4) Convert projected output to a tibble
+
+Use `include_confidence = TRUE` to include lower/upper bounds.
+
+```{r projection-table}
+proj_df <- as_tibble(pr, include_confidence = TRUE) |>
+  dplyr::mutate(year = as.integer(year))
+
+proj_df
+```
+
+## 5) Build a historical + projected comparison frame
+
+```{r combine-historical-projected}
+hist_df <- as_tibble(pop_totals) |>
+  dplyr::transmute(
+    year = as.integer(as.character(year)),
+    area.name,
+    value = population,
+    series = "Historical"
+  )
+
+proj_line_df <- proj_df |>
+  dplyr::transmute(
+    year,
+    area.name,
+    value = projection,
+    series = "Projected",
+    lower,
+    upper
+  )
+
+plot_df <- dplyr::bind_rows(
+  hist_df,
+  dplyr::select(proj_line_df, year, area.name, value, series)
+)
+```
+
+## 6) Plot county trends with projection intervals
+
+```{r plot-projection-compare, fig.width=9, fig.height=5.2}
+ggplot() +
+  geom_ribbon(
+    data = proj_line_df,
+    aes(x = year, ymin = lower, ymax = upper, fill = area.name),
+    alpha = 0.14,
+    color = NA
+  ) +
+  geom_line(
+    data = plot_df,
+    aes(x = year, y = value, color = area.name, linetype = series),
+    linewidth = 1.05
+  ) +
+  geom_point(
+    data = plot_df,
+    aes(x = year, y = value, color = area.name, shape = series),
+    size = 1.8
+  ) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(
+    title = "Historical and Projected Population: Dallas, Tarrant, Travis",
+    subtitle = "Shaded ribbons show 95% projection intervals",
+    x = "Year",
+    y = "Population",
+    color = "County",
+    fill = "County",
+    linetype = "Series",
+    shape = "Series"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+## 7) Quick projected summary
+
+```{r projected-summary}
+proj_summary <- proj_df |>
+  dplyr::group_by(area.name) |>
+  dplyr::arrange(year, .by_group = TRUE) |>
+  dplyr::summarise(
+    first_projection_year = dplyr::first(year),
+    last_projection_year = dplyr::last(year),
+    first_projection = dplyr::first(projection),
+    last_projection = dplyr::last(projection),
+    projection_change = last_projection - first_projection,
+    .groups = "drop"
+  )
+
+proj_summary
+```
+
+## Next steps
+
+- Compare methods explicitly (`ETS`, `CAGR`, `ARIMA`) for the same base cube.
+- Keep selected strata (for example sex or age) and project subgroup trajectories.
+- Export `as_tibble(pr, include_confidence = TRUE)` for reporting pipelines.

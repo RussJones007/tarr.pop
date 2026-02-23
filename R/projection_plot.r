@@ -78,7 +78,7 @@
 #' @seealso
 #' * [project()] for creating population projections
 #' * [poparray_projection] for the projection object structure
-#' * [plot.poparray()] for population pyramid plotting
+#' * [plot()] for plotting methods
 #' * [as.poparray.poparray_projection()] to coerce to poparray
 #'
 #' @examples
@@ -143,7 +143,7 @@ plot.poparray_projection <- function(x,
   
   pa <- as.poparray(x)
   pa_proj <- pa[stat = "projection", drop = FALSE]
-  time_nm <- attr(pa, "dimroles", exact = TRUE)$time
+  time_nm <- time_role(pa)
   
   if (identical(type, "ts")) {
     # "ts" ignores area selection by design; it plots totals over time with ribbon
@@ -318,7 +318,7 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
   years_chr <- as.character(dimnames(pr)[[time_nm]])
   
   y_hat <- tp_totals_by_time(pr, time_nm = time_nm)
-  z <- stats::qnorm(1 - (1 - attr(x, "level", exact = TRUE)) / 2)
+  z <- stats::qnorm(1 - (1 - pp_level(x)) / 2)
   y_se <- tp_totals_by_time(se, time_nm = time_nm)
   y_lo <- y_hat - z * y_se
   y_hi <- y_hat + z * y_se
@@ -383,8 +383,8 @@ plot_ts_pop_projection <- function(x, time_nm, ...) {
   }
   
   # ---- titles ----
-  lvl <- attr(x, "level", exact = TRUE)
-  mth <- attr(x, "method", exact = TRUE)
+  lvl <- pp_level(x)
+  mth <- pp_method(x)
   
   graphics::title(
     main = "Projected total population",
