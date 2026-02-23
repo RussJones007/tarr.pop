@@ -68,6 +68,7 @@ read_registry_row <- function(path) {
   row <- lapply(reg$name, function(k) h5_read_scalar_chr(path, paste0("cube/metadata/registry/", k)))
   names(row) <- reg$name
   row <- as.data.frame(row, stringsAsFactors = FALSE, check.names = FALSE)
+  row$filepath <- normalizePath(path, winslash = "/", mustWork = TRUE)
   if (!"filename" %in% names(row)) {
     row$filename <- basename(path)
   }
@@ -211,8 +212,24 @@ open_poparray <- function(series_id,
     stop("Unknown series_id: ", series_id)
   }
 
-  ext_dir <- resolve_extdata_dir()
-  path <- file.path(ext_dir, row$filename[[1L]])
+  if ("filepath" %in% names(row) && nzchar(row$filepath[[1L]])) {
+    path <- row$filepath[[1L]]
+  } else {
+    ext_dir <- resolve_extdata_dir()
+    path <- file.path(ext_dir, row$filename[[1L]])
+  }
+
+  if ("filename" %in% names(row) && nzchar(row$filename[[1L]])) {
+    actual_file <- basename(path)
+    if (!identical(as.character(row$filename[[1L]]), as.character(actual_file))) {
+      warning(
+        "Registry filename metadata (", row$filename[[1L]],
+        ") does not match discovered file path basename (", actual_file,
+        ") for series '", series_id, "'. Using discovered filepath."
+      )
+    }
+  }
+
   if (!file.exists(path)) {
     stop("HDF5 file not found for series '", series_id, "': ", path)
   }
