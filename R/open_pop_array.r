@@ -39,6 +39,27 @@ h5_read_scalar_chr <- function(path, name) {
   as.character(val[[1L]])
 }
 
+h5_dataset_exists <- function(path, dataset) {
+  info <- rhdf5::h5ls(path)
+  ds <- if (startsWith(dataset, "/")) dataset else paste0("/", dataset)
+  grp <- dirname(ds)
+  if (identical(grp, ".")) grp <- "/"
+  nm <- basename(ds)
+  any(info$group == grp & info$name == nm)
+}
+
+#' Read scalar metadata if present
+#'
+#' @param path HDF5 file path.
+#' @param name HDF5 dataset path.
+#'
+#' @return Length-1 character scalar or NULL.
+#' @keywords internal
+h5_read_scalar_chr_if_present <- function(path, name) {
+  if (!h5_dataset_exists(path, name)) return(NULL)
+  h5_read_scalar_chr(path, name)
+}
+
 #' Check if a file has the cube metadata schema
 #'
 #' @param path HDF5 file path.
@@ -48,37 +69,74 @@ h5_read_scalar_chr <- function(path, name) {
 h5_has_cube_schema <- function(path) {
   info <- rhdf5::h5ls(path)
   has_pop <- any(info$group == "/cube" & info$name == "population")
-  has_meta <- any(info$group == "/cube/metadata" & info$name == "registry")
-  has_pop && has_meta
+  has_dim_order <- any(info$group == "/cube/metadata" & info$name == "dim_order")
+  has_dimnames <- any(info$group == "/cube/metadata" & info$name == "dimnames")
+  has_time <- any(info$group == "/cube/metadata/roles" & info$name == "time")
+  has_area <- any(info$group == "/cube/metadata/roles" & info$name == "area")
+  has_pop && has_dim_order && has_dimnames && has_time && has_area
 }
 
-#' Read registry row from one migrated cube file
+#' Read one series index row from canonical metadata
+#'
+#' @param path HDF5 file path.
+#'
+#' @return One-row data.frame.
+#' @keywords internal
+read_series_row <- function(path) {
+  series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/series_id")
+  if (is.null(series_id) || !nzchar(series_id)) {
+    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/note")
+  }
+  if (is.null(series_id) || !nzchar(series_id)) {
+    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/series_id")
+  }
+  if (is.null(series_id) || !nzchar(series_id)) {
+    series_id <- tools::file_path_sans_ext(basename(path))
+  }
+
+  out <- data.frame(
+    series_id = as.character(series_id),
+    filepath = normalizePath(path, winslash = "/", mustWork = TRUE),
+    filename = basename(path),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/geo")
+  if (is.null(geo) || !nzchar(geo)) {
+    geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/geo")
+  }
+  if (!is.null(geo) && nzchar(geo)) out$geo <- as.character(geo)
+
+  ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/extendable_year")
+  if (is.null(ext_year) || !nzchar(ext_year)) {
+    ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/extendable_year")
+  }
+  if (!is.null(ext_year) && nzchar(ext_year)) out$extendable_year <- as.character(ext_year)
+
+  source <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/source")
+  if (!is.null(source) && nzchar(source)) out$source <- as.character(source)
+
+  population_type <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/population_type")
+  if (!is.null(population_type) && nzchar(population_type)) out$population_type <- as.character(population_type)
+
+  out
+}
+
+#' Backward-compatible alias for legacy registry row reader
 #'
 #' @param path HDF5 file path.
 #'
 #' @return One-row data.frame.
 #' @keywords internal
 read_registry_row <- function(path) {
-  info <- rhdf5::h5ls(path)
-  reg <- info[info$group == "/cube/metadata/registry", , drop = FALSE]
-  if (nrow(reg) == 0L) {
-    stop("No /cube/metadata/registry datasets found in: ", basename(path))
-  }
-
-  row <- lapply(reg$name, function(k) h5_read_scalar_chr(path, paste0("cube/metadata/registry/", k)))
-  names(row) <- reg$name
-  row <- as.data.frame(row, stringsAsFactors = FALSE, check.names = FALSE)
-  row$filepath <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  if (!"filename" %in% names(row)) {
-    row$filename <- basename(path)
-  }
-  row
+  read_series_row(path)
 }
 
 #' Series registry read from migrated HDF5 metadata
 #'
-#' Scans `inst/extdata/*.h5` and builds the registry from
-#' `cube/metadata/registry/*` datasets in migrated files.
+#' Scans `inst/extdata/*.h5` and builds the registry from canonical
+#' `cube/metadata/*` fields in migrated files.
 #'
 #' @return data.frame of available series.
 #' @keywords internal
@@ -95,7 +153,7 @@ tarr_series_registry <- function() {
     stop("No migrated cubes with /cube/metadata were found in extdata.")
   }
 
-  rows <- lapply(files, read_registry_row)
+  rows <- lapply(files, read_series_row)
   reg <- dplyr::bind_rows(rows)
   if ("series_id" %in% names(reg)) {
     reg <- reg[order(reg$series_id), , drop = FALSE]
@@ -212,23 +270,7 @@ open_poparray <- function(series_id,
     stop("Unknown series_id: ", series_id)
   }
 
-  if ("filepath" %in% names(row) && nzchar(row$filepath[[1L]])) {
-    path <- row$filepath[[1L]]
-  } else {
-    ext_dir <- resolve_extdata_dir()
-    path <- file.path(ext_dir, row$filename[[1L]])
-  }
-
-  if ("filename" %in% names(row) && nzchar(row$filename[[1L]])) {
-    actual_file <- basename(path)
-    if (!identical(as.character(row$filename[[1L]]), as.character(actual_file))) {
-      warning(
-        "Registry filename metadata (", row$filename[[1L]],
-        ") does not match discovered file path basename (", actual_file,
-        ") for series '", series_id, "'. Using discovered filepath."
-      )
-    }
-  }
+  path <- row$filepath[[1L]]
 
   if (!file.exists(path)) {
     stop("HDF5 file not found for series '", series_id, "': ", path)

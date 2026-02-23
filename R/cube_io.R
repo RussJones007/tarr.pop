@@ -129,17 +129,33 @@ pa_normalize_source <- function(source = NULL) {
   src
 }
 
+pa_scalar_chr <- function(x, default = NULL) {
+  if (is.null(x) || !length(x)) return(default)
+  as.character(x[[1L]])
+}
+
+pa_registry_fields <- function(registry = NULL) {
+  reg <- if (is.null(registry)) list() else if (is.data.frame(registry)) as.list(registry[1, , drop = FALSE]) else as.list(registry)
+  list(
+    series_id = pa_scalar_chr(reg$series_id, default = NULL),
+    geo = pa_scalar_chr(reg$geo, default = NULL),
+    extendable_year = pa_scalar_chr(reg$extendable_year, default = NULL)
+  )
+}
+
 pa_write_poparray_metadata <- function(filepath,
                                        dimnames_list,
                                        time_dim,
                                        area_dim,
                                        source = NULL,
                                        data_col = "population",
+                                       series_id = NULL,
+                                       geo = NULL,
+                                       extendable_year = NULL,
                                        registry = NULL,
-                                       schema_version = "1.0.0") {
+                                       schema_version = "1.1.0") {
   pa_h5_create_group(filepath, "cube")
   pa_h5_create_group(filepath, "cube/metadata")
-  pa_h5_create_group(filepath, "cube/metadata/registry")
   pa_h5_create_group(filepath, "cube/metadata/roles")
   pa_h5_create_group(filepath, "cube/metadata/source")
   pa_h5_create_group(filepath, "cube/metadata/dimnames")
@@ -147,10 +163,30 @@ pa_write_poparray_metadata <- function(filepath,
   dim_order <- names(dimnames_list)
   strata <- setdiff(dim_order, c(time_dim, area_dim))
   src <- pa_normalize_source(source)
+  legacy <- pa_registry_fields(registry)
+
+  if (is.null(series_id) || !length(series_id) || !nzchar(as.character(series_id[[1L]]))) {
+    series_id <- legacy$series_id
+  }
+  if (is.null(geo) || !length(geo) || !nzchar(as.character(geo[[1L]]))) {
+    geo <- legacy$geo
+  }
+  if (is.null(extendable_year) || !length(extendable_year) || !nzchar(as.character(extendable_year[[1L]]))) {
+    extendable_year <- legacy$extendable_year
+  }
 
   pa_h5_write_dataset(filepath, "cube/metadata/schema_version", as.character(schema_version))
   pa_h5_write_dataset(filepath, "cube/metadata/migrated_on", as.character(Sys.time()))
   pa_h5_write_dataset(filepath, "cube/metadata/data_col", as.character(data_col))
+  if (!is.null(series_id) && length(series_id) && nzchar(as.character(series_id[[1L]]))) {
+    pa_h5_write_dataset(filepath, "cube/metadata/series_id", as.character(series_id[[1L]]))
+  }
+  if (!is.null(geo) && length(geo) && nzchar(as.character(geo[[1L]]))) {
+    pa_h5_write_dataset(filepath, "cube/metadata/geo", as.character(geo[[1L]]))
+  }
+  if (!is.null(extendable_year) && length(extendable_year) && nzchar(as.character(extendable_year[[1L]]))) {
+    pa_h5_write_dataset(filepath, "cube/metadata/extendable_year", as.character(extendable_year[[1L]]))
+  }
 
   pa_h5_write_dataset(filepath, "cube/metadata/roles/time", as.character(time_dim))
   pa_h5_write_dataset(filepath, "cube/metadata/roles/area", as.character(area_dim))
@@ -165,13 +201,6 @@ pa_write_poparray_metadata <- function(filepath,
   pa_h5_write_dataset(filepath, "cube/metadata/source/source", as.character(src$source))
   pa_h5_write_dataset(filepath, "cube/metadata/source/updated", as.character(src$updated))
   pa_h5_write_dataset(filepath, "cube/metadata/source/population_type", as.character(src$population_type))
-
-  if (!is.null(registry)) {
-    reg <- if (is.data.frame(registry)) as.list(registry[1, , drop = FALSE]) else as.list(registry)
-    for (k in names(reg)) {
-      pa_h5_write_dataset(filepath, paste0("cube/metadata/registry/", k), as.character(reg[[k]]))
-    }
-  }
 
   invisible(TRUE)
 }
@@ -190,6 +219,9 @@ pa_write_poparray_metadata <- function(filepath,
 #' @param area_dim Area dimension name.
 #' @param source Source metadata list/vector.
 #' @param data_col Value column label.
+#' @param series_id Optional series identifier stored as `cube/metadata/series_id`.
+#' @param geo Optional geography tag stored as `cube/metadata/geo`.
+#' @param extendable_year Optional flag stored as `cube/metadata/extendable_year`.
 #' @param registry Optional registry metadata list/data.frame (one row).
 #' @param target_chunk_bytes Target bytes for auto chunking.
 #'
@@ -205,6 +237,9 @@ pa_write_poparray_cube <- function(x,
                                    area_dim = "area.name",
                                    source = NULL,
                                    data_col = "population",
+                                   series_id = NULL,
+                                   geo = NULL,
+                                   extendable_year = NULL,
                                    registry = NULL,
                                    target_chunk_bytes = 1e6) {
   if (is.null(filepath)) {
@@ -269,6 +304,9 @@ pa_write_poparray_cube <- function(x,
     area_dim = area_dim,
     source = source,
     data_col = data_col,
+    series_id = series_id,
+    geo = geo,
+    extendable_year = extendable_year,
     registry = registry
   )
 
@@ -286,6 +324,9 @@ pa_write_poparray_cube <- function(x,
 #' @param overwrite Logical; overwrite if file exists.
 #' @param chunkdim Integer chunk dimensions or `"auto"`.
 #' @param level Compression level (0-9).
+#' @param series_id Optional series identifier stored as `cube/metadata/series_id`.
+#' @param geo Optional geography tag stored as `cube/metadata/geo`.
+#' @param extendable_year Optional flag stored as `cube/metadata/extendable_year`.
 #' @param registry Optional registry metadata list/data.frame (one row).
 #' @param target_chunk_bytes Target bytes for auto chunking.
 #'
@@ -296,6 +337,9 @@ save_poparray <- function(x,
                           overwrite = FALSE,
                           chunkdim = "auto",
                           level = 6L,
+                          series_id = tools::file_path_sans_ext(basename(filepath)),
+                          geo = NULL,
+                          extendable_year = NULL,
                           registry = NULL,
                           target_chunk_bytes = 1e6) {
   if (!is(x, "poparray")) {
@@ -320,6 +364,9 @@ save_poparray <- function(x,
     area_dim = area_dim,
     source = source,
     data_col = col_name,
+    series_id = series_id,
+    geo = geo,
+    extendable_year = extendable_year,
     registry = registry,
     target_chunk_bytes = target_chunk_bytes
   )
@@ -335,9 +382,11 @@ save_poparray <- function(x,
 #'
 #' @param x A `poparray`.
 #' @param filepath Output HDF5 file path.
-#' @param series_id Series identifier written to registry metadata.
+#' @param series_id Series identifier written to `cube/metadata/series_id`.
 #' @param chunkdim Integer chunk dimensions or `"auto"`.
 #' @param overwrite Logical; overwrite existing file.
+#' @param geo Optional geography tag stored in cube metadata.
+#' @param extendable_year Optional flag stored in cube metadata.
 #' @param registry Optional extra registry fields (named list or one-row data.frame).
 #'
 #' @return Invisibly returns a list with `filepath`, `dataset`, and `chunkdim`.
@@ -347,21 +396,22 @@ create_poparray <- function(x,
                             series_id,
                             chunkdim = "auto",
                             overwrite = FALSE,
+                            geo = NULL,
+                            extendable_year = NULL,
                             registry = NULL) {
   checkmate::assert_string(series_id, min.chars = 1)
   checkmate::assert_string(filepath, min.chars = 1)
 
   reg <- as.list(registry %||% list())
-  reg$series_id <- series_id
-  if (is.null(reg$filename) || !length(reg$filename)) {
-    reg$filename <- basename(filepath)
-  }
 
   out <- save_poparray(
     x = x,
     filepath = filepath,
     overwrite = overwrite,
     chunkdim = chunkdim,
+    series_id = series_id,
+    geo = geo,
+    extendable_year = extendable_year,
     registry = reg
   )
 

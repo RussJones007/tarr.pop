@@ -15,6 +15,9 @@ pa_write_poparray_cube(
   area_dim = "area.name",
   source = NULL,
   data_col = "population",
+  series_id = NULL,
+  geo = NULL,
+  extendable_year = NULL,
   registry = NULL,
   target_chunk_bytes = 1e+06
 )
@@ -39,6 +42,12 @@ pa_write_poparray_cube(
 \item{source}{Source metadata list/vector.}
 
 \item{data_col}{Value column label.}
+
+\item{series_id}{Optional series identifier stored as \code{cube/metadata/series_id}.}
+
+\item{geo}{Optional geography tag stored as \code{cube/metadata/geo}.}
+
+\item{extendable_year}{Optional flag stored as \code{cube/metadata/extendable_year}.}
 
 \item{registry}{Optional registry metadata list/data.frame (one row).}
 

@@ -10,6 +10,9 @@ save_poparray(
   overwrite = FALSE,
   chunkdim = "auto",
   level = 6L,
+  series_id = tools::file_path_sans_ext(basename(filepath)),
+  geo = NULL,
+  extendable_year = NULL,
   registry = NULL,
   target_chunk_bytes = 1e+06
 )
@@ -24,6 +27,12 @@ save_poparray(
 \item{chunkdim}{Integer chunk dimensions or \code{"auto"}.}
 
 \item{level}{Compression level (0-9).}
+
+\item{series_id}{Optional series identifier stored as \code{cube/metadata/series_id}.}
+
+\item{geo}{Optional geography tag stored as \code{cube/metadata/geo}.}
+
+\item{extendable_year}{Optional flag stored as \code{cube/metadata/extendable_year}.}
 
 \item{registry}{Optional registry metadata list/data.frame (one row).}
 

@@ -10,6 +10,8 @@ create_poparray(
   series_id,
   chunkdim = "auto",
   overwrite = FALSE,
+  geo = NULL,
+  extendable_year = NULL,
   registry = NULL
 )
 }
@@ -18,11 +20,15 @@ create_poparray(
 
 \item{filepath}{Output HDF5 file path.}
 
-\item{series_id}{Series identifier written to registry metadata.}
+\item{series_id}{Series identifier written to \code{cube/metadata/series_id}.}
 
 \item{chunkdim}{Integer chunk dimensions or \code{"auto"}.}
 
 \item{overwrite}{Logical; overwrite existing file.}
+
+\item{geo}{Optional geography tag stored in cube metadata.}
+
+\item{extendable_year}{Optional flag stored in cube metadata.}
 
 \item{registry}{Optional extra registry fields (named list or one-row data.frame).}
 }

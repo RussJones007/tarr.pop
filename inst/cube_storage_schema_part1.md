@@ -17,7 +17,9 @@ Metadata source of truth is the `.rda` objects under `data/`, especially:
 - `cube/population`: numeric population cube (copied from legacy `/pop`)
 - `cube/metadata/schema_version`: schema version string (`"1.0.0"`)
 - `cube/metadata/migrated_on`: migration timestamp
-- `cube/metadata/registry/<col>`: one dataset per `series_registry` column
+- `cube/metadata/series_id`: canonical series identifier
+- `cube/metadata/geo`: optional geography tag
+- `cube/metadata/extendable_year`: optional extension flag
 - `cube/metadata/roles/time`: time dimension name
 - `cube/metadata/roles/area`: area dimension name
 - `cube/metadata/roles/strata`: remaining stratification dimensions
@@ -43,3 +45,7 @@ Metadata source of truth is the `.rda` objects under `data/`, especially:
 Some legacy cubes include one extra terminal level in dimensions where `.rda`
 metadata has one fewer labels. During migration, the script drops that terminal
 level from `cube/population` so `"All"` is not stored in the cube.
+
+Older migrated cubes may still include `cube/metadata/registry/*`. The package now
+builds discovery rows from canonical `cube/metadata/*` fields first, with legacy
+registry fields used only as read-time fallbacks.
