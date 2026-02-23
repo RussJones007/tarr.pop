@@ -289,61 +289,6 @@ is.poparray <- function(x) is(x, "poparray")
 
 #  dim,  names, labels, and length  -----------------------
 
-#' Get dimensions of a poparray
-#'
-#' Returns the array dimensions of a `poparray`. This delegates to the delayed
-#' backend and is a cheap, metadata-only operation (it does not realize the
-#' full array).
-#'
-#' @param x A poparray.
-#'
-#' @return An integer vector giving the extents of each dimension.
-#' @export
-dim.poparray <- function(x) {
-  .Deprecated(msg = "dim.poparray() is deprecated; use dim(x) and DelayedArray methods.")
-  d <- base::dim(methods::as(x, "DelayedArray"))
-  
-  if (is.null(d)) {
-    cli::cli_abort("poparray backend has no dimensions.")
-  }
-  
-  dn <- dimnames(x)
-  if (!is.null(dn) && length(dn) != length(d)) {
-    cli::cli_abort("poparray dimnames ({length(dn)}) do not match backend dims ({length(d)}).")
-  }
-  
-  d
-}
-
-
-
-#' Get dimension names for a poparray
-#' 
-#'
-#' Returns the named list of dimension labels stored in the poparray metadata.
-#' This is a metadata-only operation and does not realize the delayed backend.
-#'
-#' @param x A poparray.
-#' @param ... Unused.
-#'
-#' @return A named list of dimension labels (one character vector per dimension).
-#' @export
-dimnames.poparray <- function(x, ...) {
-  .Deprecated(msg = "dimnames.poparray() is deprecated; use dimnames(x) directly.")
-  dn <- base::dimnames(methods::as(x, "DelayedArray"))
-  
-  if (is.null(dn) || !is.list(dn) || is.null(names(dn))) {
-    cli::cli_abort("poparray has no valid {.field dimn} dimnames metadata.")
-  }
-  
-  d <- dim(x)
-  if (!is.null(d) && length(dn) != length(d)) {
-    cli::cli_abort("poparray dimnames ({length(dn)}) do not match backend dims ({length(d)}).")
-  }
-  
-  dn
-}
-
 #' @export
 names.poparray <- function(x) {
   names(dimnames(x))
@@ -367,37 +312,6 @@ length.poparray <- function(x) {
 
 
 # Print and summary methods -----------------------------------------------------------------------------------------
-
-#' @exportS3Method base::print
-print.poparray <- function(x, ...) {
-  .Deprecated(msg = "print.poparray() is deprecated; use show() for poparray.")
-  src <- get_source(x)
-  roles <- list(time = time_role(x), area = area_role(x))
-  
-  dms <- dimnames(x)
-  dms_names <- names(dms)
-  
-  dms_sizes <- lengths(dms)
-  names(dms_sizes) <- dms_names
-  
-  dimensions <- paste(
-    paste0(names(dms_sizes), " (", dms_sizes, ")"),
-    collapse = ", "
-  )
-  
-  recs <- length(x)
-  
-  cat("<poparray>\n")
-  cat("Series: ", src[["note"]], "\n", sep = "")
-  cat("Sourced: ", src[["source"]], "\n", sep = "")
-  cat("Updated: ", src[["updated"]], "\n", sep = "")
-  cat("Length: ", format(recs, big.mark = ","), "\n", sep = "")
-  cat("Roles: time = '", roles$time, "', area = '", roles$area, "'\n", sep = "")
-  cat("Dimensions: ", dimensions, "\n", sep = "")
-  cat("Data column as data frame: '", data_col(x), "'\n", sep = "")
-  
-  invisible(x)
-}
 
 #' Summary of a poparray (may scan backend)
 #'
@@ -454,98 +368,6 @@ summary.poparray <- function(object, ...) {
 #'   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
 #' @param drop Logical; passed to the backend `[` call.
 #'
-#' @return A `poparray` or (if `drop = TRUE` drops time/area) a `DelayedArray`.
-#' @export
-`[.poparray` <- function(x, ..., drop = FALSE) {
-  .Deprecated(msg = "S3 `[.poparray` is deprecated; use S4 `[` dispatch for poparray.")
-  dim_names <- names(x)
-  
-  # check that the poparry object has the proper roles available.  This handles manually made poparrays that are missing
-  # required attributes
-  validate_poparray((x))
-  
-  roles <- list(time = time_role(x), area = area_role(x))
-  
-  nd <- length(dim(x))
-  if (length(dim_names) != nd) {
-    cli::cli_abort("poparray dimnames are inconsistent with backend dimensions.")
-  }
-  
-  # Capture and evaluate indices; treat "missing" in ... as TRUE (select all)
-  dots <- as.list(substitute(list(...)))[-1L]
-  idx <- lapply(dots, \(e) {
-    if (is_missing_arg(e)) TRUE else eval(e, parent.frame())
-  })
-  
-  ndx <- rep(list(TRUE), nd)
-  
-  index_names <- names(idx)
-  if (is.null(index_names)) index_names <- character(0)
-  
-  # Named vs positional dispatch
-  if (length(index_names) > 0) {
-    bad <- setdiff(index_names, dim_names)
-    if (length(bad) > 0) {
-      cli::cli_abort(c(
-        "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
-        "i" = "Valid dimensions are: {paste(dim_names, collapse = ', ')}."
-      ))
-    }
-    ndx[match(index_names, dim_names)] <- idx
-  } else {
-    if (length(idx) > nd) cli::cli_abort("Too many indices for poparray.")
-    ndx[seq_along(idx)] <- idx
-  }
-  
-  # Subset delayed backend (still lazy)
-  h_sub <- do.call(`[`, c(list(methods::as(x, "DelayedArray")), ndx, list(drop = drop)))
-  
-  # Rebuild dimnames metadata to reflect the selection
-  dn0 <- dimnames(x)
-  dn <- dn0
-  
-  for (k in seq_len(nd)) {
-    sel <- ndx[[k]]
-    nm <- dim_names[[k]]
-    this <- dn0[[nm]]
-    
-    if (isTRUE(identical(sel, TRUE))) next
-    
-    if (is.numeric(sel) || is.logical(sel)) {
-      dn[[nm]] <- this[sel]
-    } else {
-      sel_chr  <- as.character(sel)
-      this_chr <- as.character(this)
-      # check that selected labesl actually exist, if not indicates an error. 
-      unknown  <- setdiff(sel_chr, this_chr)
-      if(length(unknown) > 0){
-        cli::cli_abort(c(
-          "Unknown label(s) in dim {.val {nm}}.",
-          "i" = "Unknown: {paste(utils::head(unknown, 10), collapse = ', ')}{if (length(unknown) > 10) ', ...' else ''}.",
-          "i" = "Valid labels example: {paste(utils::head(this_chr, 10), collapse = ', ')}{if (length(this_chr) > 10) ', ...' else ''}."
-        ))
-      }
-      dn[[nm]] <- sel_chr
-    }
-  }
-  
-  # If drop=TRUE return a DelayedArray result directly.
-  if (isTRUE(drop)) {
-    return(h_sub)
-  }
-  
-  # Otherwise return a valid poparray slice, preserving metadata/roles
-  new_poparray(
-    x = h_sub,
-    dimnames_list = dn,
-    data_col = data_col(x),
-    source = get_source(x),
-    time_dim = roles$time,
-    area_dim = roles$area
-  )
-}
-
-
 # Coerce to poparray' ---------------------------------------------------------------------------------------------
 
 #' Coerce to a poparray Object
@@ -871,21 +693,6 @@ by.poparray <- function(data, INDICES, FUN, ..., simplify = TRUE, drop = FALSE) 
 # Operators -------------------------------------------------------------------------------------------------------
 
 #' @export
-sum.poparray <- function(x, ..., na.rm = FALSE) {
-  .Deprecated(msg = "sum.poparray() is deprecated; use sum(x, ...) directly.")
-  a <- methods::as(x, "DelayedArray")
-  # sum() on DelayedArray triggers block processing / delayed reduction
-  base::sum(a, ..., na.rm = na.rm)
-}
-
-#' @export
-mean.poparray <- function(x, ..., na.rm = FALSE) {
-  .Deprecated(msg = "mean.poparray() is deprecated; use mean(x, ...) directly.")
-  a <- methods::as(x, "DelayedArray")
-  base::mean(a, ..., na.rm = na.rm)
-}
-
-#' @export
 sd.poparray <- function(x, ..., na.rm = FALSE) {
   a <- methods::as(x, "DelayedArray")
   # For general DelayedArray, sd() may or may not be specialized;
@@ -893,25 +700,6 @@ sd.poparray <- function(x, ..., na.rm = FALSE) {
   # (See next section.)
   stats::sd(as.vector(a), na.rm = na.rm)
 }
-
-#' @export
-Summary.poparray <- function(..., na.rm = FALSE) {
-  .Deprecated(msg = "Summary.poparray() is deprecated; use DelayedArray math generics directly.")
-  args <- list(...)
-  # Support min(x) / max(x) where first arg is poparray
-  x <- args[[1L]]
-  a <- methods::as(x, "DelayedArray")
-  
-  fun <- .Generic
-    do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
-  # if (fun %in% c("min", "max", "range")) {
-  #   do.call(fun, c(list(a), args[-1L], list(na.rm = na.rm)))
-  # } else {
-  #   stop(sprintf("Summary(%s) not implemented for poparray.", fun), call. = FALSE)
-  # }
-}
-
-
 
 # Accessors / helpers ----------------------------------------------------------
 
