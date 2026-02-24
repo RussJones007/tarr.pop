@@ -206,6 +206,43 @@ read_source_from_cube <- function(path) {
   )
 }
 
+#' Read dim_semantics metadata from migrated cube
+#'
+#' @param path HDF5 file path.
+#' @param dim_order Character dimension order vector.
+#'
+#' @return Named list with one semantic entry per dimension.
+#' @keywords internal
+read_dim_semantics_from_cube <- function(path, dim_order) {
+  info <- rhdf5::h5ls(path)
+  has_group <- any(info$group == "/cube/metadata" & info$name == "dim_semantics")
+  if (!isTRUE(has_group)) {
+    cli::cli_abort(
+      "Missing required metadata group {.val cube/metadata/dim_semantics}. This cube must be migrated before opening."
+    )
+  }
+  required_fields <- c("class", "exclusive", "overlapping", "validated")
+  out <- lapply(dim_order, function(d) {
+    base <- paste0("cube/metadata/dim_semantics/", d)
+    for (fld in required_fields) {
+      ds <- paste0(base, "/", fld)
+      if (!h5_dataset_exists(path, ds)) {
+        cli::cli_abort(
+          "Missing required dim_semantics dataset {.val {ds}}. This cube must be migrated before opening."
+        )
+      }
+    }
+    list(
+      class = h5_read_scalar_chr(path, paste0(base, "/class")),
+      exclusive = tolower(h5_read_scalar_chr(path, paste0(base, "/exclusive"))) == "true",
+      overlapping = tolower(h5_read_scalar_chr(path, paste0(base, "/overlapping"))) == "true",
+      validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true"
+    )
+  })
+  names(out) <- dim_order
+  out
+}
+
 #' Validate migrated dimnames against cube dimensions
 #'
 #' @param h5_handle Delayed HDF5Array handle.
@@ -258,6 +295,7 @@ open_tarr_pop <- function(...) {
 #'   `cube/metadata/dimnames/*`,
 #' - dimension roles from `cube/metadata/roles/*`,
 #' - source/provenance fields from `cube/metadata/source/*`.
+#' - per-dimension semantics from `cube/metadata/dim_semantics/*/*`.
 #'
 #' @returns A poparray.
 #' @export
@@ -279,6 +317,7 @@ open_poparray <- function(series_id,
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)
   dimn  <- read_dimnames_from_cube(path)
   roles <- read_roles_from_cube(path)
+  dsem  <- read_dim_semantics_from_cube(path, names(dimn))
   src   <- read_source_from_cube(path)
 
   validate_labels_against_cube(h5, dimn, series_id)
@@ -290,6 +329,7 @@ open_poparray <- function(series_id,
     data_col      = data_col,
     source        = src,
     time_dim      = roles$time,
-    area_dim      = roles$area
+    area_dim      = roles$area,
+    dim_semantics = dsem
   )
 }

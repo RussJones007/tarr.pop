@@ -84,12 +84,23 @@ poparray_from_array_like <- function(arr, template, dimnames_list) {
   src <- get_source(template)
   dc  <- data_col(template) %||% "population"
   h5  <- HDF5Array::writeHDF5Array(arr)
+  time_dim <- time_role(template)
+  area_dim <- area_role(template)
+  dsem <- ensure_dim_semantics(
+    dim_semantics = dim_semantics(template),
+    dim_names = names(dimnames_list),
+    time_dim = time_dim,
+    area_dim = area_dim
+  )
   
   new_poparray(
     x = h5,
     dimnames_list = dimnames_list,
     data_col = dc,
-    source = src
+    source = src,
+    time_dim = time_dim,
+    area_dim = area_dim,
+    dim_semantics = dsem
   )
 }
 

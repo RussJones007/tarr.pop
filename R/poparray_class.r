@@ -18,6 +18,7 @@ setClass(
     time_role = "character",
     area_role = "character",
     strata_roles = "character",
+    dim_semantics = "list",
     data_col = "character",
     source = "list"
   )
@@ -31,12 +32,117 @@ setClass(
 #' @slot time_role Name of the time dimension.
 #' @slot area_role Name of the area dimension.
 #' @slot strata_roles Character vector of optional stratification dimensions.
+#' @slot dim_semantics Named list of per-dimension semantic contracts.
 #' @slot data_col Name used for value column in tabular coercions.
 #' @slot source Provenance metadata as a named list.
 #'
 #' @name poparray
 #' @docType class
 NULL
+
+#' Validate dim semantics contract
+#'
+#' @param dim_semantics Named list of per-dimension semantics.
+#' @param dim_names Character vector of dimension names.
+#' @param time_dim Time dimension name.
+#' @param area_dim Area dimension name.
+#'
+#' @return Invisibly TRUE, otherwise errors.
+#' @keywords internal
+validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim) {
+  if (is.null(dim_semantics) || !is.list(dim_semantics) || is.null(names(dim_semantics))) {
+    cli::cli_abort("{.arg dim_semantics} must be a named list.")
+  }
+
+  if (!identical(as.character(names(dim_semantics)), as.character(dim_names))) {
+    cli::cli_abort(
+      "{.arg dim_semantics} names must exactly match names(dim(x)) in the same order."
+    )
+  }
+
+  required_fields <- c("class", "exclusive", "overlapping", "validated")
+  for (nm in dim_names) {
+    ent <- dim_semantics[[nm]]
+    if (is.null(ent) || !is.list(ent)) {
+      cli::cli_abort("dim_semantics entry for dimension {.val {nm}} must be a non-NULL list.")
+    }
+    missing_fields <- setdiff(required_fields, names(ent))
+    if (length(missing_fields) > 0L) {
+      cli::cli_abort(
+        "dim_semantics[{.val {nm}}] is missing field(s): {.val {paste(missing_fields, collapse = ', ')}}."
+      )
+    }
+    if (!is.character(ent$class) || length(ent$class) != 1L || is.na(ent$class) || !nzchar(ent$class)) {
+      cli::cli_abort("dim_semantics[{.val {nm}}]$class must be a single non-empty character value.")
+    }
+    if (!is.logical(ent$exclusive) || length(ent$exclusive) != 1L || is.na(ent$exclusive)) {
+      cli::cli_abort("dim_semantics[{.val {nm}}]$exclusive must be TRUE/FALSE.")
+    }
+    if (!is.logical(ent$overlapping) || length(ent$overlapping) != 1L || is.na(ent$overlapping)) {
+      cli::cli_abort("dim_semantics[{.val {nm}}]$overlapping must be TRUE/FALSE.")
+    }
+    if (!is.logical(ent$validated) || length(ent$validated) != 1L || is.na(ent$validated)) {
+      cli::cli_abort("dim_semantics[{.val {nm}}]$validated must be TRUE/FALSE.")
+    }
+  }
+
+  for (required_partition in c(time_dim, area_dim)) {
+    if (!identical(dim_semantics[[required_partition]]$class, "partition")) {
+      cli::cli_abort(
+        "Role dimension {.val {required_partition}} must have dim_semantics$class = {.val partition}."
+      )
+    }
+  }
+
+  invisible(TRUE)
+}
+
+default_dim_semantics <- function(dim_names, time_dim, area_dim) {
+  out <- lapply(dim_names, function(d) {
+    is_partition <- d %in% c(time_dim, area_dim)
+    list(
+      class = if (is_partition) "partition" else "set",
+      exclusive = is_partition,
+      overlapping = !is_partition,
+      validated = is_partition
+    )
+  })
+  names(out) <- dim_names
+  out
+}
+
+ensure_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim) {
+  defaults <- default_dim_semantics(dim_names, time_dim, area_dim)
+  if (is.null(dim_semantics) || !is.list(dim_semantics)) {
+    return(defaults)
+  }
+  in_names <- names(dim_semantics)
+  if (is.null(in_names)) {
+    return(defaults)
+  }
+  out <- defaults
+  for (nm in intersect(dim_names, in_names)) {
+    if (!is.null(dim_semantics[[nm]]) && is.list(dim_semantics[[nm]])) {
+      out[[nm]] <- dim_semantics[[nm]]
+    }
+  }
+  out
+}
+
+subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames) {
+  before_names <- names(before_dimnames)
+  after_names <- names(after_dimnames)
+  out <- dim_semantics[after_names]
+  before_sizes <- lengths(before_dimnames)
+  after_sizes <- lengths(after_dimnames)
+  for (nm in after_names) {
+    if (isTRUE(after_sizes[[nm]] == 1L) && isTRUE(before_sizes[[nm]] > 1L)) {
+      out[[nm]]$exclusive <- TRUE
+      out[[nm]]$overlapping <- FALSE
+    }
+  }
+  out
+}
 
 is_hdf5_backed_delayed <- function(x) {
   if (!is(x, "DelayedArray")) return(FALSE)
@@ -108,6 +214,12 @@ setValidity("poparray", function(object) {
   if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
     return("Roles cannot contain duplicates.")
   }
+  if (is.null(object@dim_semantics) || !is.list(object@dim_semantics) || is.null(names(object@dim_semantics))) {
+    return("slot 'dim_semantics' must be a named list.")
+  }
+  if (!identical(names(object@dim_semantics), names(dn))) {
+    return("slot 'dim_semantics' names must exactly match dimension names.")
+  }
   d <- lengths(dn)
   if (length(dn) != length(d)) {
     return("dimnames must align with dimensions.")
@@ -134,17 +246,23 @@ setValidity("poparray", function(object) {
 #' @param source Optional metadata describing provenance.
 #' @param time_dim Single character string naming the time dimension.
 #' @param area_dim Single character string naming the area dimension.
+#' @param dim_semantics Named list of per-dimension semantic contracts.
+#' @param validate_semantics Logical scalar. Internal control for staged
+#'   migration; if `FALSE`, strict contract checks are skipped but
+#'   `dim_semantics` is still populated.
 #' @param ... Reserved for future use.
 #'
 #' @return An S4 object of class `"poparray"`.
-#' @export
-new_poparray <- function(x,
-                         dimnames_list = dimnames(x),
-                         data_col = "population",
-                         source = NULL,
-                         time_dim = "year",
-                         area_dim = "area.name",
-                         ...) {
+#' @keywords internal
+.new_poparray_internal <- function(x,
+                                   dimnames_list = dimnames(x),
+                                   data_col = "population",
+                                   source = NULL,
+                                   time_dim = "year",
+                                   area_dim = "area.name",
+                                   dim_semantics = NULL,
+                                   validate_semantics = TRUE,
+                                   ...) {
   if (!is(x, "DelayedArray")) {
     cli::cli_abort("{.arg x} must be a {.cls DelayedArray}.")
   }
@@ -167,6 +285,24 @@ new_poparray <- function(x,
   if (identical(time_dim, area_dim)) {
     cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
   }
+  if (isTRUE(validate_semantics)) {
+    if (is.null(dim_semantics)) {
+      cli::cli_abort("{.arg dim_semantics} is required and cannot be NULL when {.arg validate_semantics = TRUE}.")
+    }
+    validate_dim_semantics(
+      dim_semantics = dim_semantics,
+      dim_names = nms,
+      time_dim = time_dim,
+      area_dim = area_dim
+    )
+  } else {
+    dim_semantics <- ensure_dim_semantics(
+      dim_semantics = dim_semantics,
+      dim_names = nms,
+      time_dim = time_dim,
+      area_dim = area_dim
+    )
+  }
   dimnames(x) <- dimnames_list
   src <- if (is.null(source)) list() else as.list(source)
   obj <- new(
@@ -175,6 +311,7 @@ new_poparray <- function(x,
     time_role = time_dim,
     area_role = area_dim,
     strata_roles = setdiff(nms, c(time_dim, area_dim)),
+    dim_semantics = dim_semantics,
     data_col = data_col,
     source = src
   )
@@ -183,6 +320,38 @@ new_poparray <- function(x,
   attr(obj, "source") <- src
   attr(obj, "dimroles") <- list(time = time_dim, area = area_dim, strata = setdiff(nms, c(time_dim, area_dim)))
   obj
+}
+
+#' Construct a poparray
+#'
+#' Creates a role-aware `poparray` that extends `DelayedArray` and stores role
+#' and provenance metadata in slots.
+#'
+#' @inheritParams .new_poparray_internal
+#' @return An S4 object of class `"poparray"`.
+#' @export
+new_poparray <- function(x,
+                         dimnames_list = dimnames(x),
+                         data_col = "population",
+                         source = NULL,
+                         time_dim = "year",
+                         area_dim = "area.name",
+                         dim_semantics = NULL,
+                         ...) {
+  if (is.null(dim_semantics)) {
+    cli::cli_abort("{.arg dim_semantics} is required and cannot be NULL.")
+  }
+  .new_poparray_internal(
+    x = x,
+    dimnames_list = dimnames_list,
+    data_col = data_col,
+    source = source,
+    time_dim = time_dim,
+    area_dim = area_dim,
+    dim_semantics = dim_semantics,
+    validate_semantics = TRUE,
+    ...
+  )
 }
 
 setMethod("show", "poparray", function(object) {
@@ -208,17 +377,31 @@ setMethod(
   "[",
   signature(x = "poparray"),
   function(x, ..., drop = FALSE) {
+    before_dimnames <- dimnames(x)
     out <- callNextMethod()
     if (isTRUE(drop) || !is(out, "DelayedArray")) {
       return(out)
     }
+    after_dimnames <- dimnames(out)
+    if (is.null(after_dimnames) || is.null(names(after_dimnames))) {
+      return(out)
+    }
+    if (!x@time_role %in% names(after_dimnames) || !x@area_role %in% names(after_dimnames)) {
+      return(out)
+    }
+    updated_dim_semantics <- subset_dim_semantics(
+      dim_semantics = x@dim_semantics,
+      before_dimnames = before_dimnames,
+      after_dimnames = after_dimnames
+    )
     new_poparray(
       x = out,
       dimnames_list = dimnames(out),
       data_col = x@data_col,
       source = x@source,
       time_dim = x@time_role,
-      area_dim = x@area_role
+      area_dim = x@area_role,
+      dim_semantics = updated_dim_semantics
     )
   }
 )
@@ -494,6 +677,7 @@ as.poparray.array <- function(x,
                source = src,
                time_dim = time_dim,
                area_dim = area_dim,
+               dim_semantics = default_dim_semantics(names(dn), time_dim, area_dim),
                ...)
 }
 
@@ -522,7 +706,8 @@ as.double.poparray <- function(x, ...) {
     data_col = data_col(x),
     source = get_source(x),
     time_dim = time_role(x),
-    area_dim = area_role(x)
+    area_dim = area_role(x),
+    dim_semantics = dim_semantics(x)
   )
 }
 
@@ -715,6 +900,21 @@ sd.poparray <- function(x, ..., na.rm = FALSE) {
 data_col <- function(x) {
   if (is(x, "poparray")) return(x@data_col)
   attr(x, "data_col", exact = TRUE)
+}
+
+#' Get dim semantics contract for a poparray
+#'
+#' Returns the read-only per-dimension semantic contract used for guarded
+#' reductions and metadata persistence.
+#'
+#' @param x A poparray.
+#' @return Named list with one entry per dimension.
+#' @export
+dim_semantics <- function(x) {
+  if (!is(x, "poparray")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray}.")
+  }
+  x@dim_semantics
 }
 
 #' @rdname data_col

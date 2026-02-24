@@ -30,11 +30,18 @@ make_collapse_time_role_fixture <- function() {
     dimnames_list = dn,
     overwrite = TRUE,
     time_dim = "time",
-    area_dim = "area.name"
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "time", "area.name")
   )
   dx <- HDF5Array::HDF5Array(filepath = fp, name = "cube/population")
   dimnames(dx) <- dn
-  new_poparray(dx, dimnames_list = dn, time_dim = "time", area_dim = "area.name")
+  new_poparray(
+    dx,
+    dimnames_list = dn,
+    time_dim = "time",
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "time", "area.name")
+  )
 }
 
 test_that("collapse_dim generic works with positional args", {

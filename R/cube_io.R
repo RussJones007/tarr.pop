@@ -143,10 +143,25 @@ pa_registry_fields <- function(registry = NULL) {
   )
 }
 
+pa_write_dim_semantics_fieldwise <- function(filepath, dim_semantics, dim_order) {
+  pa_h5_create_group(filepath, "cube/metadata/dim_semantics")
+  for (d in dim_order) {
+    base <- paste0("cube/metadata/dim_semantics/", d)
+    pa_h5_create_group(filepath, base)
+    ent <- dim_semantics[[d]]
+    pa_h5_write_dataset(filepath, paste0(base, "/class"), as.character(ent$class))
+    pa_h5_write_dataset(filepath, paste0(base, "/exclusive"), as.character(ent$exclusive))
+    pa_h5_write_dataset(filepath, paste0(base, "/overlapping"), as.character(ent$overlapping))
+    pa_h5_write_dataset(filepath, paste0(base, "/validated"), as.character(ent$validated))
+  }
+  invisible(TRUE)
+}
+
 pa_write_poparray_metadata <- function(filepath,
                                        dimnames_list,
                                        time_dim,
                                        area_dim,
+                                       dim_semantics = NULL,
                                        source = NULL,
                                        data_col = "population",
                                        series_id = NULL,
@@ -201,6 +216,19 @@ pa_write_poparray_metadata <- function(filepath,
   pa_h5_write_dataset(filepath, "cube/metadata/source/source", as.character(src$source))
   pa_h5_write_dataset(filepath, "cube/metadata/source/updated", as.character(src$updated))
   pa_h5_write_dataset(filepath, "cube/metadata/source/population_type", as.character(src$population_type))
+  dsem <- ensure_dim_semantics(
+    dim_semantics = dim_semantics,
+    dim_names = dim_order,
+    time_dim = time_dim,
+    area_dim = area_dim
+  )
+  validate_dim_semantics(
+    dim_semantics = dsem,
+    dim_names = dim_order,
+    time_dim = time_dim,
+    area_dim = area_dim
+  )
+  pa_write_dim_semantics_fieldwise(filepath, dsem, dim_order)
 
   invisible(TRUE)
 }
@@ -217,6 +245,7 @@ pa_write_poparray_metadata <- function(filepath,
 #' @param level Compression level (0-9).
 #' @param time_dim Time dimension name.
 #' @param area_dim Area dimension name.
+#' @param dim_semantics Named list of per-dimension semantic contracts.
 #' @param source Source metadata list/vector.
 #' @param data_col Value column label.
 #' @param series_id Optional series identifier stored as `cube/metadata/series_id`.
@@ -235,6 +264,7 @@ pa_write_poparray_cube <- function(x,
                                    level = 6L,
                                    time_dim = "year",
                                    area_dim = "area.name",
+                                   dim_semantics = NULL,
                                    source = NULL,
                                    data_col = "population",
                                    series_id = NULL,
@@ -302,6 +332,7 @@ pa_write_poparray_cube <- function(x,
     dimnames_list = dn,
     time_dim = time_dim,
     area_dim = area_dim,
+    dim_semantics = dim_semantics,
     source = source,
     data_col = data_col,
     series_id = series_id,
@@ -349,6 +380,7 @@ save_poparray <- function(x,
   dn <- dimnames(x)
   time_dim <- time_role(x)
   area_dim <- area_role(x)
+  dsem <- dim_semantics(x)
   source <- get_source(x)
   col_name <- data_col(x)
   x <- methods::as(x, "DelayedArray")
@@ -362,6 +394,7 @@ save_poparray <- function(x,
     level = level,
     time_dim = time_dim,
     area_dim = area_dim,
+    dim_semantics = dsem,
     source = source,
     data_col = col_name,
     series_id = series_id,

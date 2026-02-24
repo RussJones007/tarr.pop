@@ -799,7 +799,8 @@ setMethod(
       data_col = x@data_col %||% "population",
       source = x@source,
       time_dim = x@time_role,
-      area_dim = x@area_role
+      area_dim = x@area_role,
+      dim_semantics = default_dim_semantics(names(dn), x@time_role, x@area_role)
     )
   }
 )
@@ -868,7 +869,8 @@ setMethod(
     data_col = pp_data_col(x) %||% "population",
     source = pp_source(x),
     time_dim = roles$time,
-    area_dim = roles$area
+    area_dim = roles$area,
+    dim_semantics = default_dim_semantics(names(dn), roles$time, roles$area)
   )
 }
 
@@ -894,7 +896,8 @@ as.poparray.poparray_projection <- function(x, ...) {
     data_col = pp_data_col(x) %||% "population",
     source = pp_source(x),
     time_dim = roles$time,
-    area_dim = roles$area
+    area_dim = roles$area,
+    dim_semantics = default_dim_semantics(names(dn), roles$time, roles$area)
   )
   
   attr(res, "projection_level") <- pp_level(x)

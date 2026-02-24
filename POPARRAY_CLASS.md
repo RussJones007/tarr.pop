@@ -96,6 +96,11 @@ The current class contract stores core semantics in S4 slots:
 -   `time_role` - name of the time dimension
 -   `area_role` - name of the area dimension
 -   `strata_roles` - character vector of all non-time/non-area dimensions
+-   `dim_semantics` - named list with per-dimension fields:
+    -   `class` (`"partition"` or `"set"`)
+    -   `exclusive` (logical)
+    -   `overlapping` (logical)
+    -   `validated` (logical)
 -   `data_col` - value column name used for tabular coercion
 -   `source` - named provenance list (e.g. `note`, `source`, `updated`, `population_type`)
 
@@ -201,6 +206,15 @@ first (e.g., subset years/areas) before converting.
 Recommendation: summary operations should prefer delayed reductions when feasible (e.g.,
 `DelayedArray::DelayedReduce()`) and only realize small results. If a method realizes, it must be explicit in
 documentation and (ideally) warn for large objects.
+
+### Semantic safeguards for reductions
+
+-   `sum(poparray)` is strict by default.
+-   Any remaining dimension with `exclusive = FALSE` or `overlapping = TRUE` is treated as unsafe for naive aggregation.
+-   Default behavior is to error to prevent accidental double counting in epidemiologic workflows.
+-   Overrides exist for advanced users:
+    -   `strict = FALSE` (warn, then continue)
+    -   `allow_overlap = TRUE` (continue silently)
 
 ### Saving and persistence helpers
 

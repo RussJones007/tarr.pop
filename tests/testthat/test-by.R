@@ -16,7 +16,7 @@ make_by_fixture <- function() {
 test_that("by.poparray applies function by dimension labels", {
   pa <- make_by_fixture()
 
-  out <- by(pa, INDICES = "year", FUN = function(z) sum(z), simplify = TRUE)
+  out <- by(pa, INDICES = "year", FUN = function(z) sum(z, allow_overlap = TRUE), simplify = TRUE)
 
   expect_type(out, "double")
   expect_equal(length(out), 2)
@@ -42,7 +42,7 @@ test_that("by.poparray validates FUN", {
 test_that("by.poparray supports integer INDICES", {
   pa <- make_by_fixture()
 
-  out <- by(pa, INDICES = 1, FUN = function(z) sum(z), simplify = TRUE)
+  out <- by(pa, INDICES = 1, FUN = function(z) sum(z, allow_overlap = TRUE), simplify = TRUE)
 
   expect_type(out, "double")
   expect_equal(names(out), c("2020", "2021"))

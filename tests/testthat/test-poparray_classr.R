@@ -30,6 +30,7 @@ make_poparray_fixture <- function(time_dim = "year", area_dim = "area.name") {
     overwrite = TRUE,
     time_dim = time_dim,
     area_dim = area_dim,
+    dim_semantics = default_dim_semantics(names(dn), time_dim, area_dim),
     source = src,
     data_col = "population"
   )
@@ -42,7 +43,8 @@ make_poparray_fixture <- function(time_dim = "year", area_dim = "area.name") {
     data_col = "population",
     source = src,
     time_dim = time_dim,
-    area_dim = area_dim
+    area_dim = area_dim,
+    dim_semantics = default_dim_semantics(names(dn), time_dim, area_dim)
   )
 }
 
@@ -68,10 +70,11 @@ test_that("new_poparray enforces DelayedArray input and HDF5 backing", {
     dim = c(2, 2),
     dimnames = list(year = c("2020", "2021"), area.name = c("A", "B"))
   )
+  dsem <- default_dim_semantics(names(dimnames(arr)), "year", "area.name")
 
-  expect_error(new_poparray(arr), "DelayedArray")
+  expect_error(new_poparray(arr, dim_semantics = dsem), "DelayedArray")
   expect_error(
-    new_poparray(DelayedArray::DelayedArray(arr)),
+    new_poparray(DelayedArray::DelayedArray(arr), dim_semantics = dsem),
     "HDF5Array seed"
   )
 })

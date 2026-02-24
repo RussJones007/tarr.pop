@@ -28,11 +28,18 @@ make_filter_time_role_fixture <- function(time_labels = as.character(2010:2019))
     dimnames_list = dn,
     overwrite = TRUE,
     time_dim = "time",
-    area_dim = "area.name"
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "time", "area.name")
   )
   dx <- HDF5Array::HDF5Array(filepath = fp, name = "cube/population")
   dimnames(dx) <- dn
-  new_poparray(dx, dimnames_list = dn, time_dim = "time", area_dim = "area.name")
+  new_poparray(
+    dx,
+    dimnames_list = dn,
+    time_dim = "time",
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "time", "area.name")
+  )
 }
 
 make_filter_age_fixture <- function() {

@@ -170,6 +170,12 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
     if (identical(time_role(x), dim_nm)) time_dim_out <- name
     if (identical(area_role(x), dim_nm)) area_dim_out <- name
   }
+
+  dsem <- dim_semantics(x)
+  if (!is.null(name) && is.character(name) && length(name) == 1L && dim_nm %in% names(dsem)) {
+    names(dsem)[names(dsem) == dim_nm] <- name
+  }
+  dsem <- dsem[names(dn_new)]
   
   # ---- 10) Wrap into a new poparray ----
   h5_out <- HDF5Array::writeHDF5Array(arr_new)
@@ -179,7 +185,8 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
     data_col = data_col(x),
     source = get_source(x),
     time_dim = time_dim_out,
-    area_dim = area_dim_out
+    area_dim = area_dim_out,
+    dim_semantics = dsem
   )
   
   # refresh age_iv if age.char changed (if you store it as attribute)
