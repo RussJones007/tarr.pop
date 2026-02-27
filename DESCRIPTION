@@ -17,6 +17,7 @@ Authors@R:
 Depends: 
     R (>= 4.2.0)
 Imports:
+    S7,
     DelayedArray,
     HDF5Array,
     dplyr,
