@@ -168,6 +168,52 @@ test_that("HDF5 round-trip preserves dim_semantics", {
   expect_equal(dim_semantics(out), dim_semantics(pa))
 })
 
+test_that("interval dimensions derive overlap risk from labels", {
+  dn <- list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B"),
+    age.char = c("0-9", "5-14")
+  )
+  arr <- array(
+    as.numeric(seq_len(prod(unname(lengths(dn))))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+
+  dsem <- default_dim_semantics(names(dn), "year", "area.name")
+  dsem$age.char <- pa_update_dim_semantics(
+    dsem$age.char,
+    domain = "age",
+    scale_type = "interval",
+    partition_type = "set",
+    validated = TRUE
+  )
+
+  fp <- tempfile("dim_semantics_interval_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = arr,
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+
+  dx <- HDF5Array::HDF5Array(filepath = fp, name = "cube/population")
+  dimnames(dx) <- dn
+  pa <- new_poparray(
+    x = dx,
+    dimnames_list = dn,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+
+  expect_error(sum(pa), "Unsafe reduction blocked")
+  expect_silent(sum(pa[, , "0-9", drop = FALSE]))
+})
+
 test_that("ensure_dim_semantics coerces legacy entries", {
   dnames <- c("year", "area.name", "sex")
   legacy <- list(

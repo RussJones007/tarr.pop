@@ -32,7 +32,7 @@ setClass(
 #' @slot time_role Name of the time dimension.
 #' @slot area_role Name of the area dimension.
 #' @slot strata_roles Character vector of optional stratification dimensions.
-#' @slot dim_semantics Named list of per-dimension semantic contracts.
+#' @slot dim_semantics Named list of `DimSemantics` objects (one per dimension).
 #' @slot data_col Name used for value column in tabular coercions.
 #' @slot source Provenance metadata as a named list.
 #'
@@ -42,7 +42,7 @@ NULL
 
 #' Validate dim semantics contract
 #'
-#' @param dim_semantics Named list of per-dimension semantics.
+#' @param dim_semantics Named list of per-dimension `DimSemantics` objects.
 #' @param dim_names Character vector of dimension names.
 #' @param time_dim Time dimension name.
 #' @param area_dim Area dimension name.
@@ -303,7 +303,7 @@ setValidity("poparray", function(object) {
 #' @param source Optional metadata describing provenance.
 #' @param time_dim Single character string naming the time dimension.
 #' @param area_dim Single character string naming the area dimension.
-#' @param dim_semantics Named list of per-dimension semantic contracts.
+#' @param dim_semantics Named list of per-dimension `DimSemantics` objects.
 #' @param validate_semantics Logical scalar. Internal control for staged
 #'   migration; if `FALSE`, strict contract checks are skipped but
 #'   `dim_semantics` is still populated.
@@ -965,7 +965,7 @@ data_col <- function(x) {
 #' reductions and metadata persistence.
 #'
 #' @param x A poparray.
-#' @return Named list with one entry per dimension.
+#' @return Named list with one `DimSemantics` object per dimension.
 #' @export
 dim_semantics <- function(x) {
   if (!is(x, "poparray")) {

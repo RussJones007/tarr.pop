@@ -34,7 +34,7 @@ The design of `poparray` is governed by the following principles:
     -   exactly one **area dimension** (e.g. `area`, `county`, `tract`).
 
 2.  **All other dimensions are optional stratifications**\
-    Additional dimensions represent orthogonal (i.e., independent or non-overlapping) population stratifications and may
+    Additional dimensions represent analyst-defined stratifications and may
     include:
 
     -   demographic variables (age, sex, race, ethnicity),
@@ -96,11 +96,14 @@ The current class contract stores core semantics in S4 slots:
 -   `time_role` - name of the time dimension
 -   `area_role` - name of the area dimension
 -   `strata_roles` - character vector of all non-time/non-area dimensions
--   `dim_semantics` - named list with per-dimension fields:
-    -   `class` (`"partition"` or `"set"`)
-    -   `exclusive` (logical)
-    -   `overlapping` (logical)
-    -   `validated` (logical)
+-   `dim_semantics` - named list of `DimSemantics` objects with intrinsic fields:
+    -   `dim_name`
+    -   `domain`
+    -   `scale_type`
+    -   `partition_type`
+    -   `validated`
+    -   `overlap_levels`
+    -   `notes`
 -   `data_col` - value column name used for tabular coercion
 -   `source` - named provenance list (e.g. `note`, `source`, `updated`, `population_type`)
 
@@ -210,7 +213,9 @@ documentation and (ideally) warn for large objects.
 ### Semantic safeguards for reductions
 
 -   `sum(poparray)` is strict by default.
--   Any remaining dimension with `exclusive = FALSE` or `overlapping = TRUE` is treated as unsafe for naive aggregation.
+-   Any remaining dimension with derived overlap risk is treated as unsafe for naive aggregation.
+-   Overlap risk is derived at runtime from current labels plus intrinsic semantics (`partition_type`, `scale_type`,
+    `overlap_levels`), not from stored mutable overlap flags.
 -   Default behavior is to error to prevent accidental double counting in epidemiologic workflows.
 -   Overrides exist for advanced users:
     -   `strict = FALSE` (warn, then continue)

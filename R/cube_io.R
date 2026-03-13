@@ -248,7 +248,7 @@ pa_write_poparray_metadata <- function(filepath,
 #' @param level Compression level (0-9).
 #' @param time_dim Time dimension name.
 #' @param area_dim Area dimension name.
-#' @param dim_semantics Named list of per-dimension semantic contracts.
+#' @param dim_semantics Named list of per-dimension `DimSemantics` objects.
 #' @param source Source metadata list/vector.
 #' @param data_col Value column label.
 #' @param series_id Optional series identifier stored as `cube/metadata/series_id`.

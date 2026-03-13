@@ -4,7 +4,7 @@ An R package for retrieving and managing population figures for epidemiological 
 
 ### Overview
 
-`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily. The core data structure is **`poparray`**, an S3 class that wraps a `DelayedArray/HDF5Array` backend together with explicit, role-aware dimension metadata.
+`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily. The core data structure is **`poparray`**, an S4 class that extends `DelayedArray` with explicit, role-aware dimension metadata.
 
 ### Data sources
 

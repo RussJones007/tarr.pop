@@ -10,7 +10,7 @@ dim_semantics(x)
 \item{x}{A poparray.}
 }
 \value{
-Named list with one entry per dimension.
+Named list with one \code{DimSemantics} object per dimension.
 }
 \description{
 Returns the read-only per-dimension semantic contract used for guarded

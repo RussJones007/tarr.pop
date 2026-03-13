@@ -4,6 +4,13 @@ editor_options:
     wrap: 72
 ---
 
+## Status
+
+Archived design memo. The class described here has been implemented in
+`R/dim_semantics.r`, and some draft snippets below are no longer current.
+
+Use `R/dim_semantics.r` and generated man pages as the canonical contract.
+
 ## Create a new class in a new file called dim_semantics.r
 
 This will be an R S7 class called DimSemantics. The following fields are

@@ -29,7 +29,7 @@
 
 \item{area_dim}{Single character string naming the area dimension.}
 
-\item{dim_semantics}{Named list of per-dimension semantic contracts.}
+\item{dim_semantics}{Named list of per-dimension \code{DimSemantics} objects.}
 
 \item{validate_semantics}{Logical scalar. Internal control for staged
 migration; if \code{FALSE}, strict contract checks are skipped but

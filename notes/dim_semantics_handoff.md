@@ -1,5 +1,17 @@
 # Dim Semantics Handoff
 
+Status: Archived. Superseded by the `DimSemantics` object migration completed in
+March 2026.
+
+This handoff reflects an earlier design that used legacy fields such as
+`exclusive`/`overlapping`. Keep for history only.
+
+Current source of truth:
+
+1. `inst/DimSematics_Implement.md`
+2. `R/dim_semantics.r`
+3. `R/poparray_class.r` and related I/O/reduction files
+
 Date: 2026-02-23
 Branch context: new branch focused on semantic safeguards for `poparray`.
 

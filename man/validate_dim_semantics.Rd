@@ -7,7 +7,7 @@
 validate_dim_semantics(dim_semantics, dim_names, time_dim, area_dim)
 }
 \arguments{
-\item{dim_semantics}{Named list of per-dimension semantics.}
+\item{dim_semantics}{Named list of per-dimension \code{DimSemantics} objects.}
 
 \item{dim_names}{Character vector of dimension names.}
 

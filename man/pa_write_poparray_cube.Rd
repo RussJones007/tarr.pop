@@ -40,7 +40,7 @@ pa_write_poparray_cube(
 
 \item{area_dim}{Area dimension name.}
 
-\item{dim_semantics}{Named list of per-dimension semantic contracts.}
+\item{dim_semantics}{Named list of per-dimension \code{DimSemantics} objects.}
 
 \item{source}{Source metadata list/vector.}
 
