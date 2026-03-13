@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{label_factory}
 \alias{label_factory}
-\title{Factory function to generate wrapper functions for retrieving specific dimension labels from tarr_pop objects}
+\title{Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects}
 \usage{
 label_factory(dimension)
 }
@@ -10,5 +10,5 @@ label_factory(dimension)
 \item{dimension}{should be a valid dimension of the array}
 }
 \description{
-Factory function to generate wrapper functions for retrieving specific dimension labels from tarr_pop objects
+Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects
 }

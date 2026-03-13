@@ -13,7 +13,7 @@
 #' The ages dimension or column name is set to age groups and the count data (population) is summed in the new
 #' returned object.
 #'
-#' @param pop a tarr_pop (array) object with an age dimension name or column
+#' @param pop A poparray object with an age dimension name or column.
 #' @param age_groups The desired age groups to use, this can be a vector that [rage::as.age_group()] accepts such
 #' as a numeric or character vector.  Character vectors must conform to the format expected  by [rage::as.age_group()]
 #' @param dimension_name The dimension or column name that contains the age data.  "age.char" is the default.
@@ -112,7 +112,7 @@ group_ages <- function(pop, age_groups, dimension_name = "age.char"){
 #'
 #' Groups specified dimension into categories and sums population counts.
 #'
-#' @param arr An array such as a `tarr_pop` array or `tarr_pop_df` object
+#' @param arr A poparray object or similarly structured array-like object.
 #' @param dim_name Name of dimension to group
 #' @param groups Group specification which maps the new levels to those levels being collapsed. This can be a named list
 #'   with the name of the group and values being what will be in the group, or a named vector mapping each new group to

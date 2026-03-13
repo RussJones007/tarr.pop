@@ -28,7 +28,7 @@ areas(arr, ...)
 years(arr, ...)
 }
 \arguments{
-\item{arr}{a tarr_pop array object}
+\item{arr}{A poparray object.}
 
 \item{dimname}{the name of the dimension to get the labels return}
 
@@ -46,11 +46,11 @@ a function to assign x (an array), levels passed as values, to the specified dim
 }
 \description{
 Retrieves the labels for an array dimension with the option to remove one or more labels.
-These functions are useful when sub-setting arrays, especially when choosing elements from a tarr_pop array.
+These functions are useful when sub-setting arrays, especially when choosing elements from a poparray.
 }
 \details{
 Simple wrapper functions around dim_label() to retrieve and assign each dimension label values that are included in a
-tarr_pop object.
+poparray object.
 \itemize{
 \item ages() the age.char dimension, ages(arr) <- values
 \item sexes() the sex dimension
@@ -58,7 +58,7 @@ tarr_pop object.
 \item ethnicities() the ethnicity dimension
 \item areas() the areas (counties) dimension
 \item years() the years dimension. Note that this conflicts with the same function name from the lubridate package.
-The best practice is to use tarr.population::years()
+The best practice is to use tarr.pop::years()
 }
 }
 \examples{

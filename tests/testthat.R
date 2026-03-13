@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(tarr.population)
+library(tarr.pop)
 
-test_check("tarr.population")
+test_check("tarr.pop")

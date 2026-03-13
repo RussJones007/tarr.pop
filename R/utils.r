@@ -220,20 +220,20 @@ assign_array_levels <- function(arr, dimname, char_vec){
 #' Dimension Labels
 #'
 #'  Retrieves the labels for an array dimension with the option to remove one or more labels.
-#'  These functions are useful when sub-setting arrays, especially when choosing elements from a tarr_pop array.
+#'  These functions are useful when sub-setting arrays, especially when choosing elements from a poparray.
 #'
 #' Simple wrapper functions around dim_label() to retrieve and assign each dimension label values that are included in a
-#' tarr_pop object.
+#' poparray object.
 #' * ages() the age.char dimension, ages(arr) <- values
 #' * sexes() the sex dimension
 #' * races() the race dimension
 #' * ethnicities() the ethnicity dimension
 #' * areas() the areas (counties) dimension
 #' * years() the years dimension. Note that this conflicts with the same function name from the lubridate package.
-#'           The best practice is to use tarr.population::years()
+#'           The best practice is to use tarr.pop::years()
 #'
 #'
-#' @param arr  a tarr_pop array object
+#' @param arr A poparray object.
 #' @param dimname the name of the dimension to get the labels return
 #' @param remove is a character vector which will be removed when returning the labels for a dimension.
 #'   Alternatively this can be a regex expression created by the [stringr::regex()] function
@@ -284,7 +284,7 @@ dim_labels <- function(arr, dimname, remove = NULL){
 
 ## Functions to retrieve or assign dimension labels -------------------------
 
-#' Factory function to generate wrapper functions for retrieving specific dimension labels from tarr_pop objects
+#' Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects
 #' @param dimension should be a valid dimension of the array
 label_factory <- function(dimension){
   force(dimension)
@@ -386,12 +386,12 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
 
 
 
-#' Retrieve the tarr_pop source
+#' Retrieve the poparray source
 #'
-#' Gets the list of information contained in "source" attribute of 'x'.  Objects from tarr_pop have a source attributes
+#' Gets the list of information contained in the `source` attribute of `x`. Objects from poparray have source attributes
 #' as possibly other objects.
-#' @param x is the object with a source attribute, like a tarr_pop array.
-#' @return a named list of character  - names are note, source and updated.
+#' @param x is the object with a source attribute, like a poparray.
+#' @return A named character list with entries such as `note`, `source`, and `updated`.
 #' @keywords internal
 #' @export
 get_source <- function(obj){

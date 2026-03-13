@@ -2,18 +2,18 @@
 % Please edit documentation in R/utils.r
 \name{get_source}
 \alias{get_source}
-\title{Retrieve the tarr_pop source}
+\title{Retrieve the poparray source}
 \usage{
 get_source(obj)
 }
 \arguments{
-\item{x}{is the object with a source attribute, like a tarr_pop array.}
+\item{x}{is the object with a source attribute, like a poparray.}
 }
 \value{
-a named list of character  - names are note, source and updated.
+A named character list with entries such as \code{note}, \code{source}, and \code{updated}.
 }
 \description{
-Gets the list of information contained in "source" attribute of 'x'.  Objects from tarr_pop have a source attributes
+Gets the list of information contained in the \code{source} attribute of \code{x}. Objects from poparray have source attributes
 as possibly other objects.
 }
 \keyword{internal}

@@ -13,7 +13,7 @@ group_array_by_levels(
 )
 }
 \arguments{
-\item{arr}{An array such as a \code{tarr_pop} array or \code{tarr_pop_df} object}
+\item{arr}{A poparray object or similarly structured array-like object.}
 
 \item{dim_name}{Name of dimension to group}
 

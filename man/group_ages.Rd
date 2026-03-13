@@ -7,7 +7,7 @@
 group_ages(pop, age_groups, dimension_name = "age.char")
 }
 \arguments{
-\item{pop}{a tarr_pop (array) object with an age dimension name or column}
+\item{pop}{A poparray object with an age dimension name or column.}
 
 \item{age_groups}{The desired age groups to use, this can be a vector that \code{\link[rage:as.age_group]{rage::as.age_group()}} accepts such
 as a numeric or character vector.  Character vectors must conform to the format expected  by \code{\link[rage:as.age_group]{rage::as.age_group()}}}

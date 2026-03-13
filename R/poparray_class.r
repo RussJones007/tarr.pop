@@ -945,14 +945,14 @@ sd.poparray <- function(x, ..., na.rm = FALSE) {
 
 # Accessors / helpers ----------------------------------------------------------
 
-#' Get or set the name of the tarr_pop data column
+#' Get or set the name of the poparray data column
 #'
-#' tarr_pop objects have a "data_col" attribute that is used to name the column that holds the numeric data when
+#' poparray objects have a `data_col` attribute that is used to name the column that holds the numeric data when
 #' coercing to a data frame [as.data.frame()] or tibble [tibble::as_tibble()]. This convenience function can retrieve or
 #' set that attribute.
 #'
-#' @param x a tarr_pop object
-#' @return character string
+#' @param x A poparray object.
+#' @return Character string.
 #' @export
 data_col <- function(x) {
   if (is(x, "poparray")) return(x@data_col)

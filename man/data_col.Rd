@@ -3,20 +3,20 @@
 \name{data_col}
 \alias{data_col}
 \alias{data_col<-}
-\title{Get or set the name of the tarr_pop data column}
+\title{Get or set the name of the poparray data column}
 \usage{
 data_col(x)
 
 data_col(x, values) <- value
 }
 \arguments{
-\item{x}{a tarr_pop object}
+\item{x}{A poparray object.}
 }
 \value{
-character string
+Character string.
 }
 \description{
-tarr_pop objects have a "data_col" attribute that is used to name the column that holds the numeric data when
+poparray objects have a \code{data_col} attribute that is used to name the column that holds the numeric data when
 coercing to a data frame \code{\link[=as.data.frame]{as.data.frame()}} or tibble \code{\link[tibble:as_tibble]{tibble::as_tibble()}}. This convenience function can retrieve or
 set that attribute.
 }
