@@ -174,6 +174,7 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
   dsem <- dim_semantics(x)
   if (!is.null(name) && is.character(name) && length(name) == 1L && dim_nm %in% names(dsem)) {
     names(dsem)[names(dsem) == dim_nm] <- name
+    dsem[[name]] <- pa_update_dim_semantics(dsem[[name]], dim_name = name)
   }
   dsem <- dsem[names(dn_new)]
   

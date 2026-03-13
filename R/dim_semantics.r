@@ -133,7 +133,7 @@ new_dim_semantics <- function(dim_name,
 #' @return `TRUE` when `sem` is `DimSemantics` with `scale_type == "interval"`.
 #' @keywords internal
 pa_is_interval <- function(sem) {
-  inherits(sem, "DimSemantics") && identical(sem@scale_type, "interval")
+  S7::S7_inherits(sem, DimSemantics) && identical(sem@scale_type, "interval")
 }
 
 #' Predicate: set partition type
@@ -143,7 +143,7 @@ pa_is_interval <- function(sem) {
 #' @return `TRUE` when `sem` is `DimSemantics` with `partition_type == "set"`.
 #' @keywords internal
 pa_is_set <- function(sem) {
-  inherits(sem, "DimSemantics") && identical(sem@partition_type, "set")
+  S7::S7_inherits(sem, DimSemantics) && identical(sem@partition_type, "set")
 }
 
 #' Predicate: partition partition type
@@ -154,7 +154,7 @@ pa_is_set <- function(sem) {
 #'   `partition_type == "partition"`.
 #' @keywords internal
 pa_is_partition <- function(sem) {
-  inherits(sem, "DimSemantics") && identical(sem@partition_type, "partition")
+  S7::S7_inherits(sem, DimSemantics) && identical(sem@partition_type, "partition")
 }
 
 #' Update a DimSemantics object
@@ -167,7 +167,7 @@ pa_is_partition <- function(sem) {
 #' @return Updated `DimSemantics` object.
 #' @keywords internal
 pa_update_dim_semantics <- function(sem, ...) {
-  if (!inherits(sem, "DimSemantics")) {
+  if (!S7::S7_inherits(sem, DimSemantics)) {
     cli::cli_abort("{.arg sem} must inherit from {.cls DimSemantics}.")
   }
 

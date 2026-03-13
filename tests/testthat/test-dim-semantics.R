@@ -20,10 +20,9 @@ make_dim_semantics_fixture <- function(include_strata = TRUE, overlap_strata = T
 
   dsem <- default_dim_semantics(names(dn), "year", "area.name")
   if ("sex" %in% names(dsem) && isTRUE(overlap_strata)) {
-    dsem$sex <- list(
-      class = "set",
-      exclusive = FALSE,
-      overlapping = TRUE,
+    dsem$sex <- pa_update_dim_semantics(
+      dsem$sex,
+      overlap_levels = "Female",
       validated = TRUE
     )
   }
@@ -112,7 +111,7 @@ test_that("strict FALSE warns and allow_overlap TRUE proceeds", {
   expect_silent(sum(pa, allow_overlap = TRUE))
 })
 
-test_that("subsetting to one level marks dimension exclusive", {
+test_that("subsetting to one level removes overlap risk for selected set dims", {
   fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
   pa <- new_poparray(
     x = fx$dx,
@@ -124,8 +123,9 @@ test_that("subsetting to one level marks dimension exclusive", {
 
   sliced <- pa[, , "Female", drop = FALSE]
   dsem <- dim_semantics(sliced)
-  expect_true(dsem$sex$exclusive)
-  expect_false(dsem$sex$overlapping)
+  expect_true(S7::S7_inherits(dsem$sex, DimSemantics))
+  expect_identical(dsem$sex@overlap_levels, "Female")
+  expect_silent(sum(sliced))
 })
 
 test_that("dropped dimensions remove semantic entry", {
@@ -166,4 +166,24 @@ test_that("HDF5 round-trip preserves dim_semantics", {
 
   out <- open_poparray("dim_semantics_roundtrip")
   expect_equal(dim_semantics(out), dim_semantics(pa))
+})
+
+test_that("ensure_dim_semantics coerces legacy entries", {
+  dnames <- c("year", "area.name", "sex")
+  legacy <- list(
+    year = list(class = "partition", validated = TRUE),
+    area.name = list(class = "partition", validated = TRUE),
+    sex = list(class = "set", validated = TRUE)
+  )
+
+  out <- tarr.pop:::ensure_dim_semantics(
+    dim_semantics = legacy,
+    dim_names = dnames,
+    time_dim = "year",
+    area_dim = "area.name"
+  )
+
+  expect_true(all(vapply(out, function(x) S7::S7_inherits(x, DimSemantics), logical(1))))
+  expect_identical(out$year@partition_type, "partition")
+  expect_identical(out$sex@partition_type, "set")
 })

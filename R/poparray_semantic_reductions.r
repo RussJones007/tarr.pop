@@ -1,7 +1,57 @@
+#' @keywords internal
+#' @noRd
+pa_has_interval_overlap <- function(labels) {
+  if (!length(labels) || length(labels) <= 1L) {
+    return(FALSE)
+  }
+
+  bnd <- tryCatch(tp_age_bounds(as.character(labels)), error = function(e) NULL)
+  if (is.null(bnd) || anyNA(bnd$start) || anyNA(bnd$end)) {
+    return(TRUE)
+  }
+
+  ord <- order(bnd$start, bnd$end)
+  start <- bnd$start[ord]
+  end <- bnd$end[ord]
+
+  max_end <- end[[1L]]
+  if (length(start) > 1L) {
+    for (i in 2:length(start)) {
+      if (start[[i]] < max_end) {
+        return(TRUE)
+      }
+      max_end <- max(max_end, end[[i]])
+    }
+  }
+
+  FALSE
+}
+
+pa_dim_has_overlap_risk <- function(sem, labels) {
+  if (pa_is_partition(sem)) {
+    return(FALSE)
+  }
+
+  labs <- as.character(labels)
+  if (length(labs) <= 1L) {
+    return(FALSE)
+  }
+
+  if (pa_is_interval(sem)) {
+    return(pa_has_interval_overlap(labs))
+  }
+
+  if (length(sem@overlap_levels) > 0L) {
+    return(any(labs %in% sem@overlap_levels))
+  }
+
+  TRUE
+}
+
 #' Semantic guard for sum(poparray)
 #'
 #' Enforces strict epidemiologic safeguards by default: reductions are blocked
-#' when any remaining dimension is marked non-exclusive or overlapping.
+#' when any remaining dimension has derived overlap risk.
 #'
 #' @param x A poparray.
 #' @param ... Additional arguments. Supports `strict` (default `TRUE`) and
@@ -22,9 +72,10 @@ setMethod(
     dots[["allow_overlap"]] <- NULL
 
     dsem <- dim_semantics(x)
+    dn <- dimnames(x)
     is_unsafe <- vapply(
-      dsem,
-      function(ent) isFALSE(ent$exclusive) || isTRUE(ent$overlapping),
+      names(dsem),
+      function(nm) pa_dim_has_overlap_risk(dsem[[nm]], dn[[nm]]),
       logical(1)
     )
     unsafe_dims <- names(dsem)[is_unsafe]

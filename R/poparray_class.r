@@ -60,36 +60,22 @@ validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim)
     )
   }
 
-  required_fields <- c("class", "exclusive", "overlapping", "validated")
   for (nm in dim_names) {
     ent <- dim_semantics[[nm]]
-    if (is.null(ent) || !is.list(ent)) {
-      cli::cli_abort("dim_semantics entry for dimension {.val {nm}} must be a non-NULL list.")
-    }
-    missing_fields <- setdiff(required_fields, names(ent))
-    if (length(missing_fields) > 0L) {
+    if (is.null(ent) || !S7::S7_inherits(ent, DimSemantics)) {
       cli::cli_abort(
-        "dim_semantics[{.val {nm}}] is missing field(s): {.val {paste(missing_fields, collapse = ', ')}}."
+        "dim_semantics entry for dimension {.val {nm}} must inherit from {.cls DimSemantics}."
       )
     }
-    if (!is.character(ent$class) || length(ent$class) != 1L || is.na(ent$class) || !nzchar(ent$class)) {
-      cli::cli_abort("dim_semantics[{.val {nm}}]$class must be a single non-empty character value.")
-    }
-    if (!is.logical(ent$exclusive) || length(ent$exclusive) != 1L || is.na(ent$exclusive)) {
-      cli::cli_abort("dim_semantics[{.val {nm}}]$exclusive must be TRUE/FALSE.")
-    }
-    if (!is.logical(ent$overlapping) || length(ent$overlapping) != 1L || is.na(ent$overlapping)) {
-      cli::cli_abort("dim_semantics[{.val {nm}}]$overlapping must be TRUE/FALSE.")
-    }
-    if (!is.logical(ent$validated) || length(ent$validated) != 1L || is.na(ent$validated)) {
-      cli::cli_abort("dim_semantics[{.val {nm}}]$validated must be TRUE/FALSE.")
+    if (!identical(ent@dim_name, nm)) {
+      cli::cli_abort("dim_semantics[{.val {nm}}]@dim_name must equal {.val {nm}}.")
     }
   }
 
   for (required_partition in c(time_dim, area_dim)) {
-    if (!identical(dim_semantics[[required_partition]]$class, "partition")) {
+    if (!pa_is_partition(dim_semantics[[required_partition]])) {
       cli::cli_abort(
-        "Role dimension {.val {required_partition}} must have dim_semantics$class = {.val partition}."
+        "Role dimension {.val {required_partition}} must have partition_type = {.val partition}."
       )
     }
   }
@@ -97,14 +83,78 @@ validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim)
   invisible(TRUE)
 }
 
+pa_default_dim_domain <- function(dim_name, time_dim, area_dim) {
+  if (identical(dim_name, time_dim)) return("time")
+  if (identical(dim_name, area_dim)) return("area")
+  dim_name
+}
+
+pa_default_dim_scale_type <- function(dim_name, time_dim) {
+  if (identical(dim_name, time_dim)) return("interval")
+  "nominal"
+}
+
+pa_as_dim_semantics_entry <- function(entry, dim_name, time_dim, area_dim) {
+  default <- new_dim_semantics(
+    dim_name = dim_name,
+    domain = pa_default_dim_domain(dim_name, time_dim, area_dim),
+    scale_type = pa_default_dim_scale_type(dim_name, time_dim),
+    partition_type = if (dim_name %in% c(time_dim, area_dim)) "partition" else "set",
+    validated = dim_name %in% c(time_dim, area_dim),
+    overlap_levels = character(),
+    notes = character()
+  )
+
+  if (S7::S7_inherits(entry, DimSemantics)) {
+    if (!identical(entry@dim_name, dim_name)) {
+      return(pa_update_dim_semantics(entry, dim_name = dim_name))
+    }
+    return(entry)
+  }
+
+  if (is.null(entry) || !is.list(entry)) {
+    return(default)
+  }
+
+  if (all(c("domain", "scale_type", "partition_type", "validated") %in% names(entry))) {
+    return(new_dim_semantics(
+      dim_name = dim_name,
+      domain = as.character(entry$domain)[[1L]],
+      scale_type = as.character(entry$scale_type)[[1L]],
+      partition_type = as.character(entry$partition_type)[[1L]],
+      validated = as.logical(entry$validated)[[1L]],
+      overlap_levels = as.character(entry$overlap_levels %||% character()),
+      notes = as.character(entry$notes %||% character())
+    ))
+  }
+
+  if ("class" %in% names(entry)) {
+    cls <- as.character(entry$class)[[1L]]
+    pt <- switch(cls, partition = "partition", set = "set", "unknown")
+    return(new_dim_semantics(
+      dim_name = dim_name,
+      domain = pa_default_dim_domain(dim_name, time_dim, area_dim),
+      scale_type = pa_default_dim_scale_type(dim_name, time_dim),
+      partition_type = pt,
+      validated = as.logical(entry$validated %||% FALSE)[[1L]],
+      overlap_levels = character(),
+      notes = character()
+    ))
+  }
+
+  default
+}
+
 default_dim_semantics <- function(dim_names, time_dim, area_dim) {
   out <- lapply(dim_names, function(d) {
-    is_partition <- d %in% c(time_dim, area_dim)
-    list(
-      class = if (is_partition) "partition" else "set",
-      exclusive = is_partition,
-      overlapping = !is_partition,
-      validated = is_partition
+    new_dim_semantics(
+      dim_name = d,
+      domain = pa_default_dim_domain(d, time_dim, area_dim),
+      scale_type = pa_default_dim_scale_type(d, time_dim),
+      partition_type = if (d %in% c(time_dim, area_dim)) "partition" else "set",
+      validated = d %in% c(time_dim, area_dim),
+      overlap_levels = character(),
+      notes = character()
     )
   })
   names(out) <- dim_names
@@ -122,9 +172,12 @@ ensure_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim) {
   }
   out <- defaults
   for (nm in intersect(dim_names, in_names)) {
-    if (!is.null(dim_semantics[[nm]]) && is.list(dim_semantics[[nm]])) {
-      out[[nm]] <- dim_semantics[[nm]]
-    }
+    out[[nm]] <- pa_as_dim_semantics_entry(
+      entry = dim_semantics[[nm]],
+      dim_name = nm,
+      time_dim = time_dim,
+      area_dim = area_dim
+    )
   }
   out
 }
@@ -133,13 +186,8 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames)
   before_names <- names(before_dimnames)
   after_names <- names(after_dimnames)
   out <- dim_semantics[after_names]
-  before_sizes <- lengths(before_dimnames)
-  after_sizes <- lengths(after_dimnames)
-  for (nm in after_names) {
-    if (isTRUE(after_sizes[[nm]] == 1L) && isTRUE(before_sizes[[nm]] > 1L)) {
-      out[[nm]]$exclusive <- TRUE
-      out[[nm]]$overlapping <- FALSE
-    }
+  if (!identical(before_names[before_names %in% after_names], after_names)) {
+    names(out) <- after_names
   }
   out
 }
@@ -219,6 +267,15 @@ setValidity("poparray", function(object) {
   }
   if (!identical(names(object@dim_semantics), names(dn))) {
     return("slot 'dim_semantics' names must exactly match dimension names.")
+  }
+  for (nm in names(dn)) {
+    ent <- object@dim_semantics[[nm]]
+    if (!S7::S7_inherits(ent, DimSemantics)) {
+      return("slot 'dim_semantics' entries must inherit from DimSemantics.")
+    }
+    if (!identical(ent@dim_name, nm)) {
+      return("each dim_semantics entry must have @dim_name matching its dimension name.")
+    }
   }
   d <- lengths(dn)
   if (length(dn) != length(d)) {

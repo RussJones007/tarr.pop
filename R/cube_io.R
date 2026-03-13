@@ -149,10 +149,13 @@ pa_write_dim_semantics_fieldwise <- function(filepath, dim_semantics, dim_order)
     base <- paste0("cube/metadata/dim_semantics/", d)
     pa_h5_create_group(filepath, base)
     ent <- dim_semantics[[d]]
-    pa_h5_write_dataset(filepath, paste0(base, "/class"), as.character(ent$class))
-    pa_h5_write_dataset(filepath, paste0(base, "/exclusive"), as.character(ent$exclusive))
-    pa_h5_write_dataset(filepath, paste0(base, "/overlapping"), as.character(ent$overlapping))
-    pa_h5_write_dataset(filepath, paste0(base, "/validated"), as.character(ent$validated))
+    pa_h5_write_dataset(filepath, paste0(base, "/dim_name"), as.character(ent@dim_name))
+    pa_h5_write_dataset(filepath, paste0(base, "/domain"), as.character(ent@domain))
+    pa_h5_write_dataset(filepath, paste0(base, "/scale_type"), as.character(ent@scale_type))
+    pa_h5_write_dataset(filepath, paste0(base, "/partition_type"), as.character(ent@partition_type))
+    pa_h5_write_dataset(filepath, paste0(base, "/validated"), as.character(ent@validated))
+    pa_h5_write_dataset(filepath, paste0(base, "/overlap_levels"), as.character(ent@overlap_levels))
+    pa_h5_write_dataset(filepath, paste0(base, "/notes"), as.character(ent@notes))
   }
   invisible(TRUE)
 }

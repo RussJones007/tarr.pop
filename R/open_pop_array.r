@@ -210,10 +210,12 @@ read_source_from_cube <- function(path) {
 #'
 #' @param path HDF5 file path.
 #' @param dim_order Character dimension order vector.
+#' @param time_dim Time role dimension name.
+#' @param area_dim Area role dimension name.
 #'
 #' @return Named list with one semantic entry per dimension.
 #' @keywords internal
-read_dim_semantics_from_cube <- function(path, dim_order) {
+read_dim_semantics_from_cube <- function(path, dim_order, time_dim, area_dim) {
   info <- rhdf5::h5ls(path)
   has_group <- any(info$group == "/cube/metadata" & info$name == "dim_semantics")
   if (!isTRUE(has_group)) {
@@ -221,22 +223,50 @@ read_dim_semantics_from_cube <- function(path, dim_order) {
       "Missing required metadata group {.val cube/metadata/dim_semantics}. This cube must be migrated before opening."
     )
   }
-  required_fields <- c("class", "exclusive", "overlapping", "validated")
   out <- lapply(dim_order, function(d) {
     base <- paste0("cube/metadata/dim_semantics/", d)
-    for (fld in required_fields) {
+
+    new_fields <- c("domain", "scale_type", "partition_type", "validated", "overlap_levels", "notes")
+    has_new <- all(vapply(new_fields, function(fld) {
+      h5_dataset_exists(path, paste0(base, "/", fld))
+    }, logical(1)))
+
+    if (isTRUE(has_new)) {
+      dim_name <- if (h5_dataset_exists(path, paste0(base, "/dim_name"))) {
+        h5_read_scalar_chr(path, paste0(base, "/dim_name"))
+      } else {
+        d
+      }
+
+      return(new_dim_semantics(
+        dim_name = dim_name,
+        domain = h5_read_scalar_chr(path, paste0(base, "/domain")),
+        scale_type = h5_read_scalar_chr(path, paste0(base, "/scale_type")),
+        partition_type = h5_read_scalar_chr(path, paste0(base, "/partition_type")),
+        validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true",
+        overlap_levels = as.character(rhdf5::h5read(path, paste0(base, "/overlap_levels"))),
+        notes = as.character(rhdf5::h5read(path, paste0(base, "/notes")))
+      ))
+    }
+
+    legacy_fields <- c("class", "validated")
+    for (fld in legacy_fields) {
       ds <- paste0(base, "/", fld)
       if (!h5_dataset_exists(path, ds)) {
-        cli::cli_abort(
-          "Missing required dim_semantics dataset {.val {ds}}. This cube must be migrated before opening."
-        )
+        cli::cli_abort("Missing dim_semantics dataset {.val {ds}}.")
       }
     }
-    list(
-      class = h5_read_scalar_chr(path, paste0(base, "/class")),
-      exclusive = tolower(h5_read_scalar_chr(path, paste0(base, "/exclusive"))) == "true",
-      overlapping = tolower(h5_read_scalar_chr(path, paste0(base, "/overlapping"))) == "true",
-      validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true"
+
+    cls <- h5_read_scalar_chr(path, paste0(base, "/class"))
+    pt <- switch(cls, partition = "partition", set = "set", "unknown")
+    new_dim_semantics(
+      dim_name = d,
+      domain = pa_default_dim_domain(d, time_dim, area_dim),
+      scale_type = pa_default_dim_scale_type(d, time_dim),
+      partition_type = pt,
+      validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true",
+      overlap_levels = character(),
+      notes = character()
     )
   })
   names(out) <- dim_order
@@ -317,7 +347,7 @@ open_poparray <- function(series_id,
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)
   dimn  <- read_dimnames_from_cube(path)
   roles <- read_roles_from_cube(path)
-  dsem  <- read_dim_semantics_from_cube(path, names(dimn))
+  dsem  <- read_dim_semantics_from_cube(path, names(dimn), roles$time, roles$area)
   src   <- read_source_from_cube(path)
 
   validate_labels_against_cube(h5, dimn, series_id)
