@@ -2,7 +2,7 @@
 % Please edit documentation in R/open_pop_array.r
 \name{read_registry_row}
 \alias{read_registry_row}
-\title{Read registry row from one migrated cube file}
+\title{Backward-compatible alias for legacy registry row reader}
 \usage{
 read_registry_row(path)
 }
@@ -13,6 +13,6 @@ read_registry_row(path)
 One-row data.frame.
 }
 \description{
-Read registry row from one migrated cube file
+Backward-compatible alias for legacy registry row reader
 }
 \keyword{internal}

@@ -11,6 +11,6 @@ data.frame of available series.
 }
 \description{
 Scans \verb{inst/extdata/*.h5} and builds the registry from canonical
-\verb{cube/metadata/*} metadata in migrated files.
+\verb{cube/metadata/*} fields in migrated files.
 }
 \keyword{internal}

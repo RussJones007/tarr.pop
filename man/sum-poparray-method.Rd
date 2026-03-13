@@ -20,5 +20,5 @@ Numeric scalar.
 }
 \description{
 Enforces strict epidemiologic safeguards by default: reductions are blocked
-when any remaining dimension is marked non-exclusive or overlapping.
+when any remaining dimension has derived overlap risk.
 }

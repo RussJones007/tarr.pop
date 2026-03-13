@@ -34,23 +34,26 @@ to list). Expected fields include \code{note}, \code{source}, and \code{updated}
 A poparray_projection object
 }
 \description{
-An S3 class representing a time-based projection. The class wraps a \code{DelayedArray}/\code{HDF5Array}
-in member \code{handle}, and stores uncertainty as a named \code{stat} dimension with levels
+An S4 class representing a time-based projection. The class extends
+\code{DelayedArray} and stores uncertainty as a named \code{stat} dimension with levels
 \code{projection} and \code{std_error}. Objects are typically created by \code{\link[=project]{project()}}.
 }
 \section{Structure}{
 
-A \code{poparray_projection} object is a list with delayed cube member \code{handle}.
+A \code{poparray_projection} object is an S4 subclass of \code{DelayedArray}.
 The cube includes time/area/strata dimensions plus \code{stat}.
 
-Attributes included:
+Slots included:
 \itemize{
-\item \strong{level} is the confidence level used
-\item \strong{methods_used} are the unique time series forecasting methods used across all cells
-\item \strong{n_fallback} are the number of cells that required fallback as the forecasting method .
-\item \strong{source} is the  "projected from" plus the original poparray source
-\item \strong{base_years} are the base years or time unit used to project/forecast
-\item \strong{created} is the date and time stamp at time the object was created.
+\item \strong{time_role} time dimension name.
+\item \strong{area_role} area dimension name.
+\item \strong{strata_roles} non-time/non-area/non-stat dimensions.
+\item \strong{level} confidence level used by the projection.
+\item \strong{method} projection method (ARIMA/ETS/CAGR).
+\item \strong{source} provenance metadata list.
+\item \strong{base_years} base years or time units used for projection/forecast.
+\item \strong{data_col} value column name for tabular coercion.
+\item \strong{created} creation timestamp.
 }
 }
 

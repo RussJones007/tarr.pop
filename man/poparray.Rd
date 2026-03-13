@@ -17,6 +17,8 @@ explicit role and metadata slots.
 
 \item{\code{strata_roles}}{Character vector of optional stratification dimensions.}
 
+\item{\code{dim_semantics}}{Named list of per-dimension semantic contracts.}
+
 \item{\code{data_col}}{Name used for value column in tabular coercions.}
 
 \item{\code{source}}{Provenance metadata as a named list.}

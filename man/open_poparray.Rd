@@ -31,5 +31,6 @@ The function reads all semantic metadata from the same HDF5 file:
 \verb{cube/metadata/dimnames/*},
 \item dimension roles from \verb{cube/metadata/roles/*},
 \item source/provenance fields from \verb{cube/metadata/source/*}.
+\item per-dimension semantics from \verb{cube/metadata/dim_semantics/*/*}.
 }
 }

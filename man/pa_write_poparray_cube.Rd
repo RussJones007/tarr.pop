@@ -13,6 +13,7 @@ pa_write_poparray_cube(
   level = 6L,
   time_dim = "year",
   area_dim = "area.name",
+  dim_semantics = NULL,
   source = NULL,
   data_col = "population",
   series_id = NULL,
@@ -38,6 +39,8 @@ pa_write_poparray_cube(
 \item{time_dim}{Time dimension name.}
 
 \item{area_dim}{Area dimension name.}
+
+\item{dim_semantics}{Named list of per-dimension semantic contracts.}
 
 \item{source}{Source metadata list/vector.}
 

@@ -4,12 +4,16 @@
 \alias{read_dim_semantics_from_cube}
 \title{Read dim_semantics metadata from migrated cube}
 \usage{
-read_dim_semantics_from_cube(path, dim_order)
+read_dim_semantics_from_cube(path, dim_order, time_dim, area_dim)
 }
 \arguments{
 \item{path}{HDF5 file path.}
 
 \item{dim_order}{Character dimension order vector.}
+
+\item{time_dim}{Time role dimension name.}
+
+\item{area_dim}{Area role dimension name.}
 }
 \value{
 Named list with one semantic entry per dimension.
