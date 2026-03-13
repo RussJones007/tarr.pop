@@ -592,22 +592,20 @@ summary.poparray <- function(object, ...) {
   ret
 }
 
-
-
-
 # Indexing operator ----------------------------------------------------
 # 
-#' Subset a poparray
-#'
-#' Subsets the poparray object and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
-#' a `poparray`. If `drop = TRUE` and subsetting would drop either the `dimroles` time or area dimensions , the
-#' method returns the underlying subsetted `DelayedArray` instead of a `poparray`.
-#' 
-#' @param x A poparray.
-#' @param ... Indices, either positional (like base arrays) or named by dimension (e.g., `x[year = "2020", sex =
-#'   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
-#' @param drop Logical; passed to the backend `[` call.
-#'
+# Subset a poparray
+#
+# Subsets the poparray object and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
+# a `poparray`. If `drop = TRUE` and subsetting would drop either the `dimroles` time or area dimensions , the
+# method returns the underlying subsetted `DelayedArray` instead of a `poparray`.
+# 
+# @param x A poparray.
+# @param ... Indices, either positional (like base arrays) or named by dimension (e.g., `x[year = "2020", sex =
+#   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
+# @param drop Logical; passed to the backend `[` call.
+#
+
 # Coerce to poparray' ---------------------------------------------------------------------------------------------
 
 #' Coerce to a poparray Object

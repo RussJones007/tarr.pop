@@ -3,7 +3,7 @@
 \name{as.poparray}
 \alias{as.poparray}
 \alias{as.poparray.array}
-\title{Subset a poparray}
+\title{Coerce to a poparray Object}
 \usage{
 as.poparray(x, data_col = "population", ...)
 
@@ -33,18 +33,10 @@ poparray cube schema.}
 \item{chunkdim}{Optional HDF5 chunk dimensions, or \code{"auto"}.}
 
 \item{level}{Compression level (0-9) passed to \code{writeHDF5Array()}.}
-
-\item{drop}{Logical; passed to the backend \code{[} call.
-
-Coerce to a poparray Object
-
-Used to coerce a data frame or an array/table to a poparray object.}
 }
 \value{
 a poparray classed object
 }
 \description{
-Subsets the poparray object and updates the stored dimnames metadata. By default (\code{drop = FALSE}) the result remains
-a \code{poparray}. If \code{drop = TRUE} and subsetting would drop either the \code{dimroles} time or area dimensions , the
-method returns the underlying subsetted \code{DelayedArray} instead of a \code{poparray}.
+Used to coerce a data frame or an array/table to a poparray object.
 }
