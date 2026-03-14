@@ -26,8 +26,12 @@ setClass(
 
 #' Poparray class
 #'
-#' S4 class for population cubes. `poparray` extends `DelayedArray` and adds
-#' explicit role and metadata slots.
+#' S4 class for population arrays or often referred to as cubes. `poparray` extends the Bioconductor `DelayedArray` and
+#' adds explicit role and metadata slots. Memory is saved and speed increased by opening a poparray cube from disk and
+#' manipulating the dimensions/metadata before realizing (loading) the selected array/cube in memory.  Typical work flow is
+#' to open the cube via the [open_poparray()] function, filtering the dimension levels that are needed through the `[`
+#' index operator or filter() function.  Dimension levels can also be collapsed using [collapse_dim()].  The cube can
+#' then be relaized [as.array()], [as.data.frame()], or [tibble::as_tibble()].
 #'
 #' @slot time_role Name of the time dimension.
 #' @slot area_role Name of the area dimension.
