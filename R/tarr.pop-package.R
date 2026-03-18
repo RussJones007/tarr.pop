@@ -1,8 +1,10 @@
 #' tarr.pop-package.R
 #'
-#' Contains the population figures for Texas, and all counties. The population data sets contain age, sex, race, and
-#' ethnicity (asre) data. The estimated population by Zip Code Tabulation Areas (zcta) are also available.  Refer to the
-#' [population] help topic for what is contained and data format for the data sets.
+#' The package provides a disk-based approach for storing and working with large
+#' population arrays. It includes population figures for Texas and its counties,
+#' with data sets covering age, sex, race, and ethnicity (ASRE). Estimated
+#' population by Zip Code Tabulation Area (ZCTA) is also available. Refer to the
+#' [population] help topic for the available data sets and their formats.
 #'
 #' @section Package functions:
 #' * county_population() for convenient access to the county asre data sets for years of interest.

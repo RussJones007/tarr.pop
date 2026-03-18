@@ -4,7 +4,8 @@ An R package for retrieving and managing population figures for epidemiological 
 
 ### Overview
 
-`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily. The core data structure is **`poparray`**, an S4 class that extends `DelayedArray` with explicit, role-aware dimension metadata.
+`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily.
+The core data structure is **`poparray`**, an S4 class that extends `DelayedArray` with explicit, role-aware dimension metadata.
 
 ### Data sources
 
@@ -16,7 +17,8 @@ The package integrates population data from the following sources:
 
 ### Storage model
 
-Population cubes can be large, so numeric data are typically stored in HDF5-backed arrays (via `HDF5Array`/`DelayedArray`) to avoid loading full datasets into memory. Semantic meaning (dimension roles, provenance, and optional geographic lookup tables) is stored as metadata/attributes rather than encoded as additional array dimensions.
+Population cubes can be large, so numeric data are typically stored in HDF5-backed arrays (via `HDF5Array`/`DelayedArray`) to avoid loading full datasets into memory.
+Semantic meaning (dimension roles, provenance, and optional geographic lookup tables) is stored as metadata/attributes rather than encoded as additional array dimensions.
 
 ### poparray: core concept
 
@@ -28,15 +30,15 @@ Design principles:
 -   Time and area are structural invariants.
 -   Other dimensions are optional stratifications and are not assumed to be present.
 -   Hierarchical geography is not represented as multiple dimensions; hierarchy belongs in metadata (e.g., a lookup table) and is used for explicit aggregation/collapse operations.
--   Laziness is the default; realization is avoided unless explicitly documented (e.g., tabular coercions, some summaries/plots).
+-   Laziness is the default; realization is avoided unless explicitly documented (e.g., tabular coercion, some summaries/plots).
 
 ### Core capabilities
 
 `poparray` supports:
 
 -   Array-like interface: `dim()`, `length()`, `dimnames()`, `names()`.
--   Printing: `print()` shows a compact summary including roles, dimensions, and the configured value column used for tabular coercions.
--   Filtering/subsetting: `[` preserves laziness and updates dimension metadata consistently (default `drop = FALSE`), and `filter()` can be used via a `poparray` method.
+-   Printing: `print()` shows a compact summary including roles, dimensions, and the configured value column used for tabular coercion.
+-   Filtering/sub-setting: `[` preserves laziness and updates dimension metadata consistently (default `drop = FALSE`), and `filter()` can be used via a `poparray` method.
 -   Collapsing dimensions: stratification dimensions may be collapsed freely; collapsing time/area should be explicit and metadata-driven, and area collapsing uses lookup tables (replacing—not adding—the area dimension).
 -   Splitting: `split(x, f)` returns a named list of slices by a chosen dimension (e.g., by year or by area).
 -   Tabular coercion (**EAGER**): `as.data.frame(x)` and `tibble::as_tibble(x)` realize the selected slice; subset first for large cubes.

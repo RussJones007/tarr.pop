@@ -34,8 +34,7 @@ The design of `poparray` is governed by the following principles:
     -   exactly one **area dimension** (e.g. `area`, `county`, `tract`).
 
 2.  **All other dimensions are optional stratifications**\
-    Additional dimensions represent analyst-defined stratifications and may
-    include:
+    Additional dimensions represent analyst-defined stratifications and may include:
 
     -   demographic variables (age, sex, race, ethnicity),
     -   socioeconomic variables (income bracket, education level),

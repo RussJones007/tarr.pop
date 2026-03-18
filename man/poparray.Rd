@@ -5,8 +5,12 @@
 \alias{poparray}
 \title{Poparray class}
 \description{
-S4 class for population cubes. \code{poparray} extends \code{DelayedArray} and adds
-explicit role and metadata slots.
+S4 class for population arrays or often referred to as cubes. \code{poparray} extends the Bioconductor \code{DelayedArray} and
+adds explicit role and metadata slots. Memory is saved and speed increased by opening a poparray cube from disk and
+manipulating the dimensions/metadata before realizing (loading) the selected array/cube in memory.  Typical work flow is
+to open the cube via the \code{\link[=open_poparray]{open_poparray()}} function, filtering the dimension levels that are needed through the \code{[}
+index operator or filter() function.  Dimension levels can also be collapsed using \code{\link[=collapse_dim]{collapse_dim()}}.  The cube can
+then be relaized \code{\link[=as.array]{as.array()}}, \code{\link[=as.data.frame]{as.data.frame()}}, or \code{\link[tibble:as_tibble]{tibble::as_tibble()}}.
 }
 \section{Slots}{
 
