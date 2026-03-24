@@ -7,9 +7,11 @@ editor_options:
 ## Status
 
 Archived design memo. The class described here has been implemented in
-`R/dim_semantics.r`, and some draft snippets below are no longer current.
+`R/dim_semantics.r`, and some draft snippets below are no longer
+current.
 
-Use `R/dim_semantics.r` and generated man pages as the canonical contract.
+Use `R/dim_semantics.r` and generated man pages as the canonical
+contract.
 
 ## Create a new class in a new file called dim_semantics.r
 
@@ -54,7 +56,8 @@ documentation.
 -   validated must be length 1 logical and not NA.
 
 -   If partition_type == "partition" then overlap_levels must be length
-    0.
+
+    0.  
 
 -   (Because overlap-causers don’t make sense for a mutually exclusive
     partition.)
