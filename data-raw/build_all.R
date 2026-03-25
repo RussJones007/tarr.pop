@@ -62,14 +62,14 @@ build_tdc(paths    = maybe_paths)
 
 # population list variable
 population <- list(
-  "texas.demogrpahic.center" = list(
-    "estimates"   = "tdc_estimates_county_mixed",
-    "projections" = "tdc_projections_county_1y"
+  "texas.demographic.center" = list(
+    "estimates"   = "tdc_estimates_county",
+    "projections" = "tdc_projections_county"
   ),
   "census.bureau" = list(
     "census"    = "census_decennial_county_1y",
     "estimates" = "census_estimates_county_5y",
-    "zcta"      = "census_estimates_zcta_5y"
+    "zcta"      = "census_zcta_estimates"
   ),
   "seer"  = list(
     "single_age" = "seer_estimates_county_1y",

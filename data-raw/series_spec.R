@@ -224,13 +224,21 @@ tarr_series_specs <- function() {
 }
 
 tarr_population_list_from_specs <- function(specs = tarr_series_specs()) {
-  by_source <- split(specs, vapply(specs, `[[`, character(1), "source_key"))
-  lapply(by_source, function(src_specs) {
-    setNames(
-      vapply(src_specs, `[[`, character(1), "filename"),
-      vapply(src_specs, `[[`, character(1), "type_key")
+  list(
+    "texas.demographic.center" = list(
+      "estimates" = specs$tdc_estimates_county$series_id,
+      "projections" = specs$tdc_projections_county$series_id
+    ),
+    "census.bureau" = list(
+      "census" = specs$census_decennial_county_1y$series_id,
+      "estimates" = specs$census_estimates_county_5y$series_id,
+      "zcta" = specs$census_zcta_estimates$series_id
+    ),
+    "seer" = list(
+      "single_age" = specs$seer_estimates_county_1y$series_id,
+      "grouped_age" = specs$seer_estimates_county_5y$series_id
     )
-  })
+  )
 }
 
 tarr_series_registry_from_specs <- function(specs = tarr_series_specs()) {
