@@ -247,12 +247,145 @@ write_metadata_group <- function(path, row, dimn) {
 default_dim_domain <- function(dim_name, time_dim, area_dim) {
   if (identical(dim_name, time_dim)) return("time")
   if (identical(dim_name, area_dim)) return("area")
+  if (identical(dim_name, "age.char")) return("age")
   dim_name
 }
 
 default_dim_scale_type <- function(dim_name, time_dim) {
-  if (identical(dim_name, time_dim)) return("interval")
+  if (identical(dim_name, time_dim) || identical(dim_name, "age.char")) return("interval")
   "nominal"
+}
+
+normalize_label <- function(x) {
+  out <- tolower(trimws(as.character(x)))
+  out <- gsub("\\s+", " ", out)
+  out
+}
+
+parse_age_interval <- function(label) {
+  x <- normalize_label(label)
+  x <- gsub("\\s+", "", x)
+
+  if (!nzchar(x) || identical(x, "all")) {
+    return(c(0, Inf))
+  }
+  if (grepl("^<\\d+$", x)) {
+    end <- as.numeric(sub("^<", "", x))
+    return(c(0, end))
+  }
+  if (grepl("^\\d+\\+$", x)) {
+    start <- as.numeric(sub("\\+$", "", x))
+    return(c(start, Inf))
+  }
+  if (grepl("^\\d+\\-$", x)) {
+    start <- as.numeric(sub("\\-$", "", x))
+    return(c(start, Inf))
+  }
+  if (grepl("^\\d+\\-\\d+$", x)) {
+    parts <- strsplit(x, "-", fixed = TRUE)[[1L]]
+    start <- as.numeric(parts[[1L]])
+    end <- as.numeric(parts[[2L]]) + 1
+    return(c(start, end))
+  }
+  if (grepl("^\\d+$", x)) {
+    start <- as.numeric(x)
+    return(c(start, start + 1))
+  }
+  c(NA_real_, NA_real_)
+}
+
+age_levels_overlap <- function(levels) {
+  iv <- t(vapply(levels, parse_age_interval, numeric(2)))
+  ok <- stats::complete.cases(iv)
+  if (sum(ok) <= 1L) return(FALSE)
+
+  iv <- iv[ok, , drop = FALSE]
+  ord <- order(iv[, 1], iv[, 2])
+  iv <- iv[ord, , drop = FALSE]
+
+  current_end <- iv[1, 2]
+  for (i in 2:nrow(iv)) {
+    if (iv[i, 1] < current_end) return(TRUE)
+    current_end <- max(current_end, iv[i, 2])
+  }
+  FALSE
+}
+
+race_levels_overlap <- function(levels) {
+  labs <- normalize_label(levels)
+  any(grepl("plus other|or in combination", labs))
+}
+
+derive_partition_type <- function(dim_name, levels, time_dim, area_dim) {
+  if (identical(dim_name, time_dim) || identical(dim_name, area_dim)) return("partition")
+  if (dim_name %in% c("sex", "ethnicity")) return("partition")
+  if (dim_name %in% c("age", "age.char")) {
+    if (age_levels_overlap(levels)) "set" else "partition"
+  } else if (identical(dim_name, "race")) {
+    if (race_levels_overlap(levels)) "set" else "partition"
+  } else {
+    "set"
+  }
+}
+
+derive_overlap_levels <- function(dim_name, levels) {
+  if (dim_name %in% c("age", "age.char")) {
+    if (age_levels_overlap(levels)) as.character(levels) else character()
+  } else if (identical(dim_name, "race")) {
+    labs <- normalize_label(levels)
+    as.character(levels[grepl("plus other|or in combination", labs)])
+  } else {
+    character()
+  }
+}
+
+canonicalize_dim_semantics_entry <- function(ent, dim_name, levels, time_dim, area_dim) {
+  out <- ent
+  out$dim_name <- dim_name
+
+  if (is.null(out$domain) || !nzchar(as.character(out$domain[[1L]]))) {
+    out$domain <- default_dim_domain(dim_name, time_dim, area_dim)
+  }
+
+  if (identical(dim_name, "age.char")) {
+    out$scale_type <- "interval"
+  } else if (is.null(out$scale_type) || !nzchar(as.character(out$scale_type[[1L]]))) {
+    out$scale_type <- default_dim_scale_type(dim_name, time_dim)
+  }
+
+  if (identical(dim_name, time_dim) || identical(dim_name, area_dim) || dim_name %in% c("sex", "ethnicity")) {
+    out$partition_type <- "partition"
+    out$overlap_levels <- character()
+    return(out)
+  }
+
+  if (is.null(out$partition_type) || !nzchar(as.character(out$partition_type[[1L]])) || identical(out$partition_type, "unknown")) {
+    out$partition_type <- derive_partition_type(dim_name, levels, time_dim, area_dim)
+  }
+
+  if (identical(dim_name, "age.char") && identical(out$partition_type, "set") && length(out$overlap_levels) == 0L) {
+    out$overlap_levels <- derive_overlap_levels(dim_name, levels)
+  }
+
+  if (identical(dim_name, "race") && identical(out$partition_type, "set") && length(out$overlap_levels) == 0L) {
+    out$overlap_levels <- derive_overlap_levels(dim_name, levels)
+  }
+
+  out
+}
+
+canonicalize_dim_semantics <- function(dim_semantics, dimn, time_dim, area_dim) {
+  out <- lapply(names(dimn), function(d) {
+    canonicalize_dim_semantics_entry(
+      ent = dim_semantics[[d]],
+      dim_name = d,
+      levels = dimn[[d]],
+      time_dim = time_dim,
+      area_dim = area_dim
+    )
+  })
+  names(out) <- names(dimn)
+  out
 }
 
 read_current_dimnames <- function(path) {
@@ -298,17 +431,43 @@ read_current_registry <- function(path) {
 read_legacy_dim_semantics <- function(path, dim_order, time_dim, area_dim) {
   out <- lapply(dim_order, function(d) {
     base <- paste0("cube/metadata/dim_semantics/", d)
-    cls <- h5_read_scalar_if_present(path, paste0(base, "/class"), default = "unknown")
-    partition_type <- switch(cls, partition = "partition", set = "set", "unknown")
     validated <- tolower(h5_read_scalar_if_present(path, paste0(base, "/validated"), default = "false")) == "true"
+    levels <- as.character(rhdf5::h5read(path, paste0("cube/metadata/dimnames/", d)))
+    partition_type <- derive_partition_type(
+      dim_name = d,
+      levels = levels,
+      time_dim = time_dim,
+      area_dim = area_dim
+    )
+    overlap_levels <- derive_overlap_levels(
+      dim_name = d,
+      levels = levels
+    )
     list(
       dim_name = d,
       domain = default_dim_domain(d, time_dim, area_dim),
       scale_type = default_dim_scale_type(d, time_dim),
       partition_type = partition_type,
       validated = validated,
-      overlap_levels = character(),
+      overlap_levels = overlap_levels,
       notes = character()
+    )
+  })
+  names(out) <- dim_order
+  out
+}
+
+read_fieldwise_dim_semantics <- function(path, dim_order) {
+  out <- lapply(dim_order, function(d) {
+    base <- paste0("cube/metadata/dim_semantics/", d)
+    list(
+      dim_name = h5_read_scalar_if_present(path, paste0(base, "/dim_name"), default = d),
+      domain = h5_read_scalar_if_present(path, paste0(base, "/domain"), default = d),
+      scale_type = h5_read_scalar_if_present(path, paste0(base, "/scale_type"), default = "nominal"),
+      partition_type = h5_read_scalar_if_present(path, paste0(base, "/partition_type"), default = "unknown"),
+      validated = tolower(h5_read_scalar_if_present(path, paste0(base, "/validated"), default = "false")) == "true",
+      overlap_levels = as.character(tryCatch(rhdf5::h5read(path, paste0(base, "/overlap_levels")), error = function(e) character())),
+      notes = as.character(tryCatch(rhdf5::h5read(path, paste0(base, "/notes")), error = function(e) character()))
     )
   })
   names(out) <- dim_order
@@ -505,9 +664,22 @@ upgrade_one_to_1_1 <- function(file_path, backup_dir, apply_mode = FALSE) {
   geo <- h5_read_scalar_if_present(file_path, "cube/metadata/geo", default = h5_coalesce_chr(registry$geo, ""))
   extendable_year <- h5_read_scalar_if_present(file_path, "cube/metadata/extendable_year", default = h5_coalesce_chr(registry$extendable_year, ""))
   data_col <- h5_read_scalar_if_present(file_path, "cube/metadata/data_col", default = "population")
-  dim_semantics <- read_legacy_dim_semantics(
-    path = file_path,
-    dim_order = names(dimn),
+  dim_semantics <- if (identical(schema_version, "1.1.0")) {
+    read_fieldwise_dim_semantics(
+      path = file_path,
+      dim_order = names(dimn)
+    )
+  } else {
+    read_legacy_dim_semantics(
+      path = file_path,
+      dim_order = names(dimn),
+      time_dim = roles$time,
+      area_dim = roles$area
+    )
+  }
+  dim_semantics <- canonicalize_dim_semantics(
+    dim_semantics = dim_semantics,
+    dimn = dimn,
     time_dim = roles$time,
     area_dim = roles$area
   )
