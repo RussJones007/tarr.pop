@@ -206,6 +206,17 @@ read_source_from_cube <- function(path) {
   )
 }
 
+#' Read data column metadata from migrated cube
+#'
+#' @param path HDF5 file path.
+#'
+#' @return Length-1 character scalar.
+#' @keywords internal
+read_data_col_from_cube <- function(path) {
+  val <- h5_read_scalar_chr_if_present(path, "cube/metadata/data_col")
+  if (is.null(val) || !nzchar(val)) "population" else val
+}
+
 #' Read dim_semantics metadata from migrated cube
 #'
 #' @param path HDF5 file path.
@@ -331,7 +342,7 @@ open_tarr_pop <- function(...) {
 #' @export
 open_poparray <- function(series_id,
                           dataset = "cube/population",
-                          data_col = "population") {
+                          data_col = NULL) {
   reg <- tarr_series_registry()
   row <- reg[reg$series_id == series_id, , drop = FALSE]
   if (nrow(row) != 1L) {
@@ -349,6 +360,7 @@ open_poparray <- function(series_id,
   roles <- read_roles_from_cube(path)
   dsem  <- read_dim_semantics_from_cube(path, names(dimn), roles$time, roles$area)
   src   <- read_source_from_cube(path)
+  dc    <- if (is.null(data_col)) read_data_col_from_cube(path) else data_col
 
   validate_labels_against_cube(h5, dimn, series_id)
   dimnames(h5) <- dimn
@@ -356,7 +368,7 @@ open_poparray <- function(series_id,
   new_poparray(
     x             = h5,
     dimnames_list = dimn,
-    data_col      = data_col,
+    data_col      = dc,
     source        = src,
     time_dim      = roles$time,
     area_dim      = roles$area,

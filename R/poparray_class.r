@@ -90,11 +90,12 @@ validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim)
 pa_default_dim_domain <- function(dim_name, time_dim, area_dim) {
   if (identical(dim_name, time_dim)) return("time")
   if (identical(dim_name, area_dim)) return("area")
+  if (identical(dim_name, "age.char")) return("age")
   dim_name
 }
 
 pa_default_dim_scale_type <- function(dim_name, time_dim) {
-  if (identical(dim_name, time_dim)) return("interval")
+  if (identical(dim_name, time_dim) || identical(dim_name, "age.char")) return("interval")
   "nominal"
 }
 

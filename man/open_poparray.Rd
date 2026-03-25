@@ -7,7 +7,7 @@
 \usage{
 open_tarr_pop(...)
 
-open_poparray(series_id, dataset = "cube/population", data_col = "population")
+open_poparray(series_id, dataset = "cube/population", data_col = NULL)
 }
 \arguments{
 \item{series_id}{Name of the population series.}
