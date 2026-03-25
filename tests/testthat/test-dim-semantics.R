@@ -233,3 +233,24 @@ test_that("ensure_dim_semantics coerces legacy entries", {
   expect_identical(out$year@partition_type, "partition")
   expect_identical(out$sex@partition_type, "set")
 })
+
+test_that("default semantics treat age.char as interval age domain", {
+  dsem <- default_dim_semantics(c("year", "area.name", "age.char"), "year", "area.name")
+  expect_identical(dsem$age.char@domain, "age")
+  expect_identical(dsem$age.char@scale_type, "interval")
+})
+
+test_that("live cubes expose interval semantics for age.char", {
+  ids <- tarr.pop:::tarr_series_registry()$series_id
+  with_age <- ids[vapply(ids, function(id) {
+    x <- open_poparray(id)
+    "age.char" %in% names(dim_semantics(x))
+  }, logical(1))]
+
+  expect_true(length(with_age) > 0L)
+
+  for (id in with_age) {
+    x <- open_poparray(id)
+    expect_identical(dim_semantics(x)$age.char@scale_type, "interval", info = id)
+  }
+})
