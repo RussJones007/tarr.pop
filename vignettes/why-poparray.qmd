@@ -1,6 +1,10 @@
 ---
-title: "Why poparray exists"
+title: "why poparray"
 format: html
+vignette: >
+  %\VignetteIndexEntry{"why poparray"}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r}

@@ -42,8 +42,10 @@ Imports:
 Suggests: 
     knitr,
     rmarkdown,
+    quarto,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 URL: https://github.com/RussJones007/tarr.pop
 BugReports: https://github.com/RussJones007/tarr.pop/issues
-VignetteBuilder: knitr
+VignetteBuilder: quarto, knitr
+SystemRequirements: Quarto (https://quarto.org)
