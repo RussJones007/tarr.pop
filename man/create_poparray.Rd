@@ -6,7 +6,7 @@
 \usage{
 create_poparray(
   x,
-  filepath,
+  filepath = NULL,
   series_id,
   chunkdim = "auto",
   overwrite = FALSE,
@@ -18,7 +18,8 @@ create_poparray(
 \arguments{
 \item{x}{A \code{poparray}.}
 
-\item{filepath}{Output HDF5 file path.}
+\item{filepath}{Output HDF5 file path. When \code{NULL}, writes to the package
+cube storage root under \verb{base/}.}
 
 \item{series_id}{Series identifier written to \code{cube/metadata/series_id}.}
 

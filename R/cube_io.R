@@ -354,7 +354,8 @@ pa_write_poparray_cube <- function(x,
 #' Save a poparray cube to HDF5 using the canonical schema
 #'
 #' @param x A `poparray`.
-#' @param filepath Output HDF5 file path.
+#' @param filepath Output HDF5 file path. When `NULL`, writes to
+#'   `file.path(cube_path(create = TRUE), "base", paste0(series_id, ".h5"))`.
 #' @param overwrite Logical; overwrite if file exists.
 #' @param chunkdim Integer chunk dimensions or `"auto"`.
 #' @param level Compression level (0-9).
@@ -367,17 +368,29 @@ pa_write_poparray_cube <- function(x,
 #' @return Invisibly returns a list with `filepath`, `dataset`, and `chunkdim`.
 #' @export
 save_poparray <- function(x,
-                          filepath,
+                          filepath = NULL,
                           overwrite = FALSE,
                           chunkdim = "auto",
                           level = 6L,
-                          series_id = tools::file_path_sans_ext(basename(filepath)),
+                          series_id = NULL,
                           geo = NULL,
                           extendable_year = NULL,
                           registry = NULL,
                           target_chunk_bytes = 1e6) {
   if (!is(x, "poparray")) {
     cli::cli_abort("{.arg x} must be a {.cls poparray}.")
+  }
+
+  if (is.null(filepath)) {
+    if (is.null(series_id) || !nzchar(series_id)) {
+      cli::cli_abort("{.arg series_id} is required when {.arg filepath} is NULL.")
+    }
+    root <- init_cubes()
+    filepath <- file.path(root, "base", paste0(series_id, ".h5"))
+  }
+
+  if (is.null(series_id) || !nzchar(series_id)) {
+    series_id <- tools::file_path_sans_ext(basename(filepath))
   }
 
   dn <- dimnames(x)
@@ -417,7 +430,8 @@ save_poparray <- function(x,
 #' - `cube/metadata/*`
 #'
 #' @param x A `poparray`.
-#' @param filepath Output HDF5 file path.
+#' @param filepath Output HDF5 file path. When `NULL`, writes to the package
+#'   cube storage root under `base/`.
 #' @param series_id Series identifier written to `cube/metadata/series_id`.
 #' @param chunkdim Integer chunk dimensions or `"auto"`.
 #' @param overwrite Logical; overwrite existing file.
@@ -428,7 +442,7 @@ save_poparray <- function(x,
 #' @return Invisibly returns a list with `filepath`, `dataset`, and `chunkdim`.
 #' @export
 create_poparray <- function(x,
-                            filepath,
+                            filepath = NULL,
                             series_id,
                             chunkdim = "auto",
                             overwrite = FALSE,
@@ -436,8 +450,6 @@ create_poparray <- function(x,
                             extendable_year = NULL,
                             registry = NULL) {
   checkmate::assert_string(series_id, min.chars = 1)
-  checkmate::assert_string(filepath, min.chars = 1)
-
   reg <- as.list(registry %||% list())
 
   out <- save_poparray(

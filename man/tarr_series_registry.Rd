@@ -10,7 +10,7 @@ tarr_series_registry()
 data.frame of available series.
 }
 \description{
-Scans \verb{inst/extdata/*.h5} and builds the registry from canonical
+Scans the active cube storage directory for \code{.h5} files and builds the registry from canonical
 \verb{cube/metadata/*} fields in migrated files.
 }
 \keyword{internal}

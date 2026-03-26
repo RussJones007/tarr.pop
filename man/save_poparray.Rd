@@ -6,11 +6,11 @@
 \usage{
 save_poparray(
   x,
-  filepath,
+  filepath = NULL,
   overwrite = FALSE,
   chunkdim = "auto",
   level = 6L,
-  series_id = tools::file_path_sans_ext(basename(filepath)),
+  series_id = NULL,
   geo = NULL,
   extendable_year = NULL,
   registry = NULL,
@@ -20,7 +20,8 @@ save_poparray(
 \arguments{
 \item{x}{A \code{poparray}.}
 
-\item{filepath}{Output HDF5 file path.}
+\item{filepath}{Output HDF5 file path. When \code{NULL}, writes to
+\code{file.path(cube_path(create = TRUE), "base", paste0(series_id, ".h5"))}.}
 
 \item{overwrite}{Logical; overwrite if file exists.}
 

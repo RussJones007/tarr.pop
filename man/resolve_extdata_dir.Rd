@@ -4,7 +4,10 @@
 \alias{resolve_extdata_dir}
 \title{Resolve extdata directory for this package}
 \usage{
-resolve_extdata_dir()
+resolve_extdata_dir(strict = TRUE)
+}
+\arguments{
+\item{strict}{Logical; error if the directory cannot be located.}
 }
 \value{
 Absolute path to extdata directory.

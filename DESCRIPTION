@@ -1,7 +1,7 @@
 Package: tarr.pop
 Type: Package
 Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
-Version: 0.0.0.9197
+Version: 0.0.0.9200
 Description: Popuation figures and functions to retrive subsets of the data.  
     Contains population figures for Texas,  Tarrant county,  comparable 
     large counties, and counties in the metroplex. Data sources include
@@ -37,7 +37,8 @@ Imports:
     stringr,
     scales,
     Matrix,
-    rage
+    rage,
+    yaml
 Suggests: 
     knitr,
     rmarkdown,

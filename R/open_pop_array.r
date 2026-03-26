@@ -8,9 +8,11 @@
 
 #' Resolve extdata directory for this package
 #'
+#' @param strict Logical; error if the directory cannot be located.
+#'
 #' @return Absolute path to extdata directory.
 #' @keywords internal
-resolve_extdata_dir <- function() {
+resolve_extdata_dir <- function(strict = TRUE) {
   pkg <- utils::packageName()
   if (length(pkg) == 1L && !is.na(pkg) && nzchar(pkg)) {
     ext <- system.file("extdata", package = pkg)
@@ -24,7 +26,11 @@ resolve_extdata_dir <- function() {
     return(normalizePath(local_ext, winslash = "/", mustWork = TRUE))
   }
 
-  stop("Could not locate package extdata directory.")
+  if (isTRUE(strict)) {
+    stop("Could not locate package extdata directory.")
+  }
+
+  NULL
 }
 
 #' Read a scalar metadata value from HDF5
@@ -135,14 +141,14 @@ read_registry_row <- function(path) {
 
 #' Series registry read from migrated HDF5 metadata
 #'
-#' Scans `inst/extdata/*.h5` and builds the registry from canonical
+#' Scans the active cube storage directory for `.h5` files and builds the registry from canonical
 #' `cube/metadata/*` fields in migrated files.
 #'
 #' @return data.frame of available series.
 #' @keywords internal
 tarr_series_registry <- function() {
-  ext_dir <- resolve_extdata_dir()
-  files <- sort(Sys.glob(file.path(ext_dir, "*.h5")))
+  cube_dir <- resolve_cube_dir()
+  files <- sort(list.files(cube_dir, pattern = "\\.h5$", recursive = TRUE, full.names = TRUE))
   if (length(files) == 0L) {
     return(data.frame(stringsAsFactors = FALSE))
   }
@@ -150,7 +156,7 @@ tarr_series_registry <- function() {
   keep <- vapply(files, h5_has_cube_schema, logical(1))
   files <- files[keep]
   if (length(files) == 0L) {
-    stop("No migrated cubes with /cube/metadata were found in extdata.")
+    stop("No migrated cubes with /cube/metadata were found in cube storage.")
   }
 
   rows <- lapply(files, read_series_row)
