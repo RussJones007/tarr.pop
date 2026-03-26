@@ -238,7 +238,17 @@ validate_hdf5_metadata_shape <- function(x) {
   dim_order <- as.character(rhdf5::h5read(fp, "cube/metadata/dim_order"))
   dn <- dimnames(x)
   nms <- names(dn)
-  if (is.null(nms) || !identical(as.character(dim_order), as.character(nms))) {
+  if (is.null(nms)) {
+    return("HDF5 cube/metadata/dim_order does not match object dimension names.")
+  }
+  nms <- as.character(nms)
+  if (identical(as.character(dim_order), nms)) {
+    return(TRUE)
+  }
+  if (identical(as.character(dim_order[dim_order %in% nms]), nms)) {
+    return(TRUE)
+  }
+  if (is.null(nms) || !identical(as.character(dim_order), nms)) {
     return("HDF5 cube/metadata/dim_order does not match object dimension names.")
   }
   TRUE
@@ -439,11 +449,59 @@ setMethod(
   "[",
   signature(x = "poparray"),
   function(x, ..., drop = FALSE) {
+    validate_poparray(x)
     before_dimnames <- dimnames(x)
-    out <- callNextMethod()
-    if (isTRUE(drop) || !is(out, "DelayedArray")) {
+    dim_order <- names(before_dimnames)
+    nd <- length(before_dimnames)
+
+    dots <- as.list(substitute(list(...)))[-1L]
+    idx_names <- names(dots) %||% rep("", length(dots))
+
+    if (!any(nzchar(idx_names))) {
+      out <- callNextMethod()
+    } else {
+      idx <- lapply(dots, function(expr) {
+        if (identical(expr, quote(expr = ))) TRUE else eval(expr, parent.frame())
+      })
+
+      ndx <- rep(list(TRUE), nd)
+      used <- rep(FALSE, nd)
+      next_pos <- 1L
+
+      for (i in seq_along(idx)) {
+        nm <- idx_names[[i]] %||% ""
+        if (nzchar(nm)) {
+          pos <- match(nm, dim_order)
+          if (is.na(pos)) {
+            cli::cli_abort(c(
+              "Unknown dimension name in subset: {.val {nm}}.",
+              "i" = "Valid dimensions are: {paste(dim_order, collapse = ', ')}."
+            ))
+          }
+        } else {
+          while (next_pos <= nd && used[[next_pos]]) {
+            next_pos <- next_pos + 1L
+          }
+          if (next_pos > nd) {
+            cli::cli_abort("Too many indices for {.cls poparray}.")
+          }
+          pos <- next_pos
+        }
+
+        if (used[[pos]]) {
+          cli::cli_abort("Duplicate index supplied for dimension {.val {dim_order[[pos]]}}.")
+        }
+
+        ndx[[pos]] <- idx[[i]]
+        used[[pos]] <- TRUE
+      }
+
+      out <- do.call(`[`, c(list(x), ndx, list(drop = drop)))
+    }
+    if (!is(out, "DelayedArray")) {
       return(out)
     }
+
     after_dimnames <- dimnames(out)
     if (is.null(after_dimnames) || is.null(names(after_dimnames))) {
       return(out)

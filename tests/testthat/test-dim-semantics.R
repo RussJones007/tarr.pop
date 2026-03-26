@@ -241,6 +241,7 @@ test_that("default semantics treat age.char as interval age domain", {
 })
 
 test_that("live cubes expose interval semantics for age.char", {
+  reset_test_cube_root()
   ids <- tarr.pop:::tarr_series_registry()$series_id
   with_age <- ids[vapply(ids, function(id) {
     x <- open_poparray(id)

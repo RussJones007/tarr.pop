@@ -29,3 +29,32 @@
 #' @keywords package
 #' @name tarr.pop
 "_PACKAGE"
+
+tarr_pop_skip_cube_setup <- function() {
+  flag <- tolower(Sys.getenv("TARR_POP_SKIP_CUBE_SETUP", unset = ""))
+  flag %in% c("1", "true", "yes")
+}
+
+tarr_pop_startup_setup <- function(interactive_session = interactive()) {
+  if (tarr_pop_skip_cube_setup()) {
+    return(invisible(FALSE))
+  }
+
+  path <- configured_cube_path()
+  if (is.null(path) || !nzchar(path)) {
+    if (!isTRUE(interactive_session)) {
+      cli::cli_abort(c(
+        "Cube folder is not configured.",
+        "i" = "Load {.pkg tarr.pop} interactively for initial cube setup."
+      ))
+    }
+    path <- prompt_for_cube_path()
+  }
+
+  init_cubes(path)
+  invisible(TRUE)
+}
+
+.onLoad <- function(libname, pkgname) {
+  tarr_pop_startup_setup(interactive_session = interactive())
+}

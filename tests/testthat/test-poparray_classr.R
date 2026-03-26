@@ -92,6 +92,20 @@ test_that("subsetting keeps poparray when drop = FALSE and unwraps when drop = T
   expect_false(is(dropped, "poparray"))
 })
 
+test_that("subsetting supports named indices and keeps poparray when roles remain", {
+  pa <- make_poparray_fixture()
+
+  named_keep <- pa[sex = "Female", drop = TRUE]
+  expect_s4_class(named_keep, "poparray")
+  expect_equal(time_role(named_keep), "year")
+  expect_equal(area_role(named_keep), "area.name")
+  expect_equal(names(dimnames(named_keep)), c("year", "area.name"))
+
+  named_time <- pa[year = "2020", , drop = FALSE]
+  expect_s4_class(named_time, "poparray")
+  expect_equal(dimnames(named_time)$year, "2020")
+})
+
 test_that("validation enforces ordered time labels", {
   arr <- array(
     c(1, 2, 3, 4),

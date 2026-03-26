@@ -7,6 +7,7 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
+Sys.setenv(TARR_POP_SKIP_CUBE_SETUP = "true")
 library(tarr.pop)
 
 test_check("tarr.pop")

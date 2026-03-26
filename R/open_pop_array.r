@@ -73,7 +73,10 @@ h5_read_scalar_chr_if_present <- function(path, name) {
 #' @return Logical scalar.
 #' @keywords internal
 h5_has_cube_schema <- function(path) {
-  info <- rhdf5::h5ls(path)
+  info <- tryCatch(rhdf5::h5ls(path), error = function(e) NULL)
+  if (is.null(info)) {
+    return(FALSE)
+  }
   has_pop <- any(info$group == "/cube" & info$name == "population")
   has_dim_order <- any(info$group == "/cube/metadata" & info$name == "dim_order")
   has_dimnames <- any(info$group == "/cube/metadata" & info$name == "dimnames")
@@ -139,32 +142,130 @@ read_registry_row <- function(path) {
   read_series_row(path)
 }
 
+cube_registry_inventory <- function(root = resolve_cube_dir()) {
+  scan_dir <- resolve_cube_base_dir(root)
+  files <- sort(list.files(
+    scan_dir,
+    pattern = "\\.(h5|hdf5)$",
+    recursive = TRUE,
+    full.names = TRUE,
+    ignore.case = TRUE
+  ))
+
+  if (length(files) == 0L) {
+    return(data.frame(
+      filepath = character(),
+      filename = character(),
+      file_created = as.POSIXct(character()),
+      file_modified = as.POSIXct(character()),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ))
+  }
+
+  files <- normalizePath(files, winslash = "/", mustWork = TRUE)
+  info <- file.info(files)
+
+  data.frame(
+    filepath = files,
+    filename = basename(files),
+    file_created = as.POSIXct(info$ctime, origin = "1970-01-01", tz = "UTC"),
+    file_modified = as.POSIXct(info$mtime, origin = "1970-01-01", tz = "UTC"),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+}
+
+read_cube_registry_cache <- function(cache_file) {
+  if (is.null(cache_file) || !file.exists(cache_file)) {
+    return(NULL)
+  }
+
+  out <- tryCatch(readRDS(cache_file), error = function(e) NULL)
+  if (!is.data.frame(out)) {
+    return(NULL)
+  }
+
+  req <- c("filepath", "filename", "file_created", "file_modified")
+  if (!all(req %in% names(out))) {
+    return(NULL)
+  }
+
+  out
+}
+
+write_cube_registry_cache <- function(registry, cache_file) {
+  if (is.null(cache_file)) {
+    return(invisible(registry))
+  }
+
+  dir.create(dirname(cache_file), recursive = TRUE, showWarnings = FALSE)
+  saveRDS(registry, cache_file)
+  invisible(registry)
+}
+
+cube_registry_cache_current <- function(cache, inventory) {
+  if (!is.data.frame(cache) || !is.data.frame(inventory)) {
+    return(FALSE)
+  }
+
+  if (nrow(cache) != nrow(inventory)) {
+    return(FALSE)
+  }
+
+  cols <- c("filepath", "filename", "file_created", "file_modified")
+  if (!all(cols %in% names(cache))) {
+    return(FALSE)
+  }
+
+  identical(as.character(cache$filepath), as.character(inventory$filepath)) &&
+    identical(as.character(cache$filename), as.character(inventory$filename)) &&
+    identical(as.numeric(cache$file_created), as.numeric(inventory$file_created)) &&
+    identical(as.numeric(cache$file_modified), as.numeric(inventory$file_modified))
+}
+
 #' Series registry read from migrated HDF5 metadata
 #'
-#' Scans the active cube storage directory for `.h5` files and builds the registry from canonical
-#' `cube/metadata/*` fields in migrated files.
+#' Scans the cube `base/` directory recursively for HDF5 files and builds the
+#' registry from canonical `cube/metadata/*` fields in migrated files. When a
+#' cache file is available under `cache/cube_registry.rds`, it is reused until
+#' the file inventory changes.
 #'
 #' @return data.frame of available series.
 #' @keywords internal
 tarr_series_registry <- function() {
   cube_dir <- resolve_cube_dir()
-  files <- sort(list.files(cube_dir, pattern = "\\.h5$", recursive = TRUE, full.names = TRUE))
-  if (length(files) == 0L) {
+  cache_file <- cube_registry_cache_file(cube_dir)
+  inventory <- cube_registry_inventory(cube_dir)
+
+  if (nrow(inventory) == 0L) {
     return(data.frame(stringsAsFactors = FALSE))
   }
 
-  keep <- vapply(files, h5_has_cube_schema, logical(1))
-  files <- files[keep]
+  cache <- read_cube_registry_cache(cache_file)
+  if (cube_registry_cache_current(cache, inventory)) {
+    return(cache)
+  }
+
+  keep <- vapply(inventory$filepath, h5_has_cube_schema, logical(1))
+  files <- inventory$filepath[keep]
+  inventory <- inventory[keep, , drop = FALSE]
   if (length(files) == 0L) {
     stop("No migrated cubes with /cube/metadata were found in cube storage.")
   }
 
   rows <- lapply(files, read_series_row)
   reg <- dplyr::bind_rows(rows)
+  reg <- dplyr::left_join(
+    reg,
+    inventory,
+    by = c("filepath", "filename")
+  )
   if ("series_id" %in% names(reg)) {
     reg <- reg[order(reg$series_id), , drop = FALSE]
   }
   rownames(reg) <- NULL
+  write_cube_registry_cache(reg, cache_file)
   reg
 }
 

@@ -10,7 +10,9 @@ tarr_series_registry()
 data.frame of available series.
 }
 \description{
-Scans the active cube storage directory for \code{.h5} files and builds the registry from canonical
-\verb{cube/metadata/*} fields in migrated files.
+Scans the cube \verb{base/} directory recursively for HDF5 files and builds the
+registry from canonical \verb{cube/metadata/*} fields in migrated files. When a
+cache file is available under \code{cache/cube_registry.rds}, it is reused until
+the file inventory changes.
 }
 \keyword{internal}

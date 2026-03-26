@@ -20,6 +20,27 @@ tarr_pop_default_cube_path <- function() {
   file.path(tarr_pop_data_dir(), "cubes")
 }
 
+tarr_pop_cube_base_dir <- function(root = cube_path()) {
+  file.path(root, "base")
+}
+
+tarr_pop_cube_cache_dir <- function(root = cube_path()) {
+  file.path(root, "cache")
+}
+
+tarr_pop_cube_registry_cache_file <- function(root = cube_path()) {
+  file.path(tarr_pop_cube_cache_dir(root), "cube_registry.rds")
+}
+
+configured_cube_path <- function() {
+  opt <- getOption("tarr.pop.cube_path")
+  if (is.character(opt) && length(opt) == 1L && nzchar(opt)) {
+    return(as.character(opt))
+  }
+
+  read_cube_path_config()
+}
+
 read_cube_path_config <- function(path = tarr_pop_config_file()) {
   if (!file.exists(path)) {
     return(NULL)
@@ -46,7 +67,7 @@ prompt_for_cube_path <- function(default = tarr_pop_default_cube_path()) {
 
   ans <- readline(
     sprintf(
-      "Enter a directory for tarr.pop cubes [%s]: ",
+      "Enter the folder where tarr.pop cubes should be stored/found [%s]: ",
       default
     )
   )
@@ -59,38 +80,28 @@ prompt_for_cube_path <- function(default = tarr_pop_default_cube_path()) {
 #' Reads the configured cube path from, in order:
 #' 1. `getOption("tarr.pop.cube_path")`
 #' 2. a YAML config file in the user config directory
-#' 3. a package-managed default under `tools::R_user_dir()`
 #'
 #' In interactive sessions, when no configuration exists yet, the user is
-#' prompted for a path and the choice is persisted. In non-interactive sessions,
-#' the default is used unless `legacy_ok = TRUE` and package `inst/extdata`
-#' exists, in which case that directory is returned as a compatibility fallback.
+#' prompted for the cube folder and the choice is persisted. In non-interactive
+#' sessions, an error is thrown so initial setup happens explicitly.
 #'
 #' @param create Logical; create the resolved directory if needed.
-#' @param legacy_ok Logical; allow fallback to bundled `inst/extdata`.
+#' @param legacy_ok Deprecated compatibility argument; ignored.
 #'
 #' @return Absolute path to the active cube directory.
 #' @export
 cube_path <- function(create = FALSE, legacy_ok = TRUE) {
-  opt <- getOption("tarr.pop.cube_path")
-  if (is.character(opt) && length(opt) == 1L && nzchar(opt)) {
-    path <- opt
-  } else {
-    path <- read_cube_path_config()
-  }
+  path <- configured_cube_path()
 
   if (is.null(path) || !nzchar(path)) {
     path <- prompt_for_cube_path()
     if (is.null(path) || !nzchar(path)) {
-      if (isTRUE(legacy_ok)) {
-        legacy <- resolve_extdata_dir(strict = FALSE)
-        if (!is.null(legacy)) {
-          return(legacy)
-        }
-      }
-      path <- tarr_pop_default_cube_path()
+      cli::cli_abort(c(
+        "Cube folder is not configured.",
+        "i" = "Load {.pkg tarr.pop} in an interactive session for initial setup."
+      ))
     }
-    write_cube_path_config(path)
+    path <- set_cube_path(path, create = create, persist = TRUE)
   }
 
   if (isTRUE(create)) {
@@ -125,20 +136,64 @@ set_cube_path <- function(path, create = TRUE, persist = TRUE) {
   invisible(path)
 }
 
+cube_files_present <- function(path) {
+  checkmate::assert_string(path, min.chars = 1)
+  length(list.files(
+    path,
+    pattern = "\\.(h5|hdf5)$",
+    recursive = TRUE,
+    full.names = TRUE,
+    ignore.case = TRUE
+  )) > 0L
+}
+
+copy_bundled_cubes_to_base <- function(root) {
+  checkmate::assert_string(root, min.chars = 1)
+
+  base_dir <- tarr_pop_cube_base_dir(root)
+  if (cube_files_present(base_dir)) {
+    return(invisible(character()))
+  }
+
+  ext_dir <- resolve_extdata_dir(strict = FALSE)
+  if (is.null(ext_dir)) {
+    return(invisible(character()))
+  }
+
+  src <- sort(list.files(
+    ext_dir,
+    pattern = "\\.(h5|hdf5)$",
+    full.names = TRUE,
+    ignore.case = TRUE
+  ))
+  if (length(src) == 0L) {
+    return(invisible(character()))
+  }
+
+  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+  dst <- file.path(base_dir, basename(src))
+  ok <- file.copy(src, dst, overwrite = FALSE)
+  invisible(dst[ok])
+}
+
 #' Initialize the cube storage directory structure
 #'
 #' @param path Optional storage root. Defaults to [cube_path()].
+#' @param persist Logical; write the path to the user YAML config file.
 #'
 #' @return Invisibly returns the normalized root path.
 #' @export
-init_cubes <- function(path = cube_path()) {
-  root <- set_cube_path(path, create = TRUE, persist = TRUE)
+init_cubes <- function(path = cube_path(), persist = TRUE) {
+  root <- set_cube_path(path, create = TRUE, persist = persist)
 
   dirs <- file.path(
     root,
-    c("base", "derived", "derived/projections", "derived/filtered", "derived/custom")
+    c("base", "cache", "derived", "derived/projections", "derived/filtered", "derived/custom")
   )
   invisible(vapply(dirs, dir.create, logical(1), recursive = TRUE, showWarnings = FALSE))
+
+  copy_bundled_cubes_to_base(root)
+  tarr_series_registry()
 
   invisible(root)
 }
@@ -191,4 +246,32 @@ resolve_cube_dir <- function(strict = TRUE, legacy_ok = TRUE) {
   }
 
   normalizePath(path, winslash = "/", mustWork = TRUE)
+}
+
+resolve_cube_base_dir <- function(root = resolve_cube_dir()) {
+  checkmate::assert_string(root, min.chars = 1)
+
+  base_dir <- tarr_pop_cube_base_dir(root)
+  if (dir.exists(base_dir)) {
+    return(normalizePath(base_dir, winslash = "/", mustWork = TRUE))
+  }
+
+  normalizePath(root, winslash = "/", mustWork = TRUE)
+}
+
+cube_registry_cache_file <- function(root = resolve_cube_dir()) {
+  checkmate::assert_string(root, min.chars = 1)
+
+  base_dir <- tarr_pop_cube_base_dir(root)
+  if (!dir.exists(base_dir)) {
+    return(NULL)
+  }
+
+  cache_dir <- tarr_pop_cube_cache_dir(root)
+  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  normalizePath(
+    tarr_pop_cube_registry_cache_file(root),
+    winslash = "/",
+    mustWork = FALSE
+  )
 }

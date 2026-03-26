@@ -30,6 +30,7 @@ test_that("open_poparray uses discovered filepath from canonical scan row", {
 })
 
 test_that("save_poparray writes canonical metadata fields without registry duplication", {
+  reset_test_cube_root()
   sid <- tarr.pop:::tarr_series_registry()$series_id[[1L]]
   x <- open_poparray(sid)
 
@@ -52,6 +53,7 @@ test_that("save_poparray writes canonical metadata fields without registry dupli
 })
 
 test_that("open_poparray preserves stored data_col when not overridden", {
+  reset_test_cube_root()
   sid <- tarr.pop:::tarr_series_registry()$series_id[[1L]]
   x <- open_poparray(sid, data_col = "custom_population")
 
@@ -80,6 +82,7 @@ test_that("open_poparray preserves stored data_col when not overridden", {
 })
 
 test_that("population catalog entries resolve to live series ids", {
+  reset_test_cube_root()
   reg_ids <- tarr.pop:::tarr_series_registry()$series_id
   pop_ids <- unlist(population, use.names = TRUE)
 
@@ -89,6 +92,7 @@ test_that("population catalog entries resolve to live series ids", {
 })
 
 test_that("population catalog entries can be opened lazily", {
+  reset_test_cube_root()
   pop_ids <- unlist(population, use.names = TRUE)
   objs <- lapply(pop_ids, open_poparray)
   expect_true(all(vapply(objs, methods::is, logical(1), class2 = "poparray")))

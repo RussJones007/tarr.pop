@@ -4,10 +4,12 @@
 \alias{init_cubes}
 \title{Initialize the cube storage directory structure}
 \usage{
-init_cubes(path = cube_path())
+init_cubes(path = cube_path(), persist = TRUE)
 }
 \arguments{
 \item{path}{Optional storage root. Defaults to \code{\link[=cube_path]{cube_path()}}.}
+
+\item{persist}{Logical; write the path to the user YAML config file.}
 }
 \value{
 Invisibly returns the normalized root path.

@@ -92,7 +92,7 @@ passed to the \code{\link[=open_poparray]{open_poparray()}} function and \link{p
 }
 \details{
 A \code{poparray} extends \code{DelayedArray} (typically backed by an HDF5 file) and stores
-explicit dimension labels, role metadata, as part of the  dimension  meta data. See \link{DimSematics} for how each
+explicit dimension labels, role metadata, as part of the  dimension  meta data. See \link{DimSemantics} for how each
 dimension is described. The meta data is used to allow filtering and aggregation before realization, reducing memory
 use and helping guard against unsafe aggregation wwhen non-cluinve categories are present.
 
