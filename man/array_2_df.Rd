@@ -31,8 +31,15 @@ What this means is that a data .frame (df) with an an ordered factor will have a
 df_to_array(df) and then df_new <- arrary_to_df(arr). Therefore df may not equal df_new
 }
 \examples{
-#Convert a population array to a data frame
-df <- array_2_df(population$census)
+# Convert an array to a data frame
+arr <- array(
+  c(100, 95, 102, 98),
+  dim = c(2, 2),
+  dimnames = list(year = c("2020", "2021"), sex = c("Female", "Male"))
+)
+attr(arr, "data_col") <- "population"
+
+df <- array_2_df(arr)
 head(df)
 
 }

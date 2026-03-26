@@ -1,0 +1,290 @@
+---
+title: "Why poparray exists"
+format: html
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+
+Population data sits at the foundation of epidemiology, public health, and demographic analysis. Every rate, ratio, and projection ultimately depends on a denominator—how many people are in a population, and how that population is structured.
+
+In many workflows, population data is stored in tables. This works well at small scales, but as soon as we begin working across multiple dimensions—time, geography, age, sex, race, and ethnicity—the limitations become apparent. The structure becomes harder to reason about, aggregation becomes error-prone, and performance begins to degrade.
+
+The `poparray` package was developed to address a simple idea:
+
+> Population data is not naturally tabular. It is inherently multidimensional.
+
+This vignette introduces that idea and explains how `poparray` provides a framework for working with population data as structured, scalable, and semantically meaningful objects.
+
+----
+
+# From Tables to Cubes
+
+Most R users begin with a data frame:
+
+```r
+df <- data.frame(
+  year = rep(2020:2021, each = 2),
+  sex = rep(c("male", "female"), times = 2),
+  population = c(100, 120, 105, 125)
+)
+
+df
+```
+
+This representation is flexible and familiar, but it hides structure. Each row is a combination of dimensions, and relationships between those dimensions are implicit rather than explicit. As more dimensions are added, the table becomes harder to interpret and easier to misuse.
+
+An array improves this by making structure explicit:
+
+```r
+arr <- array(
+  c(100, 120, 105, 125),
+  dim = c(year = 2, sex = 2),
+  dimnames = list(
+    year = c("2020", "2021"),
+    sex = c("male", "female")
+  )
+)
+
+arr
+```
+
+Arrays introduce the idea of dimensions, but they still lack meaning. They do not know what “year” represents, whether categories overlap, or how the data should be safely aggregated.
+
+This leads to the central concept used throughout the package.
+
+## The Population Cube
+
+A **population cube** is a multidimensional array where each dimension corresponds to a real-world variable. A typical cube might include:
+
+- year (time)
+- county (geography)
+- age
+- sex
+- race
+- ethnicity
+
+Each axis has labeled categories, and each cell represents a population count.
+
+You can think of a cube as extending beyond three dimensions:
+
+> year × county × age × sex × race × ethnicity
+
+This is the natural shape of population data.
+
+----
+
+# What is a poparray?
+
+A `poparray` is a formal representation of a population cube.
+
+More specifically:
+
+> A `poparray` is an S4 class built on top of [DelayedArray] and [HDF5Array].
+
+These underlying packages provide two critical capabilities.
+
+- **DelayedArray** allows computations to be defined without immediately executing them.
+- **HDF5Array** stores data on disk, rather than requiring everything to fit in memory.
+
+The `poparray` class builds on this foundation by adding:
+
+- dimension roles (time, area, strata)
+- semantic metadata describing each dimension
+- safeguards to prevent invalid operations
+- a standardized storage format for reproducibility
+
+In practical terms, a `poparray` behaves like an array—but one that understands what its dimensions mean.
+
+----
+
+# Why Semantics Matter
+
+A key challenge in population data is that not all categories are mutually exclusive.
+
+For example, census race categories often include:
+
+- "Black or African American alone"
+- "Black or African American in combination"
+
+These categories overlap. If they are summed together, individuals are counted more than once.
+
+Most tools will allow this without warning. The result appears valid, but it is incorrect.
+
+## Semantic Awareness
+
+`poparray` addresses this by attaching semantic meaning to each dimension. Each dimension is classified as one of the following:
+
+- **partition**: categories are mutually exclusive
+- **set**: categories may overlap
+- **interval**: categories represent ranges (such as age groups)
+
+These semantics are stored and enforced during operations.
+
+```r
+sum(pa)
+# Error: Unsafe reduction blocked
+```
+
+This behavior is intentional. It prevents invalid epidemiologic calculations and forces the analyst to make an explicit decision about how to handle overlapping categories.
+
+----
+
+# Working with Population Cubes
+
+Working with a `poparray` is best understood in terms of slicing a cube rather than filtering rows.
+
+Selecting values restricts dimensions:
+
+- selecting years restricts the time dimension
+- selecting counties restricts the geographic dimension
+- selecting age groups restricts the age dimension
+
+```r
+pa_subset <- dplyr::filter(pa, year >= 2020)
+```
+
+This operation does not immediately compute anything. Instead, it builds a plan describing how the cube should be subset.
+
+The result is still a cube, just with fewer elements.
+
+----
+
+# Scalability: Delayed and Disk-Based Computation
+
+Population datasets can become very large, especially when they include:
+
+- long time spans
+- fine geographic resolution
+- multiple demographic dimensions
+
+Loading all of this data into memory is often not practical.
+
+This is where the underlying architecture becomes essential.
+
+- DelayedArray allows operations to be deferred and optimized
+- HDF5Array stores data on disk and reads only what is needed
+
+This means that:
+
+- datasets larger than RAM can be analyzed
+- operations are combined before execution
+- memory usage remains low
+
+Computation only occurs when results are explicitly requested:
+
+```r
+as.data.frame(pa_subset)
+```
+
+Until that point, operations remain lazy.
+
+----
+
+# Epidemiology Example: Calculating Rates
+
+A common task in epidemiology is calculating rates:
+
+> rate = cases / population
+
+Suppose we have two population cubes:
+
+- a cube of case counts
+- a cube of population denominators
+
+Each cube shares the same dimensions, such as:
+
+- year × county × age × sex
+
+With `poparray`, these cubes align naturally.
+
+```r
+rate_cube <- cases_cube / population_cube
+```
+
+Because both objects share the same structure:
+
+- division occurs cell by cell
+- dimensions remain aligned automatically
+- no joins or reshaping are required
+
+Semantic safeguards also apply. If overlapping categories are present, unsafe aggregations are blocked, helping ensure that calculated rates are valid.
+
+This is especially important in public health, where incorrect denominators can lead to misleading conclusions.
+
+----
+
+# Population Projections
+
+Population cubes are often extended forward in time.
+
+In `poparray`, this is done by treating each cell as a time series:
+
+- each combination of county, age, sex, and race forms a series
+- models are applied independently across the cube
+
+```r
+pr <- project(pa, h = 5, method = "auto")
+```
+
+The result is a `poparray_projection` object that:
+
+- preserves the cube structure
+- includes uncertainty estimates
+- remains lazily evaluated
+
+This allows projections to scale across large datasets.
+
+----
+
+# Comparison to Other Approaches
+
+Different tools address parts of this problem, but not the full workflow.
+
+- **data.frame / tibble**: flexible but lacks structure and semantic awareness  
+- **data.table**: fast and efficient but still row-oriented  
+- **Arrow**: excellent for large tabular data but not multidimensional  
+- **raw HDF5**: scalable storage but lacks standard structure and semantics  
+
+----
+
+# What poparray Provides
+
+| Feature | poparray |
+|--------|---------|
+| Multidimensional structure | ✔ |
+| Semantic safety | ✔ |
+| Lazy computation | ✔ |
+| Disk-backed storage | ✔ |
+| Reproducibility | ✔ |
+
+----
+
+# When to Use poparray
+
+`poparray` is most useful when:
+
+- working with population denominators
+- calculating epidemiologic rates
+- handling large multidimensional datasets
+- requiring safe aggregation across categories
+
+----
+
+# Summary
+
+Population data is not just a collection of numbers. It has structure, meaning, and constraints.
+
+The `poparray` package is built around that idea.
+
+By representing population data as cubes, attaching semantic meaning to dimensions, and leveraging modern tools such as [DelayedArray] and [HDF5Array], it enables analyses that are:
+
+- correct
+- scalable
+- reproducible
+
+This shifts the workflow from manipulating rows to reasoning about structure, providing a more natural and reliable approach to working with population data.

@@ -3,7 +3,7 @@
 \name{as.data.frame.poparray_projection}
 \alias{as.data.frame.poparray_projection}
 \alias{as_tibble.poparray_projection}
-\title{Coerce poparray_projection to a data frame}
+\title{Coerce poparray_projection to tabular output (EAGER)}
 \usage{
 \method{as.data.frame}{poparray_projection}(
   x,
@@ -22,26 +22,30 @@
 )
 }
 \arguments{
-\item{x}{a poparray_projection object}
+\item{x}{A \code{poparray_projection} object.}
 
-\item{...}{}
+\item{...}{Additional arguments passed through to internal helpers.}
 
-\item{include_level}{the default is FALSE. When TRUE means add a column with the confidence level used for the
-projection. The confidence level is also available in the attributes, attr(x, "level")}
+\item{include_level}{Logical; default \code{FALSE}. When \code{TRUE}, add a column with
+the confidence level used for the projection. The same value is also
+available in the output attributes.}
 
-\item{include_model}{the default FALSE.  When TRUE causes a column with the model name used for the projection}
+\item{include_model}{Logical; default \code{FALSE}. When \code{TRUE}, add a column with
+the model name used for the projection.}
 
 \item{include_confidence}{default FALSE; when TRUE adds \code{lower} and \code{upper}
 confidence-limit columns computed from \code{projection}, \code{std_error}, and the
 object's confidence \code{level}.}
 }
 \value{
-a data frame for as.data.frame() and tibble for as_tibble()
+A data frame for \code{\link[=as.data.frame]{as.data.frame()}} and a tibble for
+\code{\link[tibble:as_tibble]{tibble::as_tibble()}}.
 }
 \description{
-Transforms the delayed array in \code{x} to a data frame or tibble. This is an eager
-realization. The output contains \code{projection} and \code{std_error} columns.
+Transforms the delayed arrays in \code{x} to a data frame or tibble. This is an
+\strong{EAGER} realization. The output always contains \code{projection} and
+\code{std_error} columns.
 }
 \examples{
-# TO DO
+# Subset a projection before coercing to a data frame or tibble.
 }

@@ -782,7 +782,8 @@ as.double.poparray <- function(x, ...) {
 #' @param x A poparray.
 #' @param stringsAsFactors Passed to `as.data.frame.table()`.
 #' @param responseName Name of the value column (defaults to `data_col(x)`).
-#' @param bytes_threshold is the number of bytes to warnn you shen a large data frame isbing retunrd. Default is 40 MB.
+#' @param bytes_threshold Byte threshold used to warn before realizing a large
+#'   data frame. Default is 40 MB.
 #' @param ... Passed to `as.data.frame.table()` (rarely needed).
 #'
 #' @return A data.frame with one column per dimension plus `responseName`.
@@ -815,7 +816,8 @@ as.data.frame.poparray <- function(x,
 #' Coerce poparray to tibble (EAGER)
 #'
 #' Coercion is done via `as.data.frame.poparray()` for consistency, then
-#' converted to a tibble.
+#' converted to a tibble. This realizes the delayed backend for the current
+#' slice, so subset first for large cubes.
 #'
 #' @param x A poparray.
 #' @param stringsAsFactors Logical; passed to `as.data.frame.poparray()`.

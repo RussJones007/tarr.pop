@@ -4,44 +4,53 @@
 \alias{seer}
 \title{SEER NCI Population}
 \format{
-The dimension names are: year, area.name, sex, age.char, race, and ethnicity.
-Index selection from each dimension returns a subset array. An easier means of selecting the desired data is
-to use the \code{\link[dplyr:filter]{dplyr::filter()}} function as it simplifies making a query, performs some error checks, and then
-returns the data. The group_ages() function can be used to collapse ages into custom groupings.
+The dimension names are \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, and
+\code{ethnicity}.
 
-The dimensions and labels of each array are expressed as character strings.
-The dimensions and values are:
+\code{dim_semantics} interpretation:
 \itemize{
-\item year:  from
-\item area.name: All of the counties in Texas.
-\item age.char:
+\item \code{year} is an ordered interval-like time dimension with 34 levels
+(\code{1990} through \code{2023}).
+\item \code{area.name} is a 255-level Texas county partition.
+\item \code{sex} is a 2-level partition: \code{Female}, \code{Male}.
+\item \code{age.char} is an ordered interval domain:
 \itemize{
-\item seer_single_age has single ages 0 through 89 and 90+
-\item seer_grouped_age age groups 0, 1-4, 5-9, 10-14 ...80-84, and 85+
+\item \code{seer_estimates_county_1y} uses single ages \code{0} through \code{90}.
+\item \code{seer_estimates_county_5y} uses grouped intervals \code{0}, \code{1-4}, \code{5-9},
+\code{10-14}, ..., \code{80-84}, \code{85}.
 }
-\item sex:  Female ,  Male
-\item race: bridged categories that are American Indian/Alaskan Native, Asian or Pacific Islander, Black, and White.
-\item ethnicity has the values: Hispanic, or Non-Hispanic.
-\item population is the integer value of the table/array.
+\item \code{race} is a 4-level partition:
+\code{White}, \code{Black}, \verb{American Indian/Alaskan Native},
+\verb{Asian or Pacific Islander}.
+\item \code{ethnicity} is a 2-level partition: \code{Non-Hispanic}, \code{Hispanic}.
 }
 
-@source Surveillance, Epidemiology, and End Results (SEER) Program Populations (1969-2023)
-National Cancer Institute, DCCPS, Surveillance Research Program, released March 2025
-@reference \href{www.seer.cancer.gov/popdata}{NCI SEER data},
+Use \code{\link[=open_poparray]{open_poparray()}} to load one of the registered SEER cubes, then subset
+lazily with [\code{[}] or \code{\link[dplyr:filter]{dplyr::filter()}}. Tabular coercion with
+\code{\link[=as.data.frame]{as.data.frame()}} or \code{\link[tibble:as_tibble]{tibble::as_tibble()}} is \strong{EAGER} and should be used
+after subsetting.
+}
+\source{
+Surveillance, Epidemiology, and End Results (SEER) Program
+Populations (1969-2023), National Cancer Institute, DCCPS, Surveillance
+Research Program.
 }
 \description{
-Two data arrays of population estimates plus an array of standard population for use in adjustment. Sourced from the
-\href{https://seer.cancer.gov/data-software/uspopulations.html}{National Cancer Institute; Surveillance, Epidemiology, and End Results program}.
-The arrays contain intercensal estimates of age/age group, sex, race, and ethnicity (ASRE) population figures by
-year,and state/county. These estimates differ from the Census Bureau estimates primarily by using bridged race and
-ethnicity categories matching those from 1990. County level population estimates are produced in collaboration
-with the U.S. Census Bureau and the National Center for Health Statistics, with some years contracted out to private
-firms. The two population estimate
-arrays are:
+Two SEER population estimate cubes are available in the package registry:
+\code{seer_estimates_county_1y} and \code{seer_estimates_county_5y}. Both are sourced
+from the
+\href{https://seer.cancer.gov/data-software/uspopulations.html}{National Cancer Institute Surveillance, Epidemiology, and End Results (SEER) population data}.
+
+These cubes contain county-level Texas estimates by year, sex, age, race,
+and ethnicity. Compared with Census Bureau estimates, the SEER cubes use the
+SEER bridged race/ethnicity structure designed for epidemiologic rate work.
+
+The two registered cubes differ only in the age dimension:
 \itemize{
-\item "seer_grouped_age" uses 20 age groups
-\item "seer_single_age" uses single year age groups
-\item "population_std" is actually a list of tables with standard populations from different decades that may be used
-for adjustment.
+\item \code{seer_estimates_county_1y} uses single-year ages.
+\item \code{seer_estimates_county_5y} uses grouped age intervals.
 }
+}
+\references{
+\href{https://seer.cancer.gov/data-software/uspopulations.html}{SEER U.S. population data}
 }

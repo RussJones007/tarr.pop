@@ -960,25 +960,29 @@ projection_to_df <- function(x,
 
 
 
-#' Coerce poparray_projection to a data frame 
+#' Coerce poparray_projection to tabular output (EAGER)
 #' 
-#' Transforms the delayed array in `x` to a data frame or tibble. This is an eager
-#' realization. The output contains `projection` and `std_error` columns.
+#' Transforms the delayed arrays in `x` to a data frame or tibble. This is an
+#' **EAGER** realization. The output always contains `projection` and
+#' `std_error` columns.
 #'
-#' @param x a poparray_projection object
-#' @param ... 
-#' @param include_level the default is FALSE. When TRUE means add a column with the confidence level used for the
-#'   projection. The confidence level is also available in the attributes, attr(x, "level")
-#' @param include_model the default FALSE.  When TRUE causes a column with the model name used for the projection
+#' @param x A `poparray_projection` object.
+#' @param ... Additional arguments passed through to internal helpers.
+#' @param include_level Logical; default `FALSE`. When `TRUE`, add a column with
+#'   the confidence level used for the projection. The same value is also
+#'   available in the output attributes.
+#' @param include_model Logical; default `FALSE`. When `TRUE`, add a column with
+#'   the model name used for the projection.
 #' @param include_confidence default FALSE; when TRUE adds `lower` and `upper`
 #'   confidence-limit columns computed from `projection`, `std_error`, and the
 #'   object's confidence `level`.
 #'
-#' @returns a data frame for as.data.frame() and tibble for as_tibble()
+#' @returns A data frame for [as.data.frame()] and a tibble for
+#'   [tibble::as_tibble()].
 #' @export
 #'
 #' @examples
-#' # TO DO
+#' # Subset a projection before coercing to a data frame or tibble.
 as.data.frame.poparray_projection <- function(x,
                                               ...,
                                               include_level = FALSE,

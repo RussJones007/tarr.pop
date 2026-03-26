@@ -6,21 +6,24 @@
 \alias{tarr.pop}
 \title{tarr.pop-package.R}
 \description{
-The package provides a disk-based approach for storing and working with large
-population arrays. It includes population figures for Texas and its counties,
-with data sets covering age, sex, race, and ethnicity (ASRE). Estimated
-population by Zip Code Tabulation Area (ZCTA) is also available. Refer to the
-\link{population} help topic for the available data sets and their formats.
-}
-\section{Package functions}{
+The package provides a flexible framework for storing, managing, and analyzing population data using multidimensional
+arrays. It is designed to support demographic and epidemiologic workflows where population counts are organized
+across dimensions like time, geography, age, sex, race, ethnicity, or other descriptors like income bans, home
+values, household size, et cetera.
 
-\itemize{
-\item county_population() for convenient access to the county asre data sets for years of interest.
-\item retrieve_zip_code_population() to select different years of zip codes and associated population estimates for Tarrant
-County.
-}
-}
+The package enables users to work with population data from multiple sources in a consistent structure, preserving
+important semantic information about each dimension (e.g., whether categories are mutually exclusive or overlapping).
+This allows for safe aggregation, filtering, and transformation of population data while maintaining reproducibility
+and interpretability.
 
+Population data are stored using disk-backed arrays via \link[DelayedArray:DelayedArray-class]{DelayedArray::DelayedArray} and \link[HDF5Array:HDF5Array-class]{HDF5Array::HDF5Array}, allowing users to work with
+large data sets that exceed available memory. Operations such as filtering, sub-setting, and projection are performed
+lazily, minimizing memory usage and improving performance by avoiding unnecessary data realization.
+
+The package also provides tools for extending population cubes, including time-series projection methods and a
+standardized HDF5-based storage format with embedded metadata. Refer to the \link{population} help topic for available
+example data sets and their formats.
+}
 \references{
 Population figure sources are:
 \itemize{

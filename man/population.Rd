@@ -5,55 +5,127 @@
 \alias{population}
 \title{Population Tables/Arrays}
 \format{
-Typical county-level ASRE cubes include dimensions:
+A named list with source-grouped entries:
 \itemize{
-\item \code{year} (time role)
-\item \code{area.name} (area role)
-\item optional strata such as \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}
+\item \code{population$texas.demographic.center$estimates} = \code{"tdc_estimates_county"}
+\item \code{population$texas.demographic.center$projections} = \code{"tdc_projections_county"}
+\item \code{population$census.bureau$census} = \code{"census_decennial_county_1y"}
+\item \code{population$census.bureau$estimates} = \code{"census_estimates_county_5y"}
+\item \code{population$census.bureau$zcta} = \code{"census_zcta_estimates"}
+\item \code{population$seer$single_age} = \code{"seer_estimates_county_1y"}
+\item \code{population$seer$grouped_age} = \code{"seer_estimates_county_5y"}
 }
 
-Some tables may use a reduced schema (for example, \code{zcta} without ASRE
-stratification). Use \code{\link[=dimnames]{dimnames()}}, \code{\link[=names]{names()}}, and role helpers
-\code{time_role()} / \code{area_role()} on the loaded \code{poparray} to inspect the exact
-structure.
+Cube summary by current registry:
+\itemize{
+\item \code{census_decennial_county_1y}
+Source: \href{https://www.census.gov/programs-surveys/decennial-census.html}{U.S. Census Bureau decennial census}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}.
+The \code{year} dimension is a 3-level ordered interval-like time axis
+(\code{2000}, \code{2010}, \code{2020}). \code{area.name} is a 255-level county partition for
+Texas. \code{sex} is a 2-level partition (\code{Female}, \code{Male}). \code{age.char} is a
+single-year age axis summarized over many levels, so it should be treated
+as an ordered interval domain. \code{race} is a 7-level set-like dimension with
+categories such as \code{White}, \code{Black}, and \verb{Two Or More}; combinations can
+make aggregation assumptions important. \code{ethnicity} is a 2-level partition
+(\code{Hispanic}, \code{Non-Hispanic}).
+\item \code{census_estimates_county_5y}
+Source: \href{https://www.census.gov/data/datasets/time-series/demo/popest/2020s-counties-detail.html}{U.S. Census Bureau county characteristics datasets}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}.
+\code{year} has 15 levels (\code{2010} through \code{2024}) and is an ordered interval-like
+time axis. \code{area.name} is the 255-county Texas partition. \code{sex} is a
+2-level partition. \code{age.char} is a partition of 18 grouped age intervals
+(\code{0-4} through \verb{85 +}). \code{race} is an 11-level set-like dimension that
+includes bridged and "or in combination" categories. \code{ethnicity} is a
+2-level partition (\code{Hispanic}, \code{Non-Hispanic}).
+\item \code{census_zcta_estimates}
+Source: \href{https://www.census.gov/programs-surveys/acs}{U.S. Census Bureau American Community Survey}.
+Dimensions: \code{end.year}, \code{zip.code}.
+\code{end.year} has 13 levels (\code{2011} through \code{2023}) and is an ordered
+interval-like time axis representing estimate vintages. \code{zip.code} is a
+91-level ZCTA partition. This cube contains totals rather than ASRE strata.
+\item \code{seer_estimates_county_1y}
+Source: \href{https://seer.cancer.gov/data-software/uspopulations.html}{SEER U.S. population data}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}.
+\code{year} has 34 levels (\code{1990} through \code{2023}) and is an ordered interval-like
+time axis. \code{area.name} is the 255-county Texas partition. \code{sex} is a
+2-level partition (\code{Female}, \code{Male}). \code{age.char} is a single-year ordered
+interval domain (ages \code{0} through \code{90}). \code{race} is a 4-level partition
+(\code{White}, \code{Black}, \verb{American Indian/Alaskan Native},
+\verb{Asian or Pacific Islander}). \code{ethnicity} is a 2-level partition
+(\code{Non-Hispanic}, \code{Hispanic}).
+\item \code{seer_estimates_county_5y}
+Source: \href{https://seer.cancer.gov/data-software/uspopulations.html}{SEER U.S. population data}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race}, \code{ethnicity}.
+This cube shares the same year, county, sex, race, and ethnicity semantics
+as \code{seer_estimates_county_1y}. The difference is \code{age.char}, which is a
+19-level partition of grouped age intervals (\code{0}, \code{1-4}, \code{5-9}, ..., \code{80-84},
+\code{85}).
+\item \code{tdc_estimates_county}
+Source: \href{https://demographics.texas.gov/Resources/TPEPP/Estimates/}{Texas Demographic Center population estimates}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race.eth}.
+\code{year} has 11 levels (\code{2011} through \code{2022}, with no \code{2020} level in the
+current registry) and is an ordered interval-like time axis. \code{area.name} is
+the 255-county Texas partition. \code{sex} is a 2-level partition. \code{age.char}
+is an ordered age domain that mixes single ages with top-coded intervals
+such as \verb{85 +} and \verb{95 +}, so it should be treated as an interval domain.
+\code{race.eth} is a 5-level partition (\code{asian}, \code{black}, \code{hispanic}, \code{other},
+\code{white}) combining race and ethnicity into one dimension.
+\item \code{tdc_projections_county}
+Source: \href{https://demographics.texas.gov/Resources/TPEPP/Projections/}{Texas Demographic Center population projections}.
+Dimensions: \code{year}, \code{area.name}, \code{sex}, \code{age.char}, \code{race.eth}.
+\code{year} has 41 levels (\code{2010} through \code{2050}) and is an ordered interval-like
+time axis. \code{area.name} is the 255-county Texas partition. \code{sex} is a
+2-level partition. \code{age.char} is a single-year ordered interval domain with
+an infant \verb{< 1} label and a top-coded \verb{95 +} label. \code{race.eth} is the same
+5-level partition used by the TDC estimates cube.
+}
 }
 \usage{
 population
 }
 \description{
-The \code{population} object is a named catalog of population cubes grouped by source agency and table type. Each entry
-points to a delayed, disk-backed cube that can be opened as a \code{poparray} with \code{\link[=open_poparray]{open_poparray()}} (or the legacy alias
-\code{\link[=open_tarr_pop]{open_tarr_pop()}}).
+The \code{population} object is list containing a named catalog of the population cubes currently available.
+Entries are grouped by source agency and table
+type. Each entry stores a \code{series_id} string is basically the cube file name minus the extension. The series name is
+passed to the \code{\link[=open_poparray]{open_poparray()}} function and \link{poparray} is returned .
 }
 \details{
-A \code{poparray} extends \code{DelayedArray} (typically HDF5-backed) and stores explicit dimension labels and role metadata
-(\code{time}, \code{area}, optional \code{strata}). This allows filtering and aggregation before realization, reducing memory use.
+A \code{poparray} extends \code{DelayedArray} (typically backed by an HDF5 file) and stores
+explicit dimension labels, role metadata, as part of the  dimension  meta data. See \link{DimSematics} for how each
+dimension is described. The meta data is used to allow filtering and aggregation before realization, reducing memory
+use and helping guard against unsafe aggregation wwhen non-cluinve categories are present.
 
-Available series include decennial census counts, annual estimates, and projections from:
+The available cubes are sourced from include:
 \itemize{
 \item \href{https://www.census.gov/}{U.S. Census Bureau}
 \item \href{https://demographics.texas.gov/}{Texas Demographic Center}
-\item National Cancer Institute SEER program
+\item \href{https://seer.cancer.gov/data-software/uspopulations.html}{National Cancer Institute SEER Program}
 }
 
-The \code{zcta} table differs from county ASRE cubes and is focused on ZCTA-level totals for Tarrant County.
+Most cubes use county-level demographic dimensions and contain Age, Sex, Race, and  Ethnicity (\strong{ASRE}). The
+\code{census_zcta_estimates} cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
+rather than ASRE county slices.
 
 Common workflow:
 \itemize{
 \item open a cube: \code{\link[=open_poparray]{open_poparray()}}
-\item subset by labels: [\code{[}], or \code{\link[dplyr:filter]{dplyr::filter()}}
+\item subset by labels: [\code{[}] or \code{\link[dplyr:filter]{dplyr::filter()}}
 \item collapse/group dimensions: \code{\link[=collapse_dim]{collapse_dim()}}, \code{\link[=split]{split()}}, \code{\link[=by]{by()}}
-\item coerce to tabular output: \code{\link[=as.data.frame]{as.data.frame()}}, \code{\link[tibble:as_tibble]{tibble::as_tibble()}}
+\item coerce to tabular output: \code{\link[=as.data.frame]{as.data.frame()}} or \code{\link[tibble:as_tibble]{tibble::as_tibble()}} (\strong{EAGER})
 }
 
-Dimension labels and categories differ by source. The package standardizes names where possible, but category sets
-may still vary (especially race/ethnicity and age group structure).
+Dimension labels and categories differ by source. The package standardizes
+names where possible, but label sets still vary, especially for age and
+race/ethnicity dimensions.
 
 Notes:
 \itemize{
 \item census-estimate vintages are revised over time; historical year values may change across releases.
 \item use accessors such as \code{\link[=years]{years()}}, \code{\link[=areas]{areas()}}, \code{\link[=ages]{ages()}}, \code{\link[=races]{races()}},
 \code{\link[=ethnicities]{ethnicities()}} to inspect currently available labels in a loaded cube.
+\item use \code{\link[=dim_semantics]{dim_semantics()}} to inspect whether a dimension behaves like a
+partition, set, or interval domain before aggregating.
 }
 }
 \keyword{datasets}

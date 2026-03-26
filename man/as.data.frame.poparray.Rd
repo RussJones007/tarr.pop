@@ -19,7 +19,8 @@
 
 \item{responseName}{Name of the value column (defaults to \code{data_col(x)}).}
 
-\item{bytes_threshold}{is the number of bytes to warnn you shen a large data frame isbing retunrd. Default is 40 MB.}
+\item{bytes_threshold}{Byte threshold used to warn before realizing a large
+data frame. Default is 40 MB.}
 
 \item{...}{Passed to \code{as.data.frame.table()} (rarely needed).}
 }

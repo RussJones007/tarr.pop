@@ -24,13 +24,16 @@
 #' @export
 #'
 #' @examples
-#' # convert a large data frame into an array
-#' df <- population$census |>
-#'    as.data.frame()
+#' # convert a data frame into an array
+#' df <- data.frame(
+#'   year = c("2020", "2020", "2021", "2021"),
+#'   sex = c("Female", "Male", "Female", "Male"),
+#'   population = c(100, 95, 102, 98)
+#' )
 #'
 #' arr <- df_2_array(df, data_col = "population")
 #'
-#' dims(arr)
+#' dim(arr)
 #' dimnames(arr)
 #'
 df_2_array <- function(df, data_col = "value"){
@@ -72,8 +75,15 @@ df_2_array <- function(df, data_col = "value"){
 #' @export
 #'
 #' @examples
-#' #Convert a population array to a data frame
-#' df <- array_2_df(population$census)
+#' # Convert an array to a data frame
+#' arr <- array(
+#'   c(100, 95, 102, 98),
+#'   dim = c(2, 2),
+#'   dimnames = list(year = c("2020", "2021"), sex = c("Female", "Male"))
+#' )
+#' attr(arr, "data_col") <- "population"
+#'
+#' df <- array_2_df(arr)
 #' head(df)
 #'
 array_2_df <- function(

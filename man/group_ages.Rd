@@ -22,15 +22,8 @@ The ages dimension or column name is set to age groups and the count data (popul
 returned object.
 }
 \examples{
-census <- county_population(
-     population$census.bureau$census(),
-     year = c("2010", "2020"),
-     county = "Tarrant",
-     sex = c("Female", "Male"),
-     age  =  c(as.character(0:99), "100-104"),
-     race = "All",
-     ethnicity = c("Hispanic", "Non-Hispanic"),
-     drop = FALSE)
-
-census_age_grouped <- group_ages(pop = census, rage::age.groups$ILI)
+# Load a poparray, subset lazily, then group ages.
+# census <- open_poparray(population$census.bureau$census)
+# census <- dplyr::filter(census, year \%in\% c("2010", "2020"))
+# census_age_grouped <- group_ages(census, rage::age_groups$ILI)
 }

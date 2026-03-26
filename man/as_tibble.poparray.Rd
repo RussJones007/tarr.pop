@@ -25,5 +25,6 @@ A tibble.
 }
 \description{
 Coercion is done via \code{as.data.frame.poparray()} for consistency, then
-converted to a tibble.
+converted to a tibble. This realizes the delayed backend for the current
+slice, so subset first for large cubes.
 }

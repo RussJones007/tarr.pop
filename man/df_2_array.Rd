@@ -25,13 +25,16 @@ return subsets is very fast. This function is used internally, but is exposed fo
 complimentary array_2_df() is the reverse of this function.
 }
 \examples{
-# convert a large data frame into an array
-df <- population$census |>
-   as.data.frame()
+# convert a data frame into an array
+df <- data.frame(
+  year = c("2020", "2020", "2021", "2021"),
+  sex = c("Female", "Male", "Female", "Male"),
+  population = c(100, 95, 102, 98)
+)
 
 arr <- df_2_array(df, data_col = "population")
 
-dims(arr)
+dim(arr)
 dimnames(arr)
 
 }
