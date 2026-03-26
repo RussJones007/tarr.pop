@@ -1,0 +1,234 @@
+---
+title: "Introduction to tarr.pop"
+format: html
+vignette: >
+  %\VignetteIndexEntry{"Introduction to tarr.pop"}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+library(tarr.pop)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+```
+
+# Introduction
+
+The `tarr.pop` package is designed for working with population denominators as
+multi-dimensional data rather than as long tables of rows. That distinction is
+important in epidemiology and demography, where a population count is usually
+defined by several dimensions at once:
+
+- year
+- geography
+- age
+- sex
+- race
+- ethnicity
+
+In a regular table, those dimensions are present, but their structure is only
+implied by columns. In `tarr.pop`, the same data is treated as a population
+cube, which makes the structure explicit and easier to work with safely.
+
+# Why use a population cube?
+
+Population data is naturally multi-dimensional. A single cell in a cube might
+mean:
+
+> the number of people in Tarrant County, in 2022, age 65 to 69, female
+
+That is not a row-first idea. It is a combination of labeled dimensions.
+
+The `tarr.pop` package uses the `poparray` class to represent this structure.
+`poparray` builds on [DelayedArray] and [HDF5Array], so cubes can stay on disk
+and be manipulated lazily until you actually need a realized result.
+
+# The `poparray` class
+
+A `poparray` is an S4 class that stores:
+
+- the population values themselves
+- the names and labels of each dimension
+- the role of key dimensions such as time and area
+- semantic information about each dimension
+
+This means a `poparray` is more than an array of numbers. It is an array plus a
+contract describing what those numbers mean.
+
+## Roles
+
+Every `poparray` has:
+
+- one time dimension
+- one area dimension
+- zero or more additional stratification dimensions
+
+Those roles are stored with the object, so functions can work with the cube by
+meaning rather than by hard-coded position.
+
+## `DimSemantics`
+
+The `DimSemantics` class stores semantic information for each dimension. For
+example, it can describe whether a dimension behaves like:
+
+- a partition, where categories are mutually exclusive
+- a set, where categories may overlap
+- an interval scale, such as age groups or years
+
+That matters because not every aggregation is safe. Some categories overlap and
+should not be summed without care. By storing semantics with the cube,
+`tarr.pop` can help prevent invalid operations.
+
+You can inspect the semantic metadata directly:
+
+```{r}
+pop <- open_poparray("tdc_estimates_county")
+
+names(dim_semantics(pop))
+dim_semantics(pop)$year
+dim_semantics(pop)$age.char
+```
+
+# A first workflow
+
+This section walks through a simple beginner workflow:
+
+1. open a cube
+2. inspect the structure
+3. filter to a smaller analysis slice
+4. collapse remaining stratification dimensions
+5. convert to a tibble for plotting
+
+## Open a cube
+
+For this example, use the Texas Demographic Center county estimates cube.
+
+```{r}
+pop <- open_poparray("tdc_estimates_county")
+pop
+```
+
+## Inspect the structure
+
+Start by asking a few basic questions about the cube.
+
+```{r}
+dim(pop)
+names(dimnames(pop))
+time_role(pop)
+area_role(pop)
+```
+
+The dimension labels are also easy to inspect.
+
+```{r}
+head(dimnames(pop)[[time_role(pop)]])
+head(dimnames(pop)[[area_role(pop)]])
+```
+
+## Filter to a smaller slice
+
+Suppose we want to compare Dallas, Tarrant, and Travis counties over the most
+recent five years in the cube.
+
+```{r}
+target_counties <- c("Dallas", "Tarrant", "Travis")
+
+recent_years <- dimnames(pop)[[time_role(pop)]] |>
+  tail(5)
+
+pop_small <- pop |>
+  dplyr::filter(
+    area.name %in% target_counties,
+    year %in% recent_years
+  )
+
+pop_small
+```
+
+This filtering step is still lazy. At this point, `tarr.pop` has created a
+smaller cube view, but it has not converted the full result into an in-memory
+data frame.
+
+## Collapse stratification dimensions
+
+The filtered cube still contains other demographic dimensions. To compare total
+population by county and year, collapse the remaining stratification dimensions
+to `"All"`.
+
+```{r}
+strata_dims <- names(dimnames(pop_small)) |>
+  setdiff(c(time_role(pop_small), area_role(pop_small)))
+
+pop_totals <- pop_small
+
+for (dm in strata_dims) {
+  labs <- dimnames(pop_totals)[[dm]]
+  groups <- stats::setNames(rep("All", length(labs)), labs)
+  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
+}
+
+pop_totals
+```
+
+## Convert to a tibble
+
+Converting to a tibble is an eager step, so it is best done after filtering and
+collapsing.
+
+```{r}
+county_df <- pop_totals |>
+  as_tibble() |>
+  dplyr::mutate(year = as.integer(as.character(year)))
+
+county_df
+```
+
+## Plot the result
+
+```{r}
+#| fig.width: 8
+#| fig.height: 4.8
+ggplot(county_df, aes(x = year, y = population, color = area.name)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(
+    title = "Population comparison for three Texas counties",
+    subtitle = "Recent years from tdc_estimates_county",
+    x = "Year",
+    y = "Population",
+    color = "County"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+# What to remember
+
+The `tarr.pop` package is the package. `poparray` is one of its core classes.
+
+That class gives you:
+
+- a cube-shaped representation of population data
+- lazy computation through DelayedArray
+- disk-backed storage through HDF5Array
+- semantic metadata through `DimSemantics`
+
+Taken together, those pieces make it easier to work with large population
+denominators in a way that is both scalable and easier to reason about.
+
+# Next steps
+
+After you are comfortable opening and filtering cubes, common next steps are:
+
+- exploring `dim_semantics()` in more detail
+- using `collapse_dim()` for summaries
+- converting a filtered cube to a tibble for reporting
+- using `project()` to create future population projections
