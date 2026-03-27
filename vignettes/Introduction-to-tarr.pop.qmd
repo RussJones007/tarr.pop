@@ -204,21 +204,39 @@ expect to see in the smaller cube view. Compare the number of values in pop_smal
 
 The filtered cube still contains other demographic dimensions. To
 compare total population by county and year, collapse the remaining
-stratification dimensions to `"All"`.
+stratification dimensions to `"All"`. For this cube, that means
+collapsing `sex`, `age.char`, `race`, and `ethnicity`.
 
 ```{r}
-# Correct this snippet to use collapse_dims
-
-strata_dims <- names(dimnames(pop_small)) |>
-  setdiff(c(time_role(pop_small), area_role(pop_small)))
-
-pop_totals <- pop_small
-
-for (dm in strata_dims) {
-  labs <- dimnames(pop_totals)[[dm]]
-  groups <- stats::setNames(rep("All", length(labs)), labs)
-  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
-}
+pop_totals <- pop_small |>
+  collapse_dim(
+    dim = "sex",
+    groups = stats::setNames(
+      rep("All", length(dimnames(pop_small)$sex)),
+      dimnames(pop_small)$sex
+    )
+  ) |>
+  collapse_dim(
+    dim = "age.char",
+    groups = stats::setNames(
+      rep("All", length(dimnames(pop_small)$age.char)),
+      dimnames(pop_small)$age.char
+    )
+  ) |>
+  collapse_dim(
+    dim = "race",
+    groups = stats::setNames(
+      rep("All", length(dimnames(pop_small)$race)),
+      dimnames(pop_small)$race
+    )
+  ) |>
+  collapse_dim(
+    dim = "ethnicity",
+    groups = stats::setNames(
+      rep("All", length(dimnames(pop_small)$ethnicity)),
+      dimnames(pop_small)$ethnicity
+    )
+  )
 
 pop_totals
 ```
