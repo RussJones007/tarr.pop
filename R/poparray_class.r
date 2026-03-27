@@ -445,87 +445,6 @@ setMethod("show", "poparray", function(object) {
 
 setMethod("collapse_dim", "poparray", collapse_dim_poparray_impl)
 
-setMethod(
-  "[",
-  signature(x = "poparray"),
-  function(x, ..., drop = FALSE) {
-    validate_poparray(x)
-    before_dimnames <- dimnames(x)
-    dim_order <- names(before_dimnames)
-    nd <- length(before_dimnames)
-
-    dots <- as.list(substitute(list(...)))[-1L]
-    idx_names <- names(dots) %||% rep("", length(dots))
-
-    if (!any(nzchar(idx_names))) {
-      out <- callNextMethod()
-    } else {
-      idx <- lapply(dots, function(expr) {
-        if (identical(expr, quote(expr = ))) TRUE else eval(expr, parent.frame())
-      })
-
-      ndx <- rep(list(TRUE), nd)
-      used <- rep(FALSE, nd)
-      next_pos <- 1L
-
-      for (i in seq_along(idx)) {
-        nm <- idx_names[[i]] %||% ""
-        if (nzchar(nm)) {
-          pos <- match(nm, dim_order)
-          if (is.na(pos)) {
-            cli::cli_abort(c(
-              "Unknown dimension name in subset: {.val {nm}}.",
-              "i" = "Valid dimensions are: {paste(dim_order, collapse = ', ')}."
-            ))
-          }
-        } else {
-          while (next_pos <= nd && used[[next_pos]]) {
-            next_pos <- next_pos + 1L
-          }
-          if (next_pos > nd) {
-            cli::cli_abort("Too many indices for {.cls poparray}.")
-          }
-          pos <- next_pos
-        }
-
-        if (used[[pos]]) {
-          cli::cli_abort("Duplicate index supplied for dimension {.val {dim_order[[pos]]}}.")
-        }
-
-        ndx[[pos]] <- idx[[i]]
-        used[[pos]] <- TRUE
-      }
-
-      out <- do.call(`[`, c(list(x), ndx, list(drop = drop)))
-    }
-    if (!is(out, "DelayedArray")) {
-      return(out)
-    }
-
-    after_dimnames <- dimnames(out)
-    if (is.null(after_dimnames) || is.null(names(after_dimnames))) {
-      return(out)
-    }
-    if (!x@time_role %in% names(after_dimnames) || !x@area_role %in% names(after_dimnames)) {
-      return(out)
-    }
-    updated_dim_semantics <- subset_dim_semantics(
-      dim_semantics = x@dim_semantics,
-      before_dimnames = before_dimnames,
-      after_dimnames = after_dimnames
-    )
-    new_poparray(
-      x = out,
-      dimnames_list = dimnames(out),
-      data_col = x@data_col,
-      source = x@source,
-      time_dim = x@time_role,
-      area_dim = x@area_role,
-      dim_semantics = updated_dim_semantics
-    )
-  }
-)
-
 
 #' Validate poparray object
 #'
@@ -659,15 +578,137 @@ summary.poparray <- function(object, ...) {
 # 
 # Subset a poparray
 #
-# Subsets the poparray object and updates the stored dimnames metadata. By default (`drop = FALSE`) the result remains
-# a `poparray`. If `drop = TRUE` and subsetting would drop either the `dimroles` time or area dimensions , the
-# method returns the underlying subsetted `DelayedArray` instead of a `poparray`.
+# Subsets the poparray object. By default (`drop = FALSE`) the result remains
+# a `poparray`. If `drop = TRUE` and sub-setting would drop either the roles of  time or area dimensions , the
+# method returns the underlying sub-setted `DelayedArray` instead of a `poparray`.
 # 
 # @param x A poparray.
 # @param ... Indices, either positional (like base arrays) or named by dimension (e.g., `x[year = "2020", sex =
 #   "Female"]`). Missing indices in positional form are treated as `TRUE` (select all).
 # @param drop Logical; passed to the backend `[` call.
 #
+#' Subset a poparray lazily
+#'
+#' Subsets a `poparray` while preserving dimension metadata and roles whenever
+#' the resulting object still contains both the time and area dimensions.
+#' The method defaults to `drop = FALSE`, so selecting a single time or area
+#' level does not silently strip the `poparray` class.
+#'
+#' Named subscripts are supported and are matched against dimension names.
+#'
+#' @param x A `poparray`.
+#' @param ... Indices, either positional (like base arrays) or named by
+#'   dimension (for example `x[year = "2020", sex = "Female"]`). Missing
+#'   positional indices are treated as `TRUE`.
+#' @param drop Logical; passed to the backend `[` call. Defaults to `FALSE`.
+#'
+#' @return A `poparray` when both role dimensions remain after subsetting;
+#'   otherwise the underlying delayed subset.
+#' @name subset-poparray
+#' @aliases [,poparray-method
+NULL
+
+wrap_subset_poparray <- function(x, out, before_dimnames) {
+  if (!is(out, "DelayedArray")) {
+    return(out)
+  }
+
+  after_dimnames <- dimnames(out)
+  if (is.null(after_dimnames) || is.null(names(after_dimnames))) {
+    return(out)
+  }
+  if (!x@time_role %in% names(after_dimnames) || !x@area_role %in% names(after_dimnames)) {
+    return(out)
+  }
+
+  updated_dim_semantics <- subset_dim_semantics(
+    dim_semantics = x@dim_semantics,
+    before_dimnames = before_dimnames,
+    after_dimnames = after_dimnames
+  )
+
+  new_poparray(
+    x = out,
+    dimnames_list = dimnames(out),
+    data_col = x@data_col,
+    source = x@source,
+    time_dim = x@time_role,
+    area_dim = x@area_role,
+    dim_semantics = updated_dim_semantics
+  )
+}
+
+setMethod(
+  "[",
+  signature(x = "poparray", i = "ANY", j = "ANY"),
+  function(x, i, j, ..., drop = FALSE) {
+    validate_poparray(x)
+    before_dimnames <- dimnames(x)
+    dim_order <- names(before_dimnames)
+    nd <- length(before_dimnames)
+    h <- methods::as(x, "DelayedArray")
+
+    extra_dots <- as.list(substitute(list(...)))[-1L]
+    extra_names <- names(extra_dots) %||% rep("", length(extra_dots))
+    has_named_extras <- any(nzchar(extra_names))
+
+    if (isTRUE(has_named_extras)) {
+      dots <- extra_dots
+      if (!missing(i)) dots <- c(list(substitute(i)), dots)
+      if (!missing(j)) dots <- append(dots, list(substitute(j)), after = as.integer(!missing(i)))
+    } else {
+      dots <- as.list(substitute(list(i, j, ...)))[-1L]
+    }
+    idx_names <- names(dots) %||% rep("", length(dots))
+
+    if (!any(nzchar(idx_names))) {
+      idx <- lapply(dots, function(expr) {
+        if (identical(expr, quote(expr = ))) TRUE else eval(expr, parent.frame())
+      })
+      out <- do.call(`[`, c(list(h), idx, list(drop = drop)))
+    } else {
+      idx <- lapply(dots, function(expr) {
+        if (identical(expr, quote(expr = ))) TRUE else eval(expr, parent.frame())
+      })
+
+      ndx <- rep(list(TRUE), nd)
+      used <- rep(FALSE, nd)
+      next_pos <- 1L
+
+      for (i in seq_along(idx)) {
+        nm <- idx_names[[i]] %||% ""
+        if (nzchar(nm)) {
+          pos <- match(nm, dim_order)
+          if (is.na(pos)) {
+            cli::cli_abort(c(
+              "Unknown dimension name in subset: {.val {nm}}.",
+              "i" = "Valid dimensions are: {paste(dim_order, collapse = ', ')}."
+            ))
+          }
+        } else {
+          while (next_pos <= nd && used[[next_pos]]) {
+            next_pos <- next_pos + 1L
+          }
+          if (next_pos > nd) {
+            cli::cli_abort("Too many indices for {.cls poparray}.")
+          }
+          pos <- next_pos
+        }
+
+        if (used[[pos]]) {
+          cli::cli_abort("Duplicate index supplied for dimension {.val {dim_order[[pos]]}}.")
+        }
+
+        ndx[[pos]] <- idx[[i]]
+        used[[pos]] <- TRUE
+      }
+
+      out <- do.call(`[`, c(list(h), ndx, list(drop = drop)))
+    }
+
+    wrap_subset_poparray(x, out, before_dimnames)
+  }
+)
 
 # Coerce to poparray' ---------------------------------------------------------------------------------------------
 

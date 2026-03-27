@@ -82,6 +82,10 @@ test_that("new_poparray enforces DelayedArray input and HDF5 backing", {
 test_that("subsetting keeps poparray when drop = FALSE and unwraps when drop = TRUE", {
   pa <- make_poparray_fixture()
 
+  default_keep <- pa["2020", , ]
+  expect_s4_class(default_keep, "poparray")
+  expect_equal(dimnames(default_keep)$year, "2020")
+
   keep <- pa["2020", , , drop = FALSE]
   expect_s4_class(keep, "poparray")
   expect_equal(time_role(keep), "year")
