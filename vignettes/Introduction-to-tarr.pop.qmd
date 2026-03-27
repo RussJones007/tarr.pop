@@ -29,10 +29,10 @@ library(ggplot2)
 # Introduction
 
 The `tarr.pop` package is designed for working with population values as
-multi-dimensional data rather than as long tables of rows. The
-distinction is important in epidemiology and demography work flows,
-where a population count is usually defined by several dimensions at
-once, for example:
+multi-dimensional data rather than long tables of rows. The distinction
+is important in epidemiology and demography work flows, where a
+population count is usually defined by several dimensions at once, for
+example:
 
 -   year
 -   geography
@@ -47,11 +47,12 @@ population cube, which makes the structure explicit and easier to work
 with safely. In R parlance a cube is a multi-dimensional
 [array](https://www.programiz.com/r/arrays).
 
-Each dimension can have a number of labeled categories/levels. For example,
-a `sex` dimension would have "female" and "male". The area dimension
-could have an entry for each county or other divisions like census block.
-The year dimension would have entries for each year. In the case of the
-decennial census, those years could be 2000, 2020, and 2020.
+Each dimension can have a number of labeled categories/levels. For
+example, a `sex` dimension would have "female" and "male". The area
+dimension could have an entry for each county or other divisions like
+census block. The year dimension would have entries for each year. In
+the case of the decennial census, those years could be 2000, 2020, and
+2020.
 
 # Why use a population cube?
 
@@ -64,10 +65,13 @@ That is not a row-first idea. It is a combination of labeled dimensions.
 
 # The `poparray` class
 
-Central to how the `tarr.pop` package represents population data is the `poparray` class to handle the dimensional
-structure. `poparray` builds on two other classes from the Bioconductor ecosystem DelayedArray for delaying array
-actions for optimization, and HDF5Array to hanlde operations on disk rather than memory. This results in large cubes of
-data stay on disk and are manipulated "lazily" (deferred actions) until you actually need a realized (retrieved) result.
+Central to how the `tarr.pop` package represents population data is the
+`poparray` class to handle the dimensional structure. `poparray` builds
+on two other classes from the Bioconductor ecosystem DelayedArray for
+delaying array actions for optimization, and HDF5Array to hanlde
+operations on disk rather than memory. This results in large cubes of
+data stay on disk and are manipulated "lazily" (deferred actions) until
+you actually need a realized (retrieved) result.
 
 A `poparray` is an R S4 class that stores:
 
@@ -87,9 +91,10 @@ Every `poparray` has:
 -   one area dimension
 -   zero or more additional stratification dimensions
 
-Those roles are stored with the object, so functions can work with the cube by meaning rather than by hard-coded
-position. The additional stratificaton dimensions mentioned above may include things like age, race, ethnicity, house
-size, income, education, etc.
+Those roles are stored with the object, so functions can work with the
+cube by meaning rather than by hard-coded position. The additional
+stratificaton dimensions mentioned above may include things like age,
+race, ethnicity, house size, income, education, etc.
 
 Several cubes are included with the package. Sources include the US
 Census Bureau, National Cancer Institute SEER program, and the Texas
@@ -104,15 +109,18 @@ pop <- open_poparray("tdc_estimates_county")
 pop
 ```
 
-The printed information for `pop` includes the series name, the data source, last cube update, length is the number of
-values, the time and area role names, dimension names with number of levels, and column name used when converted to a
-data frame.
+The printed information for `pop` includes the series name, the data
+source, last cube update, length is the number of values, the time and
+area role names, dimension names with number of levels, and column name
+used when converted to a data frame.
 
 ## `DimSemantics`
 
-The `DimSemantics` class stores semantic information for each dimension in a cube. The `poparray` class uses objects of
-`DimSemantics` to enable operations like collapsing levles n a dimension or preventing sum() when overlapping levles
-exist.  Dimdemtics describe whether a dimension behaves like:
+The `DimSemantics` class stores semantic information for each dimension
+in a cube. The `poparray` class uses objects of `DimSemantics` to enable
+operations like collapsing levles n a dimension or preventing sum() when
+overlapping levles exist. Dimdemtics describe whether a dimension
+behaves like:
 
 -   a partition, where categories are mutually exclusive
 -   a set, where categories may overlap
@@ -136,8 +144,9 @@ dim_semantics(pop)$age.char
 
 # A first workflow
 
-`poparray` is meant handle a large data cube on the backend and allow you to specify the data you need.
-Here is an example workflow with some steps along the way so you can see what is happening:
+`poparray` is meant handle a large data cube on the backend and allow
+you to specify the data you need. Here is an example workflow with some
+steps along the way so you can see what is happening:
 
 1.  open a cube
 2.  inspect the structure
@@ -155,8 +164,9 @@ pop <- open_poparray("tdc_estimates_county")
 pop
 ```
 
-Notice the number of data elemets in the cube and the size of each dimension. Let's see some of the 
-cube meta data. Start by asking a few basic questions about the cube.
+Notice the number of data elemets in the cube and the size of each
+dimension. Let's see some of the cube meta data. Start by asking a few
+basic questions about the cube.
 
 ```{r meta_data}
 dim(pop)              # size of each dimension.
@@ -165,7 +175,8 @@ time_role(pop)        # name used for the time diomension.
 area_role(pop)        # name used for the area dimension.
 ```
 
-The dimension labels are also easy to inspect and contain information in differenmt "slots".
+The dimension labels are also easy to inspect and contain information in
+differenmt "slots".
 
 ```{r}
 head(dimnames(pop)[[time_role(pop)]])
@@ -194,11 +205,14 @@ pop_small <- pop |>
 pop_small
 ```
 
-This filtering step is still lazy, meaning the actions are queued to occur. At this point, `poparray` has created a
-smaller cube view, but it has not converted the full result into an in-memory data frame. You can still look at what to
-expect to see in the smaller cube view. Compare the number of values in pop_small `r length(pop_small) |> format(big.mark = ",")` to that in pop
-`r length(pop) |> format(big.mark = ",")`. Just by reducing the number of `levels` in area.name and `year`  the number of values are smaller.
-
+This filtering step is still lazy, meaning the actions are queued to
+occur. At this point, `poparray` has created a smaller cube view, but it
+has not converted the full result into an in-memory data frame. You can
+still look at what to expect to see in the smaller cube view. Compare
+the number of values in pop_small
+`r length(pop_small) |> format(big.mark = ",")` to that in pop
+`r length(pop) |> format(big.mark = ",")`. Just by reducing the number
+of `levels` in area.name and `year` the number of values are smaller.
 
 ## Collapse stratification dimensions
 
