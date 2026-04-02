@@ -110,6 +110,12 @@ test_that("subsetting supports named indices and keeps poparray when roles remai
   expect_equal(dimnames(named_time)$year, "2020")
 })
 
+test_that("sd(poparray) uses S4 dispatch and matches realized result", {
+  pa <- make_poparray_fixture()
+
+  expect_equal(sd(pa), stats::sd(as.array(pa)))
+})
+
 test_that("validation enforces ordered time labels", {
   arr <- array(
     c(1, 2, 3, 4),

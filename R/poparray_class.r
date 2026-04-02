@@ -1038,14 +1038,53 @@ by.poparray <- function(data, INDICES, FUN, ..., simplify = TRUE, drop = FALSE) 
 
 # Operators -------------------------------------------------------------------------------------------------------
 
-#' @export
-sd.poparray <- function(x, ..., na.rm = FALSE) {
-  a <- methods::as(x, "DelayedArray")
-  # For general DelayedArray, sd() may or may not be specialized;
-  # safest is a two-pass block reduction if you need guaranteed behavior.
-  # (See next section.)
-  stats::sd(as.vector(a), na.rm = na.rm)
-}
+setMethod(
+  "sd",
+  "poparray",
+  function(x, na.rm = FALSE) {
+    validate_poparray(x)
+    warn_if_realization_large_delayed(
+      methods::as(x, "DelayedArray"),
+      bytes_threshold = 40e6,
+      what = "Computing sd(poparray)"
+    )
+
+    state <- DelayedArray:::blockReduce(
+      FUN = function(block, init, na.rm) {
+        vals <- as.numeric(block)
+        if (!isTRUE(na.rm) && anyNA(vals)) {
+          init$has_na <- TRUE
+          return(init)
+        }
+        if (isTRUE(na.rm)) {
+          vals <- vals[!is.na(vals)]
+        }
+        if (!length(vals)) {
+          return(init)
+        }
+        init$n <- init$n + length(vals)
+        init$sum <- init$sum + sum(vals)
+        init$sumsq <- init$sumsq + sum(vals * vals)
+        init
+      },
+      x = methods::as(x, "DelayedArray"),
+      init = list(n = 0, sum = 0, sumsq = 0, has_na = FALSE),
+      na.rm = na.rm,
+      BREAKIF = function(init) isTRUE(init$has_na)
+    )
+
+    if (isTRUE(state$has_na)) {
+      return(NA_real_)
+    }
+    if (state$n <= 1L) {
+      return(stats::sd(numeric(0), na.rm = na.rm))
+    }
+
+    numer <- state$sumsq - (state$sum * state$sum / state$n)
+    numer <- max(numer, 0)
+    sqrt(numer / (state$n - 1L))
+  }
+)
 
 # Accessors / helpers ----------------------------------------------------------
 
@@ -1090,17 +1129,23 @@ dim_semantics <- function(x) {
 }
 
 
-#' Warn for large realized array
+#' Warn for large delayed realizations
 #'
-#' Used for the side effect of issuing a warning when a realized array is very large.
+#' Used for the side effect of issuing a warning when realizing a delayed array
+#' would be large.
 #'
-#' @param x A poparray.
+#' @param x A `DelayedArray`.
 #' @param bytes_threshold Threshold in bytes for warning (default ~400 MB).
+#' @param what Short label describing the eager action being taken.
 #' @returns x invisibly.
 #' @keywords internal
-warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
-  validate_poparray(x)
-  
+warn_if_realization_large_delayed <- function(x,
+                                              bytes_threshold = 5e7 * 8,
+                                              what = "Coercing this array") {
+  if (!is(x, "DelayedArray")) {
+    cli::cli_abort("{.arg x} must be a {.cls DelayedArray}.")
+  }
+
   t <- tolower(DelayedArray::type(x))
   
   bytes_per_cell <- switch(
@@ -1120,7 +1165,7 @@ warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
   if (est_bytes >= bytes_threshold) {
     est_mb <- est_bytes / 1024^2
     cli::cli_warn(c(
-      "Coercing this poparray to an in-memory array is {.emph EAGER} and may use substantial memory.",
+      "{what} is {.emph EAGER} and may use substantial memory.",
       "i" = "Cells: {format(n_cells, big.mark = ',')}.",
       "i" = "Backend type: {.val {t}} (~{bytes_per_cell} bytes/cell).",
       "i" = "Estimated realized array size: ~{format(round(est_mb, 1), nsmall = 1)} MB (array only).",
@@ -1129,6 +1174,23 @@ warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
   }
   
   invisible(x)
+}
+
+#' Warn for large realized array
+#'
+#' Used for the side effect of issuing a warning when a realized array is very large.
+#'
+#' @param x A poparray.
+#' @param bytes_threshold Threshold in bytes for warning (default ~400 MB).
+#' @returns x invisibly.
+#' @keywords internal
+warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
+  validate_poparray(x)
+  warn_if_realization_large_delayed(
+    methods::as(x, "DelayedArray"),
+    bytes_threshold = bytes_threshold,
+    what = "Coercing this poparray to an in-memory array"
+  )
 }
 
 #' Polish data frames after coercing

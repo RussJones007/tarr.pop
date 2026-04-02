@@ -10,7 +10,8 @@
   ...,
   include_level = FALSE,
   include_model = FALSE,
-  include_confidence = FALSE
+  include_confidence = FALSE,
+  bytes_threshold = 4e+07
 )
 
 \method{as_tibble}{poparray_projection}(
@@ -18,7 +19,8 @@
   ...,
   include_level = FALSE,
   include_model = FALSE,
-  include_confidence = FALSE
+  include_confidence = FALSE,
+  bytes_threshold = 4e+07
 )
 }
 \arguments{
@@ -36,6 +38,9 @@ the model name used for the projection.}
 \item{include_confidence}{default FALSE; when TRUE adds \code{lower} and \code{upper}
 confidence-limit columns computed from \code{projection}, \code{std_error}, and the
 object's confidence \code{level}.}
+
+\item{bytes_threshold}{Byte threshold used to warn before realizing a large
+projection cube. Default is 40 MB.}
 }
 \value{
 A data frame for \code{\link[=as.data.frame]{as.data.frame()}} and a tibble for

@@ -2,24 +2,42 @@
 % Please edit documentation in R/group_ages.R
 \name{group_ages}
 \alias{group_ages}
-\title{Ages into Groups}
+\title{Collapse age labels into coarser groups}
 \usage{
-group_ages(pop, age_groups, dimension_name = "age.char")
+group_ages(
+  pop,
+  age_groups,
+  dimension_name = "age.char",
+  keep_empty = FALSE,
+  strict = TRUE,
+  allow_overlap = FALSE
+)
 }
 \arguments{
-\item{pop}{A poparray object with an age dimension name or column.}
+\item{pop}{A \code{poparray}.}
 
-\item{age_groups}{The desired age groups to use, this can be a vector that \code{\link[rage:as.age_group]{rage::as.age_group()}} accepts such
-as a numeric or character vector.  Character vectors must conform to the format expected  by \code{\link[rage:as.age_group]{rage::as.age_group()}}}
+\item{age_groups}{Target age groups accepted by \code{\link[rage:as.age_group]{rage::as.age_group()}}.}
 
-\item{dimension_name}{The dimension or column name that contains the age data.  "age.char" is the default.}
+\item{dimension_name}{Name of the age dimension. Defaults to \code{"age.char"}.}
+
+\item{keep_empty}{Logical; keep declared \code{age_groups} levels even when no
+source labels map to them?}
+
+\item{strict}{Logical; when \code{TRUE} (default), unsafe grouped reductions are
+blocked. When \code{FALSE}, a warning is emitted and the grouping proceeds.}
+
+\item{allow_overlap}{Logical; default \code{FALSE}. Set \code{TRUE} to explicitly allow
+grouping overlapping age categories.}
 }
 \value{
-The object type as in the pop argument, age groups collapsed and the count data (population) summed.
+A \code{poparray} with \code{dimension_name} collapsed to the requested age
+groups.
 }
 \description{
-The ages dimension or column name is set to age groups and the count data (population) is summed in the new
-returned object.
+\code{group_ages()} is a specialization of \code{\link[=collapse_dim]{collapse_dim()}} for age dimensions. It
+maps existing age labels to \code{age_groups}, then performs the grouped reduction
+with the same semantic safety checks and blockwise backend processing used by
+\code{\link[=collapse_dim]{collapse_dim()}}.
 }
 \examples{
 # Load a poparray, subset lazily, then group ages.

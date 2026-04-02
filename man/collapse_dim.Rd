@@ -4,7 +4,15 @@
 \alias{collapse_dim}
 \title{Collapse a dimension of a poparray cube}
 \usage{
-collapse_dim(x, dim, groups, keep_empty = FALSE, name = NULL)
+collapse_dim(
+  x,
+  dim,
+  groups,
+  keep_empty = FALSE,
+  name = NULL,
+  strict = TRUE,
+  allow_overlap = FALSE
+)
 }
 \arguments{
 \item{x}{A poparray object}
@@ -17,13 +25,22 @@ See Details.}
 \item{keep_empty}{Logical; keep groups with zero members?}
 
 \item{name}{Optional new name for the dimension (defaults to original)}
+
+\item{strict}{Logical; when \code{TRUE} (default), unsafe grouped reductions are
+blocked. When \code{FALSE}, a warning is emitted and the collapse proceeds.}
+
+\item{allow_overlap}{Logical; default \code{FALSE}. Set \code{TRUE} to explicitly allow
+collapsing overlapping categories within a group.}
 }
 \value{
-A new poparray with the chosen dimension collapsed by sum.
+A new HDF5-backed \code{poparray} with the chosen dimension collapsed by
+sum.
 }
 \description{
 Groups labels along one dimension and sums population counts within groups.
-Designed to stay lazy with DelayedArray/HDF5Array backends.
+The reduction is executed blockwise against the delayed backend and written to
+a temporary HDF5-backed result. This avoids realizing the full source cube in
+memory and does not persist the result as a saved package cube.
 }
 \details{
 \code{groups} can be:

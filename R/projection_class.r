@@ -914,9 +914,15 @@ projection_to_df <- function(x,
                              include_level = TRUE,
                              include_model = TRUE,
                              include_confidence = FALSE,
+                             bytes_threshold = 40e6,
                              ...) {
   validate_poparray_projection(x)
   h <- pp_handle(x)
+  warn_if_realization_large_delayed(
+    h,
+    bytes_threshold = bytes_threshold,
+    what = "Coercing this poparray_projection to tabular output"
+  )
   arr <- as.array(h)
   dimnames(arr) <- dimnames(h)
   
@@ -976,6 +982,8 @@ projection_to_df <- function(x,
 #' @param include_confidence default FALSE; when TRUE adds `lower` and `upper`
 #'   confidence-limit columns computed from `projection`, `std_error`, and the
 #'   object's confidence `level`.
+#' @param bytes_threshold Byte threshold used to warn before realizing a large
+#'   projection cube. Default is 40 MB.
 #'
 #' @returns A data frame for [as.data.frame()] and a tibble for
 #'   [tibble::as_tibble()].
@@ -987,12 +995,14 @@ as.data.frame.poparray_projection <- function(x,
                                               ...,
                                               include_level = FALSE,
                                               include_model = FALSE,
-                                              include_confidence = FALSE) {
+                                              include_confidence = FALSE,
+                                              bytes_threshold = 40e6) {
   out <- projection_to_df(
     x,
     include_level = include_level,
     include_model = include_model,
     include_confidence = include_confidence,
+    bytes_threshold = bytes_threshold,
     ...
   )
   
@@ -1020,12 +1030,14 @@ as_tibble.poparray_projection <- function(x,
                                           ...,
                                           include_level = FALSE,
                                           include_model = FALSE,
-                                          include_confidence = FALSE) {
+                                          include_confidence = FALSE,
+                                          bytes_threshold = 40e6) {
   df <- projection_to_df(
     x,
     include_level = include_level,
     include_model = include_model,
     include_confidence = include_confidence,
+    bytes_threshold = bytes_threshold,
     ...
   )
   out <- tibble::as_tibble(df)

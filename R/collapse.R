@@ -13,7 +13,9 @@
 #' Collapse a dimension of a poparray cube
 #'
 #' Groups labels along one dimension and sums population counts within groups.
-#' Designed to stay lazy with DelayedArray/HDF5Array backends.
+#' The reduction is executed blockwise against the delayed backend and written to
+#' a temporary HDF5-backed result. This avoids realizing the full source cube in
+#' memory and does not persist the result as a saved package cube.
 #'
 #' @param x A poparray object
 #' @param dim Dimension name (character) or index (integer)
@@ -21,6 +23,10 @@
 #'   See Details.
 #' @param keep_empty Logical; keep groups with zero members?
 #' @param name Optional new name for the dimension (defaults to original)
+#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are
+#'   blocked. When `FALSE`, a warning is emitted and the collapse proceeds.
+#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
+#'   collapsing overlapping categories within a group.
 #'
 #' @details
 #' `groups` can be:
@@ -30,13 +36,26 @@
 #'
 #' Old labels not present in `groups` are dropped.
 #'
-#' @return A new poparray with the chosen dimension collapsed by sum.
+#' @return A new HDF5-backed `poparray` with the chosen dimension collapsed by
+#'   sum.
 #' @export
-setGeneric("collapse_dim", function(x, dim, groups, keep_empty = FALSE, name = NULL) {
+setGeneric("collapse_dim", function(x,
+                                    dim,
+                                    groups,
+                                    keep_empty = FALSE,
+                                    name = NULL,
+                                    strict = TRUE,
+                                    allow_overlap = FALSE) {
   standardGeneric("collapse_dim")
 })
 
-collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name = NULL) {
+collapse_dim_poparray_impl <- function(x,
+                                       dim,
+                                       groups,
+                                       keep_empty = FALSE,
+                                       name = NULL,
+                                       strict = TRUE,
+                                       allow_overlap = FALSE) {
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -88,6 +107,16 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
   
   # group index (1..n_new) for each kept old label
   g <- match(new_for_old_keep, new_levels)
+
+  pa_check_collapse_semantics(
+    x = x,
+    dim_nm = dim_nm,
+    old_labels_keep = old_labels[keep],
+    new_levels = new_levels,
+    group_index = g,
+    strict = strict,
+    allow_overlap = allow_overlap
+  )
   
   # first cleanup
   rm(dim_names, old_labels, map_old_to_new, unmapped, new_for_old_keep)
@@ -114,47 +143,55 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
   idx[[nd]] <- keep
   a_perm <- do.call(`[`, c(list(a_perm), idx, list(drop = FALSE)))
   
-  # ---- 5) Size guardrail before realizing into RAM ----
+  # ---- 5) Blockwise reduction into a temporary HDF5-backed sink ----
   d_perm <- dim(a_perm)
   n_old_keep <- d_perm[[nd]]
   n_new <- length(new_levels)
   
-  # output dims in permuted order
   d_new_perm <- c(d_perm[-nd], n_new)
-  
-  # estimate bytes
   type_in <- DelayedArray::type(a_perm)
-  bytes_per <- switch(type_in, integer = 4, double = 8, logical = 4, raw = 1, 8)
-  est_bytes <- prod(d_perm) * bytes_per   # working set we will realize (a_perm)
-  max_bytes <- getOption("poparray.max_bytes", 2e9)  # default ~2GB
-  
-  if (is.finite(est_bytes) && est_bytes > max_bytes) {
-    stop(
-      "collapse_dim(): would need to realize ~", format(est_bytes, scientific = TRUE),
-      " bytes into memory for this collapse.\n",
-      "Either: (1) filter/slice first to reduce size, or (2) implement disk-backed collapse.\n",
-      "You can raise the limit via options(poparray.max_bytes=...)."
+  bytes_per <- pa_bytes_per_cell(type_in)
+  blockdim_perm <- pa_collapse_blockdim(
+    dim = d_perm,
+    bytes_per = bytes_per,
+    target_block_bytes = getOption("poparray.collapse_block_bytes", 64e6)
+  )
+  block_ranges <- lapply(seq_len(max(0L, nd - 1L)), function(i) {
+    pa_make_block_ranges(d_perm[[i]], blockdim_perm[[i]])
+  })
+
+  sink <- HDF5Array::HDF5RealizationSink(
+    dim = as.integer(d_new_perm),
+    dimnames = NULL,
+    type = type_in
+  )
+
+  for (block_idx in pa_iterate_block_ranges(block_ranges)) {
+    src_idx <- c(block_idx, list(seq_len(n_old_keep)))
+    block <- do.call(`[`, c(list(a_perm), src_idx, list(drop = FALSE)))
+    block_arr <- as.array(block)
+    block_dim <- dim(block_arr)
+    n_row <- if (length(block_dim) == 1L) 1L else prod(block_dim[-nd])
+    mat_old <- matrix(block_arr, nrow = n_row, ncol = n_old_keep)
+    mat_new <- mat_old %*% M
+    out_block <- array(mat_new, dim = c(block_dim[-nd], n_new))
+
+    if (length(block_idx) == 0L) {
+      starts <- integer()
+      widths <- integer()
+    } else {
+      starts <- vapply(block_idx, function(idx) idx[[1L]], integer(1))
+      widths <- vapply(block_idx, length, integer(1))
+    }
+    vp <- S4Arrays::ArrayViewport(
+      as.integer(d_new_perm),
+      IRanges::IRanges(start = c(starts, 1L), width = c(widths, n_new))
     )
+    DelayedArray:::write_block(sink, vp, out_block)
   }
-  
-  rm(n_new, type_in, bytes_per, est_bytes, max_bytes)
-  
-  # ---- 6) Realize the permuted+trimmed array into memory (base array) ----
-  # This reads from disk (blockwise internally) but returns a standard R array.
-  arr_perm <- as.array(a_perm)
-  
-  # ---- 7) Collapse via sparse matrix multiply (in memory) ----
-  # fold to 2D: (prod(other dims) x n_old_keep)
-  n_row <- prod(d_perm[-nd])
-  mat_old <- matrix(arr_perm, nrow = n_row, ncol = n_old_keep)
-  
-  mat_new <- mat_old %*% M  # (n_row x n_new), returns ordinary matrix
-  
-  # unfold back to N-D in permuted order
-  arr_new_perm <- array(mat_new, dim = d_new_perm)
-  
-  # ---- 8) Invert permutation back to original order ----
-  arr_new <- aperm(arr_new_perm, invperm)
+
+  arr_new_perm <- methods::as(sink, "DelayedArray")
+  arr_new <- DelayedArray::aperm(arr_new_perm, invperm)
   
   # ---- 9) Update dimnames ----
   dn_new <- dn
@@ -179,9 +216,8 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
   dsem <- dsem[names(dn_new)]
   
   # ---- 10) Wrap into a new poparray ----
-  h5_out <- HDF5Array::writeHDF5Array(arr_new)
   out <- new_poparray(
-    x = h5_out,
+    x = arr_new,
     dimnames_list = dn_new,
     data_col = data_col(x),
     source = get_source(x),
@@ -201,6 +237,13 @@ collapse_dim_poparray_impl <- function(x, dim, groups, keep_empty = FALSE, name 
 
 normalize_groups <- function(groups, old_labels) {
   if (is.list(groups)) {
+    if (is.null(names(groups)) || any(!nzchar(names(groups)))) {
+      stop("If 'groups' is a list, it must be a named list of new group labels.", call. = FALSE)
+    }
+    olds <- unlist(groups, use.names = FALSE)
+    if (anyDuplicated(olds)) {
+      stop("An old label cannot be assigned to more than one output group.", call. = FALSE)
+    }
     # list("0-4" = c("0","1","2","3","4"), ...)
     new <- rep(NA_character_, length(old_labels))
     for (nm in names(groups)) {
@@ -235,6 +278,98 @@ defined_group_levels <- function(groups) {
   if (is.factor(groups)) return(levels(groups))
   if (is.character(groups)) return(unique(unname(groups)))
   character()
+}
+
+pa_check_collapse_semantics <- function(x,
+                                        dim_nm,
+                                        old_labels_keep,
+                                        new_levels,
+                                        group_index,
+                                        strict,
+                                        allow_overlap) {
+  if (isTRUE(allow_overlap)) {
+    return(invisible(TRUE))
+  }
+
+  sem <- dim_semantics(x)[[dim_nm]]
+  if (is.null(sem) || pa_is_partition(sem)) {
+    return(invisible(TRUE))
+  }
+
+  unsafe_groups <- vapply(seq_along(new_levels), function(i) {
+    labs <- old_labels_keep[group_index == i]
+    length(labs) > 1L && pa_dim_has_overlap_risk(sem, labs)
+  }, logical(1))
+
+  if (!any(unsafe_groups)) {
+    return(invisible(TRUE))
+  }
+
+  msg <- c(
+    "Unsafe collapse blocked for {.cls poparray}.",
+    "i" = "Dimension {.val {dim_nm}} is not known to be a safe partition for grouped reduction.",
+    "i" = "Unsafe output group(s): {.val {paste(new_levels[unsafe_groups], collapse = ', ')}}.",
+    "i" = "Set {.arg allow_overlap = TRUE} to bypass, or {.arg strict = FALSE} to warn and continue."
+  )
+  if (isTRUE(strict)) {
+    cli::cli_abort(msg)
+  }
+  cli::cli_warn(msg)
+  invisible(TRUE)
+}
+
+pa_collapse_blockdim <- function(dim, bytes_per, target_block_bytes = 64e6) {
+  dim <- as.integer(dim)
+  if (length(dim) == 1L) {
+    return(dim)
+  }
+
+  target_cells <- max(1L, floor(as.numeric(target_block_bytes) / max(1, as.numeric(bytes_per))))
+  out <- dim
+  out[-length(out)] <- 1L
+  if (prod(out) > target_cells) {
+    stop(
+      "collapse_dim(): target block size is too small to process the collapsed dimension safely. ",
+      "Increase options(poparray.collapse_block_bytes = ...).",
+      call. = FALSE
+    )
+  }
+
+  grow_order <- seq_len(length(out) - 1L)
+  grew <- TRUE
+  while (isTRUE(grew)) {
+    grew <- FALSE
+    for (k in grow_order) {
+      if (out[[k]] >= dim[[k]]) next
+      cand <- out
+      cand[[k]] <- min(dim[[k]], as.integer(cand[[k]] * 2L))
+      if (prod(cand) <= target_cells) {
+        out <- cand
+        grew <- TRUE
+      }
+    }
+  }
+  out
+}
+
+pa_make_block_ranges <- function(n, block_size) {
+  starts <- seq.int(1L, as.integer(n), by = max(1L, as.integer(block_size)))
+  lapply(starts, function(start) {
+    end <- min(as.integer(n), start + as.integer(block_size) - 1L)
+    seq.int(start, end)
+  })
+}
+
+pa_iterate_block_ranges <- function(block_ranges) {
+  if (!length(block_ranges)) {
+    return(list(list()))
+  }
+  idx_grid <- expand.grid(lapply(block_ranges, seq_along), KEEP.OUT.ATTRS = FALSE)
+  lapply(seq_len(nrow(idx_grid)), function(i) {
+    lapply(seq_along(block_ranges), function(k) {
+      block_ranges[[k]][[idx_grid[[i, k]]]]
+    })
+  })
 }
 
 

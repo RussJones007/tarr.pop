@@ -8,35 +8,35 @@ group_array_by_levels(
   arr,
   dim_name,
   groups,
-  keep_unmapped = c("error", "drop", "keep"),
-  other_label = "Other"
+  keep_unmapped = c("error", "drop", "keep", "other"),
+  other_label = "Other",
+  strict = TRUE,
+  allow_overlap = FALSE
 )
 }
 \arguments{
-\item{arr}{A poparray object or similarly structured array-like object.}
+\item{arr}{A \code{poparray}.}
 
 \item{dim_name}{Name of dimension to group}
 
-\item{groups}{Group specification which maps the new levels to those levels being collapsed. This can be a named list
-with the name of the group and values being what will be in the group, or a named vector mapping each new group to
-an individual level.}
+\item{groups}{Group specification accepted by \code{\link[=collapse_dim]{collapse_dim()}}.}
 
-\item{keep_unmapped}{a character vector of length one flagging on what happens when not all the levels are included
-in groups.  The values this argument can be:
-"error"  - throw an error and stop if all the original levels are not included.
-"drop"   - exclude un-mapped levels entirely.
-"keep"   - keep un-mapped levels with their original labels.
-"other"  - all un-mapped levels are summarized and placed under the other_label.
-@param other_label is where any levels not included in groups, but "other" is set, are summed into this category.
-"Other" is the default level name.}
+\item{keep_unmapped}{What to do with source levels not present in \code{groups}:
+\code{"error"}, \code{"drop"}, \code{"keep"}, or \code{"other"}.}
+
+\item{other_label}{Label used when \code{keep_unmapped = "other"}.}
+
+\item{strict}{Logical; when \code{TRUE} (default), unsafe grouped reductions are
+blocked. When \code{FALSE}, a warning is emitted and the grouping proceeds.}
+
+\item{allow_overlap}{Logical; default \code{FALSE}. Set \code{TRUE} to explicitly allow
+grouping overlapping categories.}
 }
 \value{
-Object with grouped dimension and summed counts
+A \code{poparray}.
 }
 \description{
-Groups specified dimension into categories and sums population counts.
-}
-\examples{
-# Group age dimension
-# Coming soon
+Internal wrapper around \code{\link[=collapse_dim]{collapse_dim()}} that preserves the older helper API
+while routing all grouped reductions through the current \code{poparray}
+implementation.
 }

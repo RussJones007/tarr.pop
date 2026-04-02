@@ -134,3 +134,12 @@ test_that("tabular conversions optionally include confidence limits", {
   tb1 <- tibble::as_tibble(pr, include_confidence = TRUE)
   expect_true(all(c("lower", "upper") %in% names(tb1)))
 })
+
+test_that("projection tabular coercion warns before large realization", {
+  pr <- make_projection_fixture()
+
+  expect_warning(
+    base::as.data.frame(pr, bytes_threshold = 1),
+    "EAGER"
+  )
+})

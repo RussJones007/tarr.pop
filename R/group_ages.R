@@ -1,24 +1,28 @@
 # ------------------------------------------------------------------------------------------------------------------->
 # Script: group_ages.R
-# Description:  Temporary until a more general solution is found
-#   Group ages 
-# 
+# Description:
+#   Age-group helpers built on top of collapse_dim().
 # ------------------------------------------------------------------------------------------------------------------->
-# Author: Russ Jones
-# Created:
-# 
-# ------------------------------------------------------------------------------------------------------------------->
-#' Ages into Groups
+
+#' Collapse age labels into coarser groups
 #'
-#' The ages dimension or column name is set to age groups and the count data (population) is summed in the new
-#' returned object.
+#' `group_ages()` is a specialization of [collapse_dim()] for age dimensions. It
+#' maps existing age labels to `age_groups`, then performs the grouped reduction
+#' with the same semantic safety checks and blockwise backend processing used by
+#' [collapse_dim()].
 #'
-#' @param pop A poparray object with an age dimension name or column.
-#' @param age_groups The desired age groups to use, this can be a vector that [rage::as.age_group()] accepts such
-#' as a numeric or character vector.  Character vectors must conform to the format expected  by [rage::as.age_group()]
-#' @param dimension_name The dimension or column name that contains the age data.  "age.char" is the default.
+#' @param pop A `poparray`.
+#' @param age_groups Target age groups accepted by [rage::as.age_group()].
+#' @param dimension_name Name of the age dimension. Defaults to `"age.char"`.
+#' @param keep_empty Logical; keep declared `age_groups` levels even when no
+#'   source labels map to them?
+#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are
+#'   blocked. When `FALSE`, a warning is emitted and the grouping proceeds.
+#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
+#'   grouping overlapping age categories.
 #'
-#' @returns The object type as in the pop argument, age groups collapsed and the count data (population) summed.
+#' @returns A `poparray` with `dimension_name` collapsed to the requested age
+#'   groups.
 #' @export
 #'
 #' @examples
@@ -26,244 +30,101 @@
 #' # census <- open_poparray(population$census.bureau$census)
 #' # census <- dplyr::filter(census, year %in% c("2010", "2020"))
 #' # census_age_grouped <- group_ages(census, rage::age_groups$ILI)
-group_ages <- function(pop, age_groups, dimension_name = "age.char"){
-  
-  assertthat::assert_that(inherits(pop, "tarr_pop"))
-  
-  # get the ages in pop 
-  age <- ages(pop) |>
-     rage::as.age_group()
-   
-  # take the age_groups argument and convert to age_group object
-  age_groups <- rage::as.age_group(age_groups)
-  
-  # locate where the original age categories and desired age groups overlap and align them
-  al <- ivs::iv_locate_overlaps(needles = age,
-                                haystack = age_groups,
-                                relationship = "many-to-one") |>
-    ivs::iv_align(age, age_groups, locations = _)
-  
-  # create a named list with desired age groups as the names, and the current age categories as the vector.
-  grouping <- map(age_groups, ~ al[al$haystack == .x, "needles" ] |>
-                    as.character() |>
-                    unlist(use.names = FALSE)) |>
-    set_names(unique(age_groups) |> as.character())
-  
-  ret <- group_array_by_levels(arr = pop, dim_name = dimension_name, groups = grouping, keep_unmapped = "keep")
-  return(ret)
-  
-  dim_nms <- names(dimnames(pop))
-  dim_ndx <- which(dim_nms == dimension_name)
-  
-  #dimnames(pop)[[dimension_name]] <- age_grps
-  unique_grps <- unique(age_grps)
-  new_dims <- dim(pop)
-  new_dims[dim_ndx] <- length(unique_grps)
-  
-  result <- array(0, dim = new_dims)
-  marg <- dim_nms[-dim_ndx]  # Exclude age dimension from margins
-  
-  # Create index template for array assignment
-  indices <- rep(list(alist(,,)[[1]]), length(dim(pop)))
-  
-  for(i in seq_along(unique_grps)) {
-    group <- unique_grps[i]
-    ndx <- which(dimnames(pop)[[dimension_name]] == group)
-    
-    # Dynamic subsetting for age dimension
-    age_subset <- list(ndx)
-    names(age_subset) <- dimension_name
-    
-    # Sum across the age groups
-    summed <- apply(
-      X = abind::asub(pop, age_subset, dims = dim_ndx, drop = FALSE),
-      MARGIN = marg,
-      FUN = sum
-    )
-    
-    # Dynamic assignment to result array
-    indices[[dim_ndx]] <- i
-    result <- do.call(`[<-`, c(list(result), indices, list(value = summed)))
+group_ages <- function(pop,
+                       age_groups,
+                       dimension_name = "age.char",
+                       keep_empty = FALSE,
+                       strict = TRUE,
+                       allow_overlap = FALSE) {
+  validate_poparray(pop)
+
+  dn <- dimnames(pop)
+  if (!dimension_name %in% names(dn)) {
+    cli::cli_abort("Dimension {.val {dimension_name}} was not found in {.cls poparray}.")
   }
-  
-  # Update dimension names
-  new_dimnames <- dimnames(pop)
-  new_dimnames[[dimension_name]] <- unique_grps
-  dimnames(result) <- new_dimnames
-  
-  structure(result,
-            data_col = data_col(pop),
-            filter = attr(pop, "filter"),
-            source = attr(pop, "source"),
-            class = class(pop))
+
+  current_age <- rage::as.age_group(as.character(dn[[dimension_name]]))
+  target_age <- rage::as.age_group(age_groups)
+
+  al <- ivs::iv_locate_overlaps(
+    needles = current_age,
+    haystack = target_age,
+    relationship = "many-to-one"
+  ) |>
+    ivs::iv_align(current_age, target_age, locations = _)
+
+  target_age_unique <- unique(target_age)
+  grouping <- purrr::map(target_age_unique, function(age_group) {
+    as.character(al[al$haystack == age_group, "needles"])
+  })
+  names(grouping) <- as.character(target_age_unique)
+
+  collapse_dim(
+    x = pop,
+    dim = dimension_name,
+    groups = grouping,
+    keep_empty = keep_empty,
+    strict = strict,
+    allow_overlap = allow_overlap
+  )
 }
 
-
-
-
-#' Group an Array Dimension
+#' Group a poparray dimension by level mappings
 #'
-#' Groups specified dimension into categories and sums population counts.
+#' Internal wrapper around [collapse_dim()] that preserves the older helper API
+#' while routing all grouped reductions through the current `poparray`
+#' implementation.
 #'
-#' @param arr A poparray object or similarly structured array-like object.
-#' @param dim_name Name of dimension to group
-#' @param groups Group specification which maps the new levels to those levels being collapsed. This can be a named list
-#'   with the name of the group and values being what will be in the group, or a named vector mapping each new group to
-#'   an individual level.
-#' @param keep_unmapped a character vector of length one flagging on what happens when not all the levels are included
-#'   in groups.  The values this argument can be:
-#'   "error"  - throw an error and stop if all the original levels are not included.
-#'   "drop"   - exclude un-mapped levels entirely.
-#'   "keep"   - keep un-mapped levels with their original labels.
-#'   "other"  - all un-mapped levels are summarized and placed under the other_label.
-#'  @param other_label is where any levels not included in groups, but "other" is set, are summed into this category.
-#'    "Other" is the default level name.
-#' @returns Object with grouped dimension and summed counts
+#' @param arr A `poparray`.
+#' @param dim_name Name of the dimension to group.
+#' @param groups Group specification accepted by [collapse_dim()].
+#' @param keep_unmapped What to do with source levels not present in `groups`:
+#'   `"error"`, `"drop"`, `"keep"`, or `"other"`.
+#' @param other_label Label used when `keep_unmapped = "other"`.
+#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are
+#'   blocked. When `FALSE`, a warning is emitted and the grouping proceeds.
+#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
+#'   grouping overlapping categories.
 #'
-#' @examples
-#' # Group age dimension
-#' # Coming soon
+#' @returns A `poparray`.
 group_array_by_levels <- function(arr,
                                   dim_name,
                                   groups,
-                                  keep_unmapped = c("error", "drop", "keep"),
-                                  other_label = "Other") {
-  # --- Validate inputs ------------------------------------------------------->
-  assert_that(is.tarr_pop(arr),
-              ! is.null(dimnames(arr)),
-              ! is.null(names(dimnames(arr))),
-              msg =  "'arr' must be an array with named dimesions that have named levels")
-  
+                                  keep_unmapped = c("error", "drop", "keep", "other"),
+                                  other_label = "Other",
+                                  strict = TRUE,
+                                  allow_overlap = FALSE) {
+  validate_poparray(arr)
   keep_unmapped <- match.arg(keep_unmapped)
-  
-  # --- Locate the target dimension by NAME ---------------------------------->
-  dim_index <- which(names(dimnames(arr)) == dim_name)
-  assert_that(length(dim_index) > 0,
-              msg = str_glue("Dimension name '{dim_name}' was not found"))
-  assert_that(is.scalar(dim_index),
-              msg = str_glue("Duplicate '{dim_name}' names detected "))
-  
-  old_levels <- dimnames(arr)[[dim_index]]
-  assert_that(! is.null(old_levels),
-              msg = str_glue("'{dim_name}' dimension has no names (levels)"))
-  
-  # --- Build an old->new level MAP from `groups` ----------------------------->
-  # Accept either:
-  #  - named list: list("groupA" = c("a","b"), "groupB" = c("c"))
-  #  - named character vector: c(a="groupA", b="groupA", c="groupB")
-  if (is.list(groups)) {
-    if (is.null(names(groups)) || any(names(groups) == "")) {
-      stop("`groups` list must be named; names are the new grouped labels.")
-    }
-    # Flatten to a named character vector: names = old levels, values = new group
-    level_map <- unlist(
-      lapply(names(groups), function(g) {
-        olds <- groups[[g]]
-        if (!is.character(olds)) {
-          stop("Each element in `groups` list must be a character vector of old levels.")
-        }
-        stats::setNames(rep(g, length(olds)), olds)
-      }),
-      use.names = TRUE
-    )
-  } else if (is.character(groups) && !is.null(names(groups))) {
-    # Already an old -> new mapping
-    level_map <- groups
-  } else {
-    stop(
-      "`groups` must be either a named list of character vectors ",
-      "(new_group = c(old1, old2, ...)) or a named character vector ",
-      "mapping old_level -> new_group."
-    )
+
+  dn <- dimnames(arr)
+  if (!dim_name %in% names(dn)) {
+    cli::cli_abort("Dimension {.val {dim_name}} was not found in {.cls poparray}.")
   }
-  
-  # --- Determine new label for every old level -------------------------------->
-  # Map known olds; produce NA for unknowns (unmapped)
-  mapped <- level_map[old_levels]
-  # `mapped` is a character vector aligned to old_levels; NAs where unmapped
+  old_levels <- dn[[dim_name]]
+  mapped <- normalize_groups(groups, old_levels)
   unmapped <- is.na(mapped)
-  
+
   if (any(unmapped)) {
-    unknown_levels <- old_levels[unmapped]
-    if (keep_unmapped == "error") {
-      stop(
-        "Unmapped levels in '", dim_name, "': ",
-        paste(unknown_levels, collapse = ", "),
-        ". Provide a mapping or choose keep_unmapped = 'drop' or 'keep'."
-      )
-    } else if (keep_unmapped == "keep") {
-      # Keep them under their original labels
-      mapped[unmapped] <- unknown_levels
-    } else { # "drop"
-      # leave as NA; we will drop these columns during aggregation
-      # (no action here)
+    if (identical(keep_unmapped, "error")) {
+      cli::cli_abort(c(
+        "Unmapped levels remain in {.val {dim_name}}.",
+        "i" = "Examples: {.val {paste(utils::head(old_levels[unmapped], 10L), collapse = ', ')}}."
+      ))
+    }
+    if (identical(keep_unmapped, "keep")) {
+      mapped[unmapped] <- old_levels[unmapped]
+    }
+    if (identical(keep_unmapped, "other")) {
+      mapped[unmapped] <- other_label
     }
   }
-  
-  # Final set of new group labels (including 'Other' if user had chosen that label explicitly)
-  new_groups <- unique(mapped[!is.na(mapped)])
-  
-  # --- Fast aggregation along the named dimension ---------------------------->
-  # 1) Permute so target dim is LAST
-  d <- dim(arr)
-  perm <- c(setdiff(seq_along(d), dim_index), dim_index)
-  arr_perm <- aperm(arr$handle, perm)
-  
-  # 2) Reshape to 2D: rows = product(other dims), cols = length(old_levels)
-  n_cols <- length(old_levels)
-  n_rows <- prod(d[-dim_index])
-  mat <- matrix(arr_perm, nrow = n_rows, ncol = n_cols)
-  
-  # 3) Build a column-group index for aggregation
-  #    For each new group label, sum columns where mapped == that label
-  keep_cols <- !is.na(mapped)
-  mat_kept <- mat[, keep_cols, drop = FALSE]
-  mapped_kept <- mapped[keep_cols]
-  
-  # If everything got dropped, fail gracefully
-  if (ncol(mat_kept) == 0L) {
-    stop("After applying mapping and `keep_unmapped = 'drop'`, no levels remain.")
-  }
-  
-  # Aggregate columns by new group using rowsums over each group
-  # Pre-allocate result matrix
-  k <- length(unique(mapped_kept))
-  mat_out <- matrix(0, nrow = n_rows, ncol = k)
-  colnames(mat_out) <- unique(mapped_kept)
-  
-  # Preserve the order of groups as they first appear in `mapped_kept`
-  group_order <- match(unique(mapped_kept), unique(mapped_kept))
-  # Sum columns for each group
-  for (g in seq_len(k)) {
-    cols_g <- mapped_kept == colnames(mat_out)[g]
-    # Sum across selected columns (NA-safe: sum treats NA as NA unless na.rm=TRUE)
-    mat_out[, g] <- if (any(cols_g)) {
-      # Use base rowSums for speed
-      rowSums(mat_kept[, cols_g, drop = FALSE], na.rm = TRUE)
-    } else {
-      0
-    }
-  }
-  
-  # 4) Reshape back to array:
-  #    new dims = original dims but replace target dim length by k
-  new_dims <- d
-  new_dims[dim_index] <- k
-  
-  # Build new dimnames: same as original, but with grouped labels on target dim
-  new_dimnames <- dimnames(arr)
-  new_dimnames[[dim_index]] <- colnames(mat_out)
-  
-  # Rebuild with target dim last, then aperm back
-  arr_out_last <- array(mat_out, dim = c(d[setdiff(seq_along(d), dim_index)], k))
-  # Inverse permutation to original order
-  inv_perm <- match(seq_along(perm), perm)
-  arr_out <- aperm(arr_out_last, inv_perm)
-  dimnames(arr_out) <- new_dimnames
-  ret <- new_tarr_pop(x = arr_out, dimnames_list = new_dimnames, 
-               data_col = data_col(arr), source = get_source(arr))
-  #attr(arr_out, "data_col") <- attr(arr, "data_col")
-  #class(arr_out) <- class(arr)
-  
-  return(ret)
+
+  collapse_dim(
+    x = arr,
+    dim = dim_name,
+    groups = mapped,
+    strict = strict,
+    allow_overlap = allow_overlap
+  )
 }
