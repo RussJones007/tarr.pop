@@ -4,7 +4,7 @@
 \alias{h5_read_scalar_chr_if_present}
 \title{Read scalar metadata if present}
 \usage{
-h5_read_scalar_chr_if_present(path, name)
+h5_read_scalar_chr_if_present(path, name, info = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}

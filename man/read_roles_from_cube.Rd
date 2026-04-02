@@ -4,7 +4,7 @@
 \alias{read_roles_from_cube}
 \title{Read dimension roles metadata from migrated cube}
 \usage{
-read_roles_from_cube(path)
+read_roles_from_cube(path, meta = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}

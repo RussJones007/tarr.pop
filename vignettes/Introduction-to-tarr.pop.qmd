@@ -93,7 +93,7 @@ Every `poparray` has:
 
 Those roles are stored with the object, so functions can work with the
 cube by meaning rather than by hard-coded position. The additional
-stratificaton dimensions mentioned above may include things like age,
+stratification dimensions mentioned above may include things like age,
 race, ethnicity, house size, income, education, etc.
 
 Several cubes are included with the package. Sources include the US
@@ -164,7 +164,7 @@ pop <- open_poparray("tdc_estimates_county")
 pop
 ```
 
-Notice the number of data elemets in the cube and the size of each
+Notice the number of data elements in the cube and the size of each
 dimension. Let's see some of the cube meta data. Start by asking a few
 basic questions about the cube.
 
@@ -189,7 +189,7 @@ head(dimnames(pop)[[area_role(pop)]])
 Suppose we want to compare Dallas, Tarrant, and Travis counties over the
 most recent five years in the cube.
 
-```{r}
+```{r small_explore}
 # Names of the counties
 target_counties <- c("Dallas", "Tarrant", "Travis")
 
@@ -199,7 +199,8 @@ recent_years <- dimnames(pop)[[time_role(pop)]] |>
 pop_small <- pop |>
   dplyr::filter(
     area.name %in% target_counties,
-    year %in% recent_years
+    year %in% recent_years,
+    age.char %in%  ages(pop, remove = "85 +")
   )
 
 pop_small
@@ -221,7 +222,7 @@ compare total population by county and year, collapse the remaining
 stratification dimensions to `"All"`. For this cube, that means
 collapsing `sex`, `age.char`, `race`, and `ethnicity`.
 
-```{r}
+```{r  collapse_pop_small}
 pop_totals <- pop_small |>
   collapse_dim(
     dim = "sex",
@@ -238,19 +239,12 @@ pop_totals <- pop_small |>
     )
   ) |>
   collapse_dim(
-    dim = "race",
+    dim = "race.eth",
     groups = stats::setNames(
-      rep("All", length(dimnames(pop_small)$race)),
-      dimnames(pop_small)$race
+      rep("All", length(dimnames(pop_small)$race.eth )),
+      dimnames(pop_small)$race.eth
     )
-  ) |>
-  collapse_dim(
-    dim = "ethnicity",
-    groups = stats::setNames(
-      rep("All", length(dimnames(pop_small)$ethnicity)),
-      dimnames(pop_small)$ethnicity
-    )
-  )
+  ) 
 
 pop_totals
 ```

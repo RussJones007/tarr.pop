@@ -156,6 +156,34 @@ test_that("tarr_series_registry reuses cache until file inventory changes", {
   expect_equal(reg1$series_id, reg2$series_id)
 })
 
+test_that("tarr_series_registry memoisation avoids repeated cache reads", {
+  root <- tempfile("cube-root-")
+  base_dir <- file.path(root, "base")
+  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+
+  src <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
+  dst <- file.path(base_dir, basename(src))
+  expect_true(file.copy(src, dst))
+
+  cache_reads <- 0L
+  orig <- tarr.pop:::read_cube_registry_cache
+
+  local_cube_option(root)
+  tarr.pop:::reset_poparray_cache()
+  testthat::local_mocked_bindings(
+    read_cube_registry_cache = function(cache_file) {
+      cache_reads <<- cache_reads + 1L
+      orig(cache_file)
+    },
+    .package = "tarr.pop"
+  )
+
+  tarr.pop:::tarr_series_registry()
+  tarr.pop:::tarr_series_registry()
+
+  expect_equal(cache_reads, 1L)
+})
+
 test_that("tarr_series_registry refreshes cache when a cube timestamp changes", {
   root <- tempfile("cube-root-")
   base_dir <- file.path(root, "base")
@@ -183,6 +211,53 @@ test_that("tarr_series_registry refreshes cache when a cube timestamp changes", 
   tarr.pop:::tarr_series_registry()
 
   expect_equal(calls, 2L)
+})
+
+test_that("reset_poparray_cache clears metadata and registry memoisation", {
+  root <- tempfile("cube-root-")
+  base_dir <- file.path(root, "base")
+  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+
+  src <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
+  dst <- file.path(base_dir, basename(src))
+  expect_true(file.copy(src, dst))
+
+  path <- system.file("extdata", "seer_estimates_county_1y.h5", package = "tarr.pop")
+  expect_true(nzchar(path))
+
+  metadata_reads <- 0L
+  registry_reads <- 0L
+  orig_meta <- tarr.pop:::get_cube_metadata
+  orig_reg <- tarr.pop:::read_cube_registry_cache
+
+  local_cube_option(root)
+  tarr.pop:::reset_poparray_cache()
+  testthat::local_mocked_bindings(
+    get_cube_metadata = function(path) {
+      metadata_reads <<- metadata_reads + 1L
+      orig_meta(path)
+    },
+    read_cube_registry_cache = function(cache_file) {
+      registry_reads <<- registry_reads + 1L
+      orig_reg(cache_file)
+    },
+    .package = "tarr.pop"
+  )
+
+  tarr.pop:::get_cube_metadata_cached(path)
+  tarr.pop:::get_cube_metadata_cached(path)
+  tarr.pop:::tarr_series_registry()
+  tarr.pop:::tarr_series_registry()
+
+  expect_equal(metadata_reads, 1L)
+  expect_equal(registry_reads, 1L)
+
+  tarr.pop:::reset_poparray_cache()
+  tarr.pop:::get_cube_metadata_cached(path)
+  tarr.pop:::tarr_series_registry()
+
+  expect_equal(metadata_reads, 2L)
+  expect_equal(registry_reads, 2L)
 })
 
 test_that("startup setup errors non-interactively when cube folder is unknown", {

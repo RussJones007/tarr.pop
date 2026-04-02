@@ -45,13 +45,19 @@ h5_read_scalar_chr <- function(path, name) {
   as.character(val[[1L]])
 }
 
-h5_dataset_exists <- function(path, dataset) {
-  info <- rhdf5::h5ls(path)
+cube_info_has_dataset <- function(info, dataset) {
   ds <- if (startsWith(dataset, "/")) dataset else paste0("/", dataset)
   grp <- dirname(ds)
   if (identical(grp, ".")) grp <- "/"
   nm <- basename(ds)
   any(info$group == grp & info$name == nm)
+}
+
+h5_dataset_exists <- function(path, dataset, info = NULL) {
+  if (is.null(info)) {
+    info <- rhdf5::h5ls(path)
+  }
+  cube_info_has_dataset(info, dataset)
 }
 
 #' Read scalar metadata if present
@@ -61,8 +67,8 @@ h5_dataset_exists <- function(path, dataset) {
 #'
 #' @return Length-1 character scalar or NULL.
 #' @keywords internal
-h5_read_scalar_chr_if_present <- function(path, name) {
-  if (!h5_dataset_exists(path, name)) return(NULL)
+h5_read_scalar_chr_if_present <- function(path, name, info = NULL) {
+  if (!h5_dataset_exists(path, name, info = info)) return(NULL)
   h5_read_scalar_chr(path, name)
 }
 
@@ -92,12 +98,14 @@ h5_has_cube_schema <- function(path) {
 #' @return One-row data.frame.
 #' @keywords internal
 read_series_row <- function(path) {
-  series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/series_id")
+  info <- rhdf5::h5ls(path)
+
+  series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/series_id", info = info)
   if (is.null(series_id) || !nzchar(series_id)) {
-    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/note")
+    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/note", info = info)
   }
   if (is.null(series_id) || !nzchar(series_id)) {
-    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/series_id")
+    series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/series_id", info = info)
   }
   if (is.null(series_id) || !nzchar(series_id)) {
     series_id <- tools::file_path_sans_ext(basename(path))
@@ -111,22 +119,22 @@ read_series_row <- function(path) {
     check.names = FALSE
   )
 
-  geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/geo")
+  geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/geo", info = info)
   if (is.null(geo) || !nzchar(geo)) {
-    geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/geo")
+    geo <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/geo", info = info)
   }
   if (!is.null(geo) && nzchar(geo)) out$geo <- as.character(geo)
 
-  ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/extendable_year")
+  ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/extendable_year", info = info)
   if (is.null(ext_year) || !nzchar(ext_year)) {
-    ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/extendable_year")
+    ext_year <- h5_read_scalar_chr_if_present(path, "cube/metadata/registry/extendable_year", info = info)
   }
   if (!is.null(ext_year) && nzchar(ext_year)) out$extendable_year <- as.character(ext_year)
 
-  source <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/source")
+  source <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/source", info = info)
   if (!is.null(source) && nzchar(source)) out$source <- as.character(source)
 
-  population_type <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/population_type")
+  population_type <- h5_read_scalar_chr_if_present(path, "cube/metadata/source/population_type", info = info)
   if (!is.null(population_type) && nzchar(population_type)) out$population_type <- as.character(population_type)
 
   out
@@ -233,10 +241,132 @@ cube_registry_cache_current <- function(cache, inventory) {
 #'
 #' @return data.frame of available series.
 #' @keywords internal
-tarr_series_registry <- function() {
-  cube_dir <- resolve_cube_dir()
+.cube_metadata_cache <- new.env(parent = emptyenv())
+.tarr_series_registry_cache <- memoise::cache_memory()
+
+cube_metadata_cache_key <- function(path) {
+  info <- file.info(path)
+  if (!isTRUE(file.exists(path)) || is.na(info$mtime[[1L]])) {
+    stop("HDF5 file not found for metadata cache: ", path)
+  }
+
+  paste(
+    normalizePath(path, winslash = "/", mustWork = TRUE),
+    format(info$mtime[[1L]], tz = "UTC", usetz = TRUE),
+    sep = "::"
+  )
+}
+
+get_cube_metadata <- function(path) {
+  info <- rhdf5::h5ls(path)
+  dim_order <- as.character(rhdf5::h5read(path, "cube/metadata/dim_order"))
+
+  dimnames <- lapply(dim_order, function(d) {
+    as.character(rhdf5::h5read(path, paste0("cube/metadata/dimnames/", d)))
+  })
+  names(dimnames) <- dim_order
+
+  list(
+    path = normalizePath(path, winslash = "/", mustWork = TRUE),
+    info = info,
+    dim_order = dim_order,
+    dimnames = dimnames,
+    roles = list(
+      time = h5_read_scalar_chr(path, "cube/metadata/roles/time"),
+      area = h5_read_scalar_chr(path, "cube/metadata/roles/area"),
+      strata = as.character(rhdf5::h5read(path, "cube/metadata/roles/strata"))
+    ),
+    source = c(
+      note = h5_read_scalar_chr(path, "cube/metadata/source/note"),
+      source = h5_read_scalar_chr(path, "cube/metadata/source/source"),
+      updated = h5_read_scalar_chr(path, "cube/metadata/source/updated"),
+      population_type = h5_read_scalar_chr(path, "cube/metadata/source/population_type")
+    ),
+    data_col = {
+      val <- h5_read_scalar_chr_if_present(path, "cube/metadata/data_col", info = info)
+      if (is.null(val) || !nzchar(val)) "population" else val
+    }
+  )
+}
+
+get_cube_metadata_cached <- function(path) {
+  key <- cube_metadata_cache_key(path)
+
+  if (exists(key, envir = .cube_metadata_cache, inherits = FALSE)) {
+    return(get(key, envir = .cube_metadata_cache, inherits = FALSE))
+  }
+
+  meta <- get_cube_metadata(path)
+  assign(key, meta, envir = .cube_metadata_cache)
+  meta
+}
+
+parse_dim_semantics_from_meta <- function(meta, dim_order = meta$dim_order, time_dim, area_dim) {
+  has_group <- any(meta$info$group == "/cube/metadata" & meta$info$name == "dim_semantics")
+  if (!isTRUE(has_group)) {
+    cli::cli_abort(
+      "Missing required metadata group {.val cube/metadata/dim_semantics}. This cube must be migrated before opening."
+    )
+  }
+
+  out <- lapply(dim_order, function(d) {
+    base <- paste0("cube/metadata/dim_semantics/", d)
+
+    new_fields <- c("domain", "scale_type", "partition_type", "validated", "overlap_levels", "notes")
+    has_new <- all(vapply(new_fields, function(fld) {
+      cube_info_has_dataset(meta$info, paste0(base, "/", fld))
+    }, logical(1)))
+
+    if (isTRUE(has_new)) {
+      dim_name <- if (cube_info_has_dataset(meta$info, paste0(base, "/dim_name"))) {
+        h5_read_scalar_chr(meta$path, paste0(base, "/dim_name"))
+      } else {
+        d
+      }
+
+      return(new_dim_semantics(
+        dim_name = dim_name,
+        domain = h5_read_scalar_chr(meta$path, paste0(base, "/domain")),
+        scale_type = h5_read_scalar_chr(meta$path, paste0(base, "/scale_type")),
+        partition_type = h5_read_scalar_chr(meta$path, paste0(base, "/partition_type")),
+        validated = tolower(h5_read_scalar_chr(meta$path, paste0(base, "/validated"))) == "true",
+        overlap_levels = as.character(rhdf5::h5read(meta$path, paste0(base, "/overlap_levels"))),
+        notes = as.character(rhdf5::h5read(meta$path, paste0(base, "/notes")))
+      ))
+    }
+
+    legacy_fields <- c("class", "validated")
+    for (fld in legacy_fields) {
+      ds <- paste0(base, "/", fld)
+      if (!cube_info_has_dataset(meta$info, ds)) {
+        cli::cli_abort("Missing dim_semantics dataset {.val {ds}}.")
+      }
+    }
+
+    cls <- h5_read_scalar_chr(meta$path, paste0(base, "/class"))
+    pt <- switch(cls, partition = "partition", set = "set", "unknown")
+    new_dim_semantics(
+      dim_name = d,
+      domain = pa_default_dim_domain(d, time_dim, area_dim),
+      scale_type = pa_default_dim_scale_type(d, time_dim),
+      partition_type = pt,
+      validated = tolower(h5_read_scalar_chr(meta$path, paste0(base, "/validated"))) == "true",
+      overlap_levels = character(),
+      notes = character()
+    )
+  })
+  names(out) <- dim_order
+  out
+}
+
+reset_poparray_cache <- function() {
+  rm(list = ls(envir = .cube_metadata_cache, all.names = TRUE), envir = .cube_metadata_cache)
+  memoise::forget(.tarr_series_registry_memoised)
+  invisible(TRUE)
+}
+
+.tarr_series_registry_impl <- function(cube_dir, inventory) {
   cache_file <- cube_registry_cache_file(cube_dir)
-  inventory <- cube_registry_inventory(cube_dir)
 
   if (nrow(inventory) == 0L) {
     return(data.frame(stringsAsFactors = FALSE))
@@ -269,19 +399,28 @@ tarr_series_registry <- function() {
   reg
 }
 
+.tarr_series_registry_memoised <- memoise::memoise(
+  .tarr_series_registry_impl,
+  cache = .tarr_series_registry_cache
+)
+
+tarr_series_registry <- function(root = resolve_cube_dir()) {
+  cube_dir <- normalizePath(root, winslash = "/", mustWork = TRUE)
+  inventory <- cube_registry_inventory(cube_dir)
+  .tarr_series_registry_memoised(cube_dir, inventory)
+}
+
 #' Read dimnames metadata from migrated cube
 #'
 #' @param path HDF5 file path.
 #'
 #' @return Named list of character vectors.
 #' @keywords internal
-read_dimnames_from_cube <- function(path) {
-  dim_order <- as.character(rhdf5::h5read(path, "cube/metadata/dim_order"))
-  out <- lapply(dim_order, function(d) {
-    as.character(rhdf5::h5read(path, paste0("cube/metadata/dimnames/", d)))
-  })
-  names(out) <- dim_order
-  out
+read_dimnames_from_cube <- function(path, meta = NULL) {
+  if (is.null(meta)) {
+    meta <- get_cube_metadata_cached(path)
+  }
+  meta$dimnames
 }
 
 #' Read dimension roles metadata from migrated cube
@@ -290,12 +429,11 @@ read_dimnames_from_cube <- function(path) {
 #'
 #' @return Named list with time, area, strata.
 #' @keywords internal
-read_roles_from_cube <- function(path) {
-  list(
-    time = h5_read_scalar_chr(path, "cube/metadata/roles/time"),
-    area = h5_read_scalar_chr(path, "cube/metadata/roles/area"),
-    strata = as.character(rhdf5::h5read(path, "cube/metadata/roles/strata"))
-  )
+read_roles_from_cube <- function(path, meta = NULL) {
+  if (is.null(meta)) {
+    meta <- get_cube_metadata_cached(path)
+  }
+  meta$roles
 }
 
 #' Read source metadata from migrated cube
@@ -304,13 +442,11 @@ read_roles_from_cube <- function(path) {
 #'
 #' @return Named character vector with source fields.
 #' @keywords internal
-read_source_from_cube <- function(path) {
-  c(
-    note = h5_read_scalar_chr(path, "cube/metadata/source/note"),
-    source = h5_read_scalar_chr(path, "cube/metadata/source/source"),
-    updated = h5_read_scalar_chr(path, "cube/metadata/source/updated"),
-    population_type = h5_read_scalar_chr(path, "cube/metadata/source/population_type")
-  )
+read_source_from_cube <- function(path, meta = NULL) {
+  if (is.null(meta)) {
+    meta <- get_cube_metadata_cached(path)
+  }
+  meta$source
 }
 
 #' Read data column metadata from migrated cube
@@ -319,9 +455,11 @@ read_source_from_cube <- function(path) {
 #'
 #' @return Length-1 character scalar.
 #' @keywords internal
-read_data_col_from_cube <- function(path) {
-  val <- h5_read_scalar_chr_if_present(path, "cube/metadata/data_col")
-  if (is.null(val) || !nzchar(val)) "population" else val
+read_data_col_from_cube <- function(path, meta = NULL) {
+  if (is.null(meta)) {
+    meta <- get_cube_metadata_cached(path)
+  }
+  meta$data_col
 }
 
 #' Read dim_semantics metadata from migrated cube
@@ -333,62 +471,16 @@ read_data_col_from_cube <- function(path) {
 #'
 #' @return Named list with one semantic entry per dimension.
 #' @keywords internal
-read_dim_semantics_from_cube <- function(path, dim_order, time_dim, area_dim) {
-  info <- rhdf5::h5ls(path)
-  has_group <- any(info$group == "/cube/metadata" & info$name == "dim_semantics")
-  if (!isTRUE(has_group)) {
-    cli::cli_abort(
-      "Missing required metadata group {.val cube/metadata/dim_semantics}. This cube must be migrated before opening."
-    )
+read_dim_semantics_from_cube <- function(path, dim_order, time_dim, area_dim, meta = NULL) {
+  if (is.null(meta)) {
+    meta <- get_cube_metadata_cached(path)
   }
-  out <- lapply(dim_order, function(d) {
-    base <- paste0("cube/metadata/dim_semantics/", d)
-
-    new_fields <- c("domain", "scale_type", "partition_type", "validated", "overlap_levels", "notes")
-    has_new <- all(vapply(new_fields, function(fld) {
-      h5_dataset_exists(path, paste0(base, "/", fld))
-    }, logical(1)))
-
-    if (isTRUE(has_new)) {
-      dim_name <- if (h5_dataset_exists(path, paste0(base, "/dim_name"))) {
-        h5_read_scalar_chr(path, paste0(base, "/dim_name"))
-      } else {
-        d
-      }
-
-      return(new_dim_semantics(
-        dim_name = dim_name,
-        domain = h5_read_scalar_chr(path, paste0(base, "/domain")),
-        scale_type = h5_read_scalar_chr(path, paste0(base, "/scale_type")),
-        partition_type = h5_read_scalar_chr(path, paste0(base, "/partition_type")),
-        validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true",
-        overlap_levels = as.character(rhdf5::h5read(path, paste0(base, "/overlap_levels"))),
-        notes = as.character(rhdf5::h5read(path, paste0(base, "/notes")))
-      ))
-    }
-
-    legacy_fields <- c("class", "validated")
-    for (fld in legacy_fields) {
-      ds <- paste0(base, "/", fld)
-      if (!h5_dataset_exists(path, ds)) {
-        cli::cli_abort("Missing dim_semantics dataset {.val {ds}}.")
-      }
-    }
-
-    cls <- h5_read_scalar_chr(path, paste0(base, "/class"))
-    pt <- switch(cls, partition = "partition", set = "set", "unknown")
-    new_dim_semantics(
-      dim_name = d,
-      domain = pa_default_dim_domain(d, time_dim, area_dim),
-      scale_type = pa_default_dim_scale_type(d, time_dim),
-      partition_type = pt,
-      validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true",
-      overlap_levels = character(),
-      notes = character()
-    )
-  })
-  names(out) <- dim_order
-  out
+  parse_dim_semantics_from_meta(
+    meta = meta,
+    dim_order = dim_order,
+    time_dim = time_dim,
+    area_dim = area_dim
+  )
 }
 
 #' Validate migrated dimnames against cube dimensions
@@ -462,12 +554,13 @@ open_poparray <- function(series_id,
     stop("HDF5 file not found for series '", series_id, "': ", path)
   }
 
+  meta <- get_cube_metadata_cached(path)
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)
-  dimn  <- read_dimnames_from_cube(path)
-  roles <- read_roles_from_cube(path)
-  dsem  <- read_dim_semantics_from_cube(path, names(dimn), roles$time, roles$area)
-  src   <- read_source_from_cube(path)
-  dc    <- if (is.null(data_col)) read_data_col_from_cube(path) else data_col
+  dimn  <- read_dimnames_from_cube(path, meta = meta)
+  roles <- read_roles_from_cube(path, meta = meta)
+  dsem  <- read_dim_semantics_from_cube(path, names(dimn), roles$time, roles$area, meta = meta)
+  src   <- read_source_from_cube(path, meta = meta)
+  dc    <- if (is.null(data_col)) read_data_col_from_cube(path, meta = meta) else data_col
 
   validate_labels_against_cube(h5, dimn, series_id)
   dimnames(h5) <- dimn

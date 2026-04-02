@@ -4,7 +4,7 @@
 \alias{read_dimnames_from_cube}
 \title{Read dimnames metadata from migrated cube}
 \usage{
-read_dimnames_from_cube(path)
+read_dimnames_from_cube(path, meta = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}

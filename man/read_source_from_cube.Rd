@@ -4,7 +4,7 @@
 \alias{read_source_from_cube}
 \title{Read source metadata from migrated cube}
 \usage{
-read_source_from_cube(path)
+read_source_from_cube(path, meta = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}
