@@ -3,20 +3,26 @@
 \name{data_col}
 \alias{data_col}
 \alias{data_col<-}
-\title{Get or set the name of the poparray data column}
+\title{Get or set the name of the data column for a poparray or cube file}
 \usage{
 data_col(x)
 
 data_col(x, values) <- value
 }
 \arguments{
-\item{x}{A poparray object.}
+\item{x}{A \code{poparray} object or HDF5 cube path.}
+
+\item{values}{Length-1 character scalar naming the data column.}
 }
 \value{
 Character string.
 }
 \description{
-poparray objects have a \code{data_col} attribute that is used to name the column that holds the numeric data when
-coercing to a data frame \code{\link[=as.data.frame]{as.data.frame()}} or tibble \code{\link[tibble:as_tibble]{tibble::as_tibble()}}. This convenience function can retrieve or
-set that attribute.
+\code{poparray} objects have a \code{data_col} attribute that is used to name the
+column that holds the numeric data when coercing to a data frame
+\code{\link[=as.data.frame]{as.data.frame()}} or tibble
+\code{\link[tibble:as_tibble]{tibble::as_tibble()}}. This convenience function
+can retrieve or set that attribute. When \code{x} is a cube path, the getter
+reads canonical metadata directly from the HDF5 file and the replacement form
+writes updated metadata back to the cube file.
 }

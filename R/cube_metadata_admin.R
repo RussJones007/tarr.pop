@@ -72,26 +72,15 @@ write_cube_source_metadata <- function(path, source) {
   invisible(TRUE)
 }
 
-#' Read dim_semantics metadata from a cube file
-#'
-#' Reads the canonical `cube/metadata/dim_semantics/*/*` metadata from an HDF5
-#' cube without constructing a full `poparray`.
-#'
-#' @param path HDF5 file path.
-#' @param validate Logical; when `TRUE` (default), validate the returned
-#'   semantics against the cube's dimension order and roles.
-#'
-#' @return Named list of `DimSemantics` entries.
-#' @export
-read_cube_dim_semantics <- function(path, validate = TRUE) {
+read_cube_dim_semantics_impl <- function(path, validate = TRUE) {
   checkmate::assert_string(path, min.chars = 1)
   meta <- get_cube_metadata_cached(path)
-  roles <- read_roles_from_cube(path, meta = meta)
+  cube_roles <- read_roles_from_cube(path, meta = meta)
   out <- read_dim_semantics_from_cube(
     path = path,
     dim_order = meta$dim_order,
-    time_dim = roles$time,
-    area_dim = roles$area,
+    time_dim = cube_roles$time,
+    area_dim = cube_roles$area,
     meta = meta
   )
 
@@ -99,46 +88,68 @@ read_cube_dim_semantics <- function(path, validate = TRUE) {
     validate_dim_semantics(
       dim_semantics = out,
       dim_names = meta$dim_order,
-      time_dim = roles$time,
-      area_dim = roles$area
+      time_dim = cube_roles$time,
+      area_dim = cube_roles$area
     )
   }
 
   out
 }
 
-#' Write dim_semantics metadata to a cube file
-#'
-#' Overwrites the canonical `cube/metadata/dim_semantics/*/*` tree in an
-#' existing HDF5 cube. This is an admin-only metadata operation and does not
-#' rewrite `cube/population`.
-#'
-#' @param path HDF5 file path.
-#' @param dim_semantics Named list of `DimSemantics` entries.
-#' @param validate Logical; when `TRUE` (default), validate `dim_semantics`
-#'   against the cube's dimension order and roles before writing.
-#'
-#' @return Invisibly returns the normalized cube path.
-#' @export
-write_cube_dim_semantics <- function(path, dim_semantics, validate = TRUE) {
+read_cube_roles_impl <- function(path) {
+  checkmate::assert_string(path, min.chars = 1)
+  meta <- get_cube_metadata_cached(path)
+  normalize_cube_roles(read_roles_from_cube(path, meta = meta), meta$dim_order)
+}
+
+read_cube_source_impl <- function(path) {
+  checkmate::assert_string(path, min.chars = 1)
+  meta <- get_cube_metadata_cached(path)
+  normalize_cube_source(read_source_from_cube(path, meta = meta))
+}
+
+read_cube_data_col_impl <- function(path) {
+  checkmate::assert_string(path, min.chars = 1)
+  meta <- get_cube_metadata_cached(path)
+  as.character(read_data_col_from_cube(path, meta = meta))
+}
+
+read_cube_metadata_admin_impl <- function(path, validate = TRUE) {
+  checkmate::assert_string(path, min.chars = 1)
+  meta <- get_cube_metadata_cached(path)
+  out <- list(
+    roles = read_cube_roles_impl(path),
+    source = read_cube_source_impl(path),
+    data_col = read_cube_data_col_impl(path),
+    dim_semantics = read_cube_dim_semantics_impl(path, validate = FALSE)
+  )
+
+  if (isTRUE(validate)) {
+    out <- normalize_cube_metadata_bundle(out, meta$dim_order)
+  }
+
+  out
+}
+
+write_cube_dim_semantics_impl <- function(path, dim_semantics, validate = TRUE) {
   require_cube_metadata_admin("write dim_semantics metadata")
   checkmate::assert_string(path, min.chars = 1)
 
   meta <- get_cube_metadata_cached(path)
-  roles <- read_roles_from_cube(path, meta = meta)
+  cube_roles <- read_roles_from_cube(path, meta = meta)
   dsem <- ensure_dim_semantics(
     dim_semantics = dim_semantics,
     dim_names = meta$dim_order,
-    time_dim = roles$time,
-    area_dim = roles$area
+    time_dim = cube_roles$time,
+    area_dim = cube_roles$area
   )
 
   if (isTRUE(validate)) {
     validate_dim_semantics(
       dim_semantics = dsem,
       dim_names = meta$dim_order,
-      time_dim = roles$time,
-      area_dim = roles$area
+      time_dim = cube_roles$time,
+      area_dim = cube_roles$area
     )
   }
 
@@ -152,60 +163,7 @@ write_cube_dim_semantics <- function(path, dim_semantics, validate = TRUE) {
   invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
 }
 
-#' Edit dim_semantics metadata in a cube file
-#'
-#' Reads `dim_semantics`, applies `FUN`, validates the result, and writes the
-#' updated semantics back to the cube. This is an admin-only metadata
-#' operation.
-#'
-#' @param path HDF5 file path.
-#' @param FUN Function called as `FUN(dim_semantics, ...)`.
-#' @param ... Additional arguments passed to `FUN`.
-#' @param validate Logical; when `TRUE` (default), validate the updated
-#'   semantics before writing.
-#'
-#' @return Invisibly returns the updated `dim_semantics` list.
-#' @export
-edit_cube_dim_semantics <- function(path, FUN, ..., validate = TRUE) {
-  require_cube_metadata_admin("edit dim_semantics metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_function(FUN)
-
-  current <- read_cube_dim_semantics(path, validate = validate)
-  updated <- FUN(current, ...)
-  if (!is.list(updated) || is.null(names(updated))) {
-    cli::cli_abort("{.arg FUN} must return a named list of DimSemantics entries.")
-  }
-  write_cube_dim_semantics(path, updated, validate = validate)
-  invisible(updated)
-}
-
-#' Read roles metadata from a cube file
-#'
-#' Reads the canonical `cube/metadata/roles/*` metadata from an HDF5 cube.
-#'
-#' @param path HDF5 file path.
-#'
-#' @return Named list with `time`, `area`, and `strata`.
-#' @export
-read_cube_roles <- function(path) {
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-  normalize_cube_roles(read_roles_from_cube(path, meta = meta), meta$dim_order)
-}
-
-#' Write roles metadata to a cube file
-#'
-#' Overwrites the canonical `cube/metadata/roles/*` datasets in an existing HDF5
-#' cube. This is an admin-only metadata operation and does not rewrite
-#' `cube/population`.
-#'
-#' @param path HDF5 file path.
-#' @param roles Named list with `time`, `area`, and optional `strata`.
-#'
-#' @return Invisibly returns the normalized cube path.
-#' @export
-write_cube_roles <- function(path, roles) {
+write_cube_roles_impl <- function(path, roles) {
   require_cube_metadata_admin("write cube roles metadata")
   checkmate::assert_string(path, min.chars = 1)
   meta <- get_cube_metadata_cached(path)
@@ -215,53 +173,7 @@ write_cube_roles <- function(path, roles) {
   invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
 }
 
-#' Edit roles metadata in a cube file
-#'
-#' Reads roles metadata, applies `FUN`, validates the result, and writes the
-#' updated roles back to the cube. This is an admin-only metadata operation.
-#'
-#' @param path HDF5 file path.
-#' @param FUN Function called as `FUN(roles, ...)`.
-#' @param ... Additional arguments passed to `FUN`.
-#'
-#' @return Invisibly returns the updated roles list.
-#' @export
-edit_cube_roles <- function(path, FUN, ...) {
-  require_cube_metadata_admin("edit cube roles metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_function(FUN)
-  current <- read_cube_roles(path)
-  updated <- FUN(current, ...)
-  write_cube_roles(path, updated)
-  invisible(updated)
-}
-
-#' Read source metadata from a cube file
-#'
-#' Reads the canonical `cube/metadata/source/*` metadata from an HDF5 cube.
-#'
-#' @param path HDF5 file path.
-#'
-#' @return Named list of source/provenance fields.
-#' @export
-read_cube_source <- function(path) {
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-  normalize_cube_source(read_source_from_cube(path, meta = meta))
-}
-
-#' Write source metadata to a cube file
-#'
-#' Overwrites the canonical `cube/metadata/source/*` datasets in an existing
-#' HDF5 cube. This is an admin-only metadata operation and does not rewrite
-#' `cube/population`.
-#'
-#' @param path HDF5 file path.
-#' @param source Named list or named atomic vector of source/provenance fields.
-#'
-#' @return Invisibly returns the normalized cube path.
-#' @export
-write_cube_source <- function(path, source) {
+write_cube_source_impl <- function(path, source) {
   require_cube_metadata_admin("write cube source metadata")
   checkmate::assert_string(path, min.chars = 1)
   write_cube_source_metadata(path, source)
@@ -269,54 +181,7 @@ write_cube_source <- function(path, source) {
   invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
 }
 
-#' Edit source metadata in a cube file
-#'
-#' Reads source metadata, applies `FUN`, normalizes the result, and writes the
-#' updated source metadata back to the cube. This is an admin-only metadata
-#' operation.
-#'
-#' @param path HDF5 file path.
-#' @param FUN Function called as `FUN(source, ...)`.
-#' @param ... Additional arguments passed to `FUN`.
-#'
-#' @return Invisibly returns the updated source metadata list.
-#' @export
-edit_cube_source <- function(path, FUN, ...) {
-  require_cube_metadata_admin("edit cube source metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_function(FUN)
-  current <- read_cube_source(path)
-  updated <- FUN(current, ...)
-  write_cube_source(path, updated)
-  invisible(updated)
-}
-
-#' Read data column metadata from a cube file
-#'
-#' Reads the canonical `cube/metadata/data_col` value from an HDF5 cube.
-#'
-#' @param path HDF5 file path.
-#'
-#' @return Length-1 character scalar.
-#' @export
-read_cube_data_col <- function(path) {
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-  as.character(read_data_col_from_cube(path, meta = meta))
-}
-
-#' Write data column metadata to a cube file
-#'
-#' Overwrites the canonical `cube/metadata/data_col` dataset in an existing HDF5
-#' cube. This is an admin-only metadata operation and does not rewrite
-#' `cube/population`.
-#'
-#' @param path HDF5 file path.
-#' @param data_col Length-1 character scalar naming the value column.
-#'
-#' @return Invisibly returns the normalized cube path.
-#' @export
-write_cube_data_col <- function(path, data_col) {
+write_cube_data_col_impl <- function(path, data_col) {
   require_cube_metadata_admin("write cube data_col metadata")
   checkmate::assert_string(path, min.chars = 1)
   checkmate::assert_string(data_col, min.chars = 1)
@@ -325,28 +190,124 @@ write_cube_data_col <- function(path, data_col) {
   invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
 }
 
-#' Edit data column metadata in a cube file
+#' Get cube roles from a poparray or cube file
 #'
-#' Reads `data_col`, applies `FUN`, validates the result, and writes the updated
-#' value back to the cube. This is an admin-only metadata operation.
+#' Returns dimension role metadata from either an in-memory `poparray` or an
+#' HDF5 cube path.
 #'
-#' @param path HDF5 file path.
-#' @param FUN Function called as `FUN(data_col, ...)`.
-#' @param ... Additional arguments passed to `FUN`.
+#' @param x A `poparray` or HDF5 cube path.
 #'
-#' @return Invisibly returns the updated data column name.
+#' @return Named list with `time`, `area`, and `strata`.
 #' @export
-edit_cube_data_col <- function(path, FUN, ...) {
-  require_cube_metadata_admin("edit cube data_col metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_function(FUN)
-  current <- read_cube_data_col(path)
-  updated <- FUN(current, ...)
-  if (!is.character(updated) || length(updated) != 1L || !nzchar(updated)) {
-    cli::cli_abort("{.arg FUN} must return a non-empty character(1) for {.arg data_col}.")
+roles <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(read_cube_roles_impl(x))
   }
-  write_cube_data_col(path, updated)
-  invisible(updated)
+  if (is(x, "poparray")) {
+    dn <- names(dimnames(x))
+    return(list(
+      time = time_role(x),
+      area = area_role(x),
+      strata = setdiff(dn, c(time_role(x), area_role(x)))
+    ))
+  }
+  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+}
+
+#' @rdname roles
+#' @export
+`roles<-` <- function(x, value) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    write_cube_roles_impl(x, value)
+    return(x)
+  }
+  if (!is(x, "poparray")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  }
+  dn <- names(dimnames(x))
+  val <- normalize_cube_roles(value, dn)
+  x@time_role <- val$time
+  x@area_role <- val$area
+  x@strata_roles <- val$strata
+  validate_poparray(x)
+  x
+}
+
+#' Get source metadata from a poparray or cube file
+#'
+#' Returns source/provenance metadata from either an in-memory `poparray` or an
+#' HDF5 cube path.
+#'
+#' @param x A `poparray` or HDF5 cube path.
+#'
+#' @return Named list of source/provenance fields.
+#' @export
+source_meta <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(read_cube_source_impl(x))
+  }
+  if (is(x, "poparray")) {
+    return(normalize_cube_source(get_source(x)))
+  }
+  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+}
+
+#' @rdname source_meta
+#' @export
+`source_meta<-` <- function(x, value) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    write_cube_source_impl(x, value)
+    return(x)
+  }
+  if (!is(x, "poparray")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  }
+  x@source <- normalize_cube_source(value)
+  x
+}
+
+#' Get canonical cube metadata as one bundle
+#'
+#' Returns the canonical metadata bundle from either an in-memory `poparray` or
+#' an HDF5 cube path.
+#'
+#' @param x A `poparray` or HDF5 cube path.
+#'
+#' @return Named list with `roles`, `source`, `data_col`, and `dim_semantics`.
+#' @export
+cube_metadata <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(read_cube_metadata_admin_impl(x))
+  }
+  if (is(x, "poparray")) {
+    return(list(
+      roles = roles(x),
+      source = source_meta(x),
+      data_col = data_col(x),
+      dim_semantics = dim_semantics(x)
+    ))
+  }
+  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+}
+
+#' @rdname cube_metadata
+#' @export
+`cube_metadata<-` <- function(x, value) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    write_cube_metadata_admin_impl(x, value)
+    return(x)
+  }
+  if (!is(x, "poparray")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  }
+  dn <- names(dimnames(x))
+  bundled <- normalize_cube_metadata_bundle(value, dn)
+  x <- `roles<-`(x, bundled$roles)
+  x@source <- bundled$source
+  x@data_col <- bundled$data_col
+  x@dim_semantics <- bundled$dim_semantics
+  validate_poparray(x)
+  x
 }
 
 normalize_cube_metadata_bundle <- function(metadata, dim_order) {
@@ -381,49 +342,7 @@ normalize_cube_metadata_bundle <- function(metadata, dim_order) {
   out
 }
 
-#' Read canonical cube metadata as one bundle
-#'
-#' Reads the canonical metadata fields used to construct a `poparray` from an
-#' HDF5 cube: roles, source, `data_col`, and `dim_semantics`.
-#'
-#' @param path HDF5 file path.
-#' @param validate Logical; when `TRUE` (default), validate the bundled
-#'   metadata for cross-field consistency.
-#'
-#' @return Named list with `roles`, `source`, `data_col`, and `dim_semantics`.
-#' @export
-read_cube_metadata_admin <- function(path, validate = TRUE) {
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-  out <- list(
-    roles = read_cube_roles(path),
-    source = read_cube_source(path),
-    data_col = read_cube_data_col(path),
-    dim_semantics = read_cube_dim_semantics(path, validate = FALSE)
-  )
-
-  if (isTRUE(validate)) {
-    out <- normalize_cube_metadata_bundle(out, meta$dim_order)
-  }
-
-  out
-}
-
-#' Write canonical cube metadata as one bundle
-#'
-#' Writes roles, source, `data_col`, and `dim_semantics` back to an existing HDF5
-#' cube as one validated metadata transaction. This is an admin-only metadata
-#' operation and does not rewrite `cube/population`.
-#'
-#' @param path HDF5 file path.
-#' @param metadata Named list with `roles`, `source`, `data_col`, and
-#'   `dim_semantics`.
-#' @param validate Logical; when `TRUE` (default), validate the bundled
-#'   metadata for cross-field consistency before writing.
-#'
-#' @return Invisibly returns the normalized cube path.
-#' @export
-write_cube_metadata_admin <- function(path, metadata, validate = TRUE) {
+write_cube_metadata_admin_impl <- function(path, metadata, validate = TRUE) {
   require_cube_metadata_admin("write bundled cube metadata")
   checkmate::assert_string(path, min.chars = 1)
   meta <- get_cube_metadata_cached(path)
@@ -445,32 +364,4 @@ write_cube_metadata_admin <- function(path, metadata, validate = TRUE) {
   )
   reset_poparray_cache()
   invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
-}
-
-#' Edit canonical cube metadata as one bundle
-#'
-#' Reads the canonical metadata bundle, applies `FUN`, validates the result, and
-#' writes the updated metadata back to the cube. This is an admin-only metadata
-#' operation.
-#'
-#' @param path HDF5 file path.
-#' @param FUN Function called as `FUN(metadata, ...)`.
-#' @param ... Additional arguments passed to `FUN`.
-#' @param validate Logical; when `TRUE` (default), validate the bundled
-#'   metadata for cross-field consistency before writing.
-#'
-#' @return Invisibly returns the updated metadata bundle.
-#' @export
-edit_cube_metadata_admin <- function(path, FUN, ..., validate = TRUE) {
-  require_cube_metadata_admin("edit bundled cube metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_function(FUN)
-
-  current <- read_cube_metadata_admin(path, validate = validate)
-  updated <- FUN(current, ...)
-  if (!is.list(updated)) {
-    cli::cli_abort("{.arg FUN} must return a named metadata list.")
-  }
-  write_cube_metadata_admin(path, updated, validate = validate)
-  invisible(updated)
 }

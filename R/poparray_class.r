@@ -1098,6 +1098,9 @@ setMethod(
 #' @return Character string.
 #' @export
 data_col <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(read_cube_data_col_impl(x))
+  }
   if (is(x, "poparray")) return(x@data_col)
   attr(x, "data_col", exact = TRUE)
 }
@@ -1111,8 +1114,11 @@ data_col <- function(x) {
 #' @return Named list with one `DimSemantics` object per dimension.
 #' @export
 dim_semantics <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(read_cube_dim_semantics_impl(x))
+  }
   if (!is(x, "poparray")) {
-    cli::cli_abort("{.arg x} must be a {.cls poparray}.")
+    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
   }
   x@dim_semantics
 }
@@ -1121,10 +1127,37 @@ dim_semantics <- function(x) {
 #' @export
 `data_col<-` <- function(x, values) {
   checkmate::assert_character(values, len = 1, any.missing = FALSE)
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    write_cube_data_col_impl(x, values)
+    return(x)
+  }
   if (is(x, "poparray")) {
     x@data_col <- values
   }
   attr(x, "data_col") <- values
+  x
+}
+
+#' @rdname dim_semantics
+#' @export
+`dim_semantics<-` <- function(x, value) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    write_cube_dim_semantics_impl(x, value)
+    return(x)
+  }
+  if (!is(x, "poparray")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  }
+  if (is.null(value) || !is.list(value) || is.null(names(value))) {
+    cli::cli_abort("{.arg value} must be a named list of DimSemantics entries.")
+  }
+  validate_dim_semantics(
+    dim_semantics = value,
+    dim_names = names(dimnames(x)),
+    time_dim = time_role(x),
+    area_dim = area_role(x)
+  )
+  x@dim_semantics <- value
   x
 }
 
