@@ -168,6 +168,38 @@ test_that("HDF5 round-trip preserves dim_semantics", {
   expect_equal(dim_semantics(out), dim_semantics(pa))
 })
 
+test_that("dim semantics metadata is stable across cached and uncached opens", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
+  pa <- new_poparray(
+    x = fx$dx,
+    dimnames_list = fx$dn,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+
+  tmp <- tempfile("dim_semantics_cache_", fileext = ".h5")
+  save_poparray(pa, filepath = tmp, overwrite = TRUE, series_id = "dim_semantics_cache")
+
+  testthat::local_mocked_bindings(
+    tarr_series_registry = function() {
+      data.frame(
+        series_id = "dim_semantics_cache",
+        filename = basename(tmp),
+        filepath = tmp,
+        stringsAsFactors = FALSE
+      )
+    },
+    .package = "tarr.pop"
+  )
+
+  out_cached <- open_poparray("dim_semantics_cache")
+  reset_poparray_cache()
+  out_uncached <- open_poparray("dim_semantics_cache")
+
+  expect_equal(dim_semantics(out_cached), dim_semantics(out_uncached))
+})
+
 test_that("interval dimensions derive overlap risk from labels", {
   dn <- list(
     year = c("2020", "2021"),

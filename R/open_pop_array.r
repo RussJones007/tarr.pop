@@ -301,6 +301,38 @@ get_cube_metadata_cached <- function(path) {
   meta
 }
 
+read_dim_semantics_entry <- function(meta, base, dim_name_fallback) {
+  path <- meta$path
+  info <- meta$info
+
+  read_if_present <- function(field) {
+    ds <- paste0(base, "/", field)
+    if (cube_info_has_dataset(info, ds)) {
+      h5_read_scalar_chr(path, ds)
+    } else {
+      NULL
+    }
+  }
+
+  list(
+    dim_name = read_if_present("dim_name") %||% dim_name_fallback,
+    domain = h5_read_scalar_chr(path, paste0(base, "/domain")),
+    scale_type = h5_read_scalar_chr(path, paste0(base, "/scale_type")),
+    partition_type = h5_read_scalar_chr(path, paste0(base, "/partition_type")),
+    validated = tolower(h5_read_scalar_chr(path, paste0(base, "/validated"))) == "true",
+    overlap_levels = if (cube_info_has_dataset(info, paste0(base, "/overlap_levels"))) {
+      as.character(rhdf5::h5read(path, paste0(base, "/overlap_levels")))
+    } else {
+      character()
+    },
+    notes = if (cube_info_has_dataset(info, paste0(base, "/notes"))) {
+      as.character(rhdf5::h5read(path, paste0(base, "/notes")))
+    } else {
+      character()
+    }
+  )
+}
+
 parse_dim_semantics_from_meta <- function(meta, dim_order = meta$dim_order, time_dim, area_dim) {
   has_group <- any(meta$info$group == "/cube/metadata" & meta$info$name == "dim_semantics")
   if (!isTRUE(has_group)) {
@@ -318,20 +350,16 @@ parse_dim_semantics_from_meta <- function(meta, dim_order = meta$dim_order, time
     }, logical(1)))
 
     if (isTRUE(has_new)) {
-      dim_name <- if (cube_info_has_dataset(meta$info, paste0(base, "/dim_name"))) {
-        h5_read_scalar_chr(meta$path, paste0(base, "/dim_name"))
-      } else {
-        d
-      }
+      entry <- read_dim_semantics_entry(meta, base, d)
 
       return(new_dim_semantics(
-        dim_name = dim_name,
-        domain = h5_read_scalar_chr(meta$path, paste0(base, "/domain")),
-        scale_type = h5_read_scalar_chr(meta$path, paste0(base, "/scale_type")),
-        partition_type = h5_read_scalar_chr(meta$path, paste0(base, "/partition_type")),
-        validated = tolower(h5_read_scalar_chr(meta$path, paste0(base, "/validated"))) == "true",
-        overlap_levels = as.character(rhdf5::h5read(meta$path, paste0(base, "/overlap_levels"))),
-        notes = as.character(rhdf5::h5read(meta$path, paste0(base, "/notes")))
+        dim_name = entry$dim_name,
+        domain = entry$domain,
+        scale_type = entry$scale_type,
+        partition_type = entry$partition_type,
+        validated = entry$validated,
+        overlap_levels = entry$overlap_levels,
+        notes = entry$notes
       ))
     }
 
