@@ -1,0 +1,142 @@
+make_ingestion_semantics <- function(dims, time_dim = "year", area_dim = "area.name") {
+  out <- lapply(dims, function(d) {
+    tarr.pop:::new_dim_semantics(
+      dim_name = d,
+      domain = if (identical(d, time_dim)) "time" else if (identical(d, area_dim)) "area" else d,
+      scale_type = if (d %in% c(time_dim, "age.char")) "interval" else "nominal",
+      partition_type = if (d %in% c(time_dim, area_dim)) "partition" else "set"
+    )
+  })
+  names(out) <- dims
+  out
+}
+
+test_that("apply_completion_policy errors when source table is incomplete", {
+  df <- data.frame(
+    year = c("2020", "2020", "2020"),
+    area.name = c("A", "A", "B"),
+    sex = c("Female", "Male", "Female"),
+    population = c(10, 11, 12),
+    stringsAsFactors = FALSE
+  )
+
+  expect_error(
+    tarr.pop:::apply_completion_policy(
+      df,
+      dims = c("year", "area.name", "sex"),
+      policy = "error"
+    ),
+    "Missing population cells"
+  )
+})
+
+test_that("build_poparray_from_df validates dim_semantics against cube dimensions", {
+  fp <- tempfile("ingestion-bad-semantics-", fileext = ".h5")
+
+  df <- data.frame(
+    year = c("2020", "2021"),
+    area.name = c("A", "A"),
+    population = c(10, 11),
+    stringsAsFactors = FALSE
+  )
+
+  bad_semantics <- make_ingestion_semantics(c("year", "sex"))
+
+  expect_error(
+    tarr.pop:::build_poparray_from_df(
+      df = df,
+      dims = c("year", "area.name"),
+      dim_semantics = bad_semantics,
+      filepath = fp,
+      series_id = "ingestion_bad_semantics"
+    ),
+    "dim_semantics"
+  )
+})
+
+test_that("ingest_population writes reduced-dimension cubes with explicit semantics", {
+  fp <- tempfile("ingestion-reduced-", fileext = ".h5")
+  dims <- c("year", "area.name")
+  sem <- make_ingestion_semantics(dims)
+
+  reader <- function(...) {
+    data.frame(
+      year = c("2020", "2020", "2021", "2021"),
+      area.name = c("A", "B", "A", "B"),
+      population = c(100, 120, 101, 121),
+      scenario = "baseline",
+      stringsAsFactors = FALSE
+    )
+  }
+
+  out <- tarr.pop:::ingest_population(
+    reader = reader,
+    dims = dims,
+    dim_semantics = sem,
+    filepath = fp,
+    series_id = "ingestion_reduced",
+    source_meta = list(
+      nm = "Reduced Dimension Example",
+      pop_type = "Synthetic",
+      url = "https://example.test/reduced"
+    )
+  )
+
+  expect_true(file.exists(fp))
+  expect_equal(out, normalizePath(fp, winslash = "/", mustWork = FALSE))
+
+  meta <- tarr.pop:::get_cube_metadata_cached(fp)
+  dimn <- tarr.pop:::read_dimnames_from_cube(fp, meta = meta)
+  roles <- tarr.pop:::read_roles_from_cube(fp, meta = meta)
+  dsem <- tarr.pop:::read_dim_semantics_from_cube(fp, names(dimn), roles$time, roles$area, meta = meta)
+  src <- tarr.pop:::read_source_from_cube(fp, meta = meta)
+
+  expect_identical(names(dimn), dims)
+  expect_identical(dimn$year, c("2020", "2021"))
+  expect_identical(dimn$area.name, c("A", "B"))
+  expect_identical(roles$time, "year")
+  expect_identical(roles$area, "area.name")
+  expect_identical(names(dsem), dims)
+  expect_true(tarr.pop:::pa_is_partition(dsem$year))
+  expect_true(tarr.pop:::pa_is_partition(dsem$area.name))
+  expect_identical(src[["note"]], "Reduced Dimension Example")
+  expect_identical(src[["population_type"]], "Synthetic")
+  expect_identical(src[["source"]], "https://example.test/reduced")
+})
+
+test_that("ingest_population persists through a single cube write path", {
+  fp <- tempfile("ingestion-single-write-", fileext = ".h5")
+  dims <- c("year", "area.name")
+  sem <- make_ingestion_semantics(dims)
+  writes <- 0L
+  orig_write <- tarr.pop:::pa_write_poparray_cube
+
+  testthat::local_mocked_bindings(
+    pa_write_poparray_cube = function(...) {
+      writes <<- writes + 1L
+      orig_write(...)
+    },
+    save_poparray = function(...) {
+      stop("save_poparray() should not be called by ingest_population()")
+    },
+    .package = "tarr.pop"
+  )
+
+  tarr.pop:::ingest_population(
+    reader = function(...) {
+      data.frame(
+        year = c("2020", "2020", "2021", "2021"),
+        area.name = c("A", "B", "A", "B"),
+        population = c(10, 11, 12, 13),
+        stringsAsFactors = FALSE
+      )
+    },
+    dims = dims,
+    dim_semantics = sem,
+    filepath = fp,
+    series_id = "ingestion_single_write"
+  )
+
+  expect_equal(writes, 1L)
+  expect_true(file.exists(fp))
+})
