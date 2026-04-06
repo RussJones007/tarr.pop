@@ -88,6 +88,15 @@ Every response MUST include:
     -   safe examples
 -   Mention vignettes or related functions when useful
 
+## Vignettes and longer documentation formats
+
+- Show how functions and classes are used both singly and together.
+- Cover why and how package tools are used. 
+- Explain the reasons for the use of lazy evaluation for speed and memory optimization. 
+- Explain package design and how it is implemented. 
+- Reduce the number of bullets and increase explanatory text.
+- Include possible mistakes that can occurr and how the package design prevents mistakes.
+
 ------------------------------------------------------------------------
 
 # Anti-patterns to flag
