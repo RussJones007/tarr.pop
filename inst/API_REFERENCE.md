@@ -1,10 +1,172 @@
 # tarr.pop API Reference
 
-This reference groups the exported, user-facing API by module. The "Object
-Class" column indicates the primary object type a function works with or
-returns.
+This document is the long-form reference for the user-facing API.
+It is organized around the way population cubes are created, inspected,
+transformed, summarized, projected, and stored. Each section also explains 
+how the functions are intended to be used together.
+
+The package is built around delayed, dimension-aware population arrays. In
+normal use, a `poparray` should remain lazy for as long as possible so that
+filtering, grouping, and many summaries can be expressed without
+materializing the full cube in memory. This matters both for performance and
+for correctness: `tarr.pop` is designed to preserve dimension names, roles,
+and semantic metadata while preventing unsafe aggregations across overlapping
+categories.
+
+Two ideas appear throughout this reference:
+
+1. A `poparray` is not just an array of numbers. It is an array plus
+   dimensional meaning, including time, area, and category semantics.
+2. Long-table or tibble conversions are often convenient, but they are
+   intentionally marked **EAGER** because they realize cube values into a
+   tabular structure.
+
+## Arrays, Data Frames, Lazy Work, and Eager Work
+
+Many R users spend most of their time with data frames, so it is worth being
+explicit about how an array-based workflow differs. A data frame is organized
+as rows and columns. Each row is usually treated as one observation, and each
+column is treated as one variable. That is an excellent general-purpose
+structure, but it is not always the most natural structure for population
+data.
+
+Population data is often defined by several dimensions at once: year, area,
+age, sex, race, and ethnicity are all part of what a value means. In a data
+frame, that multi-dimensional structure is present, but it is implicit. In an
+array, the structure is explicit.
+
+One way to picture the difference is this:
+
+```text
+Data frame thinking
+
+year   area      age      sex     value
+2020   Tarrant   0-4      F       73421
+2020   Tarrant   0-4      M       76810
+2020   Tarrant   5-9      F       75103
+2020   Dallas    0-4      F       181552
+...
+
+Each row stores one combination of categories.
+The dimensional structure is carried by repeated columns.
+```
+
+```text
+Array thinking
+
+value[year, area, age, sex]
+
+                 sex
+              F      M
+year area age
+2020 Tarr 0-4 73421 76810
+          5-9 75103 78744
+     Dall 0-4 181552 190331
+
+Each axis is a named dimension.
+Each cell is addressed by its position on every dimension at once.
+```
+
+For a data-frame user, the most important conceptual shift is this: arrays do
+not start from rows. They start from dimensions. That means the structure of
+the data is not reconstructed from repeated columns each time you work with
+it. The structure is already built into the object.
+
+This matters for both correctness and efficiency. In a data frame, each row
+repeats the labels needed to identify the cell: the year value appears again
+and again, the area name appears again and again, and the age label appears
+again and again. In an array, those labels are stored once per dimension and
+the values live in the multi-dimensional grid. That can be much more compact,
+especially when the same categories repeat across many combinations.
+
+Another way to picture the memory difference is:
+
+```text
+Data frame
+
+row 1: "2020", "Tarrant", "0-4", "F", 73421
+row 2: "2020", "Tarrant", "0-4", "M", 76810
+row 3: "2020", "Tarrant", "5-9", "F", 75103
+...
+
+The identifying labels are repeated in every row.
+```
+
+```text
+Array
+
+dimnames$year = c("2020", "2021", ...)
+dimnames$area = c("Tarrant", "Dallas", ...)
+dimnames$age  = c("0-4", "5-9", ...)
+dimnames$sex  = c("F", "M")
+
+values = one numeric block arranged on those dimensions
+
+The identifying labels are stored once per axis.
+```
+
+The package builds on that compact array representation and then goes a step
+further by supporting delayed computation. This is where the terms **lazy**
+and **EAGER** become important.
+
+In this package, **lazy** means that an operation is described, recorded, or
+planned without immediately realizing all values into ordinary in-memory R
+objects. A lazy filter, grouped operation, or summary can often stay as a
+DelayedArray-style computation, which allows the package to work efficiently
+with large HDF5-backed cubes.
+
+By contrast, **EAGER** means that the operation materializes data now. When a
+`poparray` is converted to a data frame or tibble, the package has to expand
+the cube into rows and attach the identifying labels to each row. That is
+often exactly what the user wants for export, printing, modeling, or plotting,
+but it is more expensive in both memory and computation.
+
+The contrast can be summarized like this:
+
+```text
+Lazy
+  Keep the cube in array form
+  Keep labels on dimensions
+  Delay reading or computing full results when possible
+  Best for filtering, regrouping, summaries, and storage-backed workflows
+
+EAGER
+  Materialize values now
+  Often expand the cube into long rows
+  Useful for reporting, export, and table-oriented tools
+  More memory-intensive for large cubes
+```
+
+For an R user used to data frames, a good rule is: stay in array form while
+you are doing population-cube work, and move to a data frame only when you
+need a data-frame result. That is why `tarr.pop` treats long-table conversion
+as important but not primary. The array is the working representation; the
+data frame is usually the delivery representation.
+
+## Working Principles
+
+Most workflows follow a common pattern:
+
+1. Open or construct a cube.
+2. Inspect its roles, labels, and semantics.
+3. Filter or regroup dimensions without realizing values.
+4. Compute summaries or create projections.
+5. Convert to a data frame or tibble only when tabular output is actually
+   needed.
+
+The package design tries to prevent common mistakes. For example, age is
+treated as interval data rather than plain strings, and grouped collapse
+operations are expected to respect semantic safety rather than summing across
+overlapping labels by accident. Similarly, the `"All"` category is treated as
+virtual rather than something that should be stored redundantly in a cube.
 
 ## Core Cube Objects
+
+The starting point for most work is the `poparray` class. A `poparray`
+represents a population cube together with the metadata needed to interpret
+its dimensions safely. The projection workflow introduces a second class,
+`poparray_projection`, which keeps projected values and related uncertainty in
+a structured form.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -13,7 +175,18 @@ returns.
 | `is.poparray()` | Test whether an object is a `poparray`. | logical / `poparray` |
 | `poparray_projection()` | Construct a `poparray_projection`. | `poparray_projection` |
 
+Use `new_poparray()` when you are assembling a cube with metadata explicitly
+and want a canonical object. Use `as.poparray()` when you already have a
+compatible object and want to normalize it to package conventions. In either
+case, the important point is that construction should preserve delayed
+storage, dimension names, roles, and semantic metadata.
+
 ## Cube Accessors
+
+Accessors expose the metadata that makes a `poparray` more than a numeric
+array. These functions are usually the first thing to inspect when you are
+trying to understand a cube, verify assumptions in a script, or document how
+downstream code interprets each dimension.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -24,7 +197,18 @@ returns.
 | `dim_semantics()` | Get per-dimension semantic metadata. | `poparray` |
 | `get_source()` | Get source/provenance metadata. | `poparray` |
 
+These accessors matter because many higher-level operations rely on named
+dimensions rather than positional indexing. A workflow that depends on
+"dimension 1 means year" is fragile; a workflow that asks for the time role
+directly is much safer and easier to read. The same principle applies to
+source metadata and the tabular value-column name.
+
 ## Dimension Label Accessors
+
+Label accessors provide a readable way to inspect valid values along standard
+dimensions such as year, area, age, sex, race, and ethnicity. They are useful
+both in interactive analysis and in code that needs to validate user choices
+before subsetting or regrouping.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -36,7 +220,16 @@ returns.
 | `ethnicities()` | Return labels for `ethnicity`. | `poparray`, array-like |
 | `dim_labels()` | Return labels for a named dimension. | `poparray`, array-like |
 
+`dim_labels()` is the general interface, while helpers such as `years()` and
+`ages()` are optimized for common dimensions in demographic workflows. Age
+labels should be interpreted as intervals, not as arbitrary strings. That
+distinction is important when filtering ranges or creating grouped age bands.
+
 ## Filtering and Subsetting
+
+Filtering narrows a cube by label while preserving the dimensional structure
+that remains. In normal workflows, this should stay lazy: the goal is to
+describe the slice you want, not to immediately materialize it.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -45,14 +238,44 @@ returns.
 | `split.poparray()` | Split a cube into slices by one dimension. | `poparray` |
 | `by.poparray()` | Apply a function by dimension groups. | `poparray` |
 
+This family of functions is useful when you want to focus on a subset of
+years, a region, or an age interval before computing summaries or plots. The
+main safety benefit is that subsetting remains dimension-aware. Using label
+predicates is more robust than numeric positions, especially when the cube has
+been filtered or regrouped earlier in the workflow.
+
+`%between%` is especially helpful for ordered dimensions such as time or age
+intervals. `split.poparray()` and `by.poparray()` support more structured
+iteration without discarding the semantics that individual slices still need.
+
 ## Grouped Aggregation
+
+Aggregation is where semantic errors become easy to make, so the grouped
+aggregation API is deliberately explicit. These functions are meant to
+collapse a dimension into safer grouped levels while checking that the
+operation is meaningful.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
 | `collapse_dim()` | Collapse one dimension into grouped levels with semantic safety checks. | `poparray` |
 | `group_ages()` | Age-specific grouped collapse built on `collapse_dim()`. | `poparray` |
 
+`collapse_dim()` is the general tool for regrouping labels. `group_ages()` is
+the specialized helper for age intervals, where overlap and ordering matter
+especially strongly. These functions are central to the package's design
+because a plain array sum can produce numerically valid but substantively
+wrong results. The grouped API exists to reduce that risk.
+
+Users should prefer these helpers to ad hoc recoding when building broad age
+bands or collapsing categories for analysis. The aim is not only to simplify
+code, but also to preserve metadata and guard against unsafe aggregation.
+
 ## Summaries and Coercion
+
+This section combines two related ideas: computing summaries from a cube and
+coercing the cube into other representations. The distinction to keep in mind
+is that many summaries can remain delayed or block-wise, while tabular
+coercion is usually **EAGER**.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -63,7 +286,31 @@ returns.
 | `sd()` | Standard deviation for `poparray` using delayed block reduction. | `poparray` |
 | `sum()` | Semantically guarded sum for `poparray`. | `poparray` |
 
+`summary.poparray()`, `sd()`, and `sum()` are designed for analytical work on
+the cube itself. In particular, `sum()` is semantically guarded, which
+reflects the package's broader goal of preventing invalid aggregation across
+overlapping dimensions or categories.
+
+`as.data.frame.poparray()` and `as_tibble.poparray()` are included because
+many downstream tools expect long-form tables. They are intentionally useful,
+but they should be treated as endpoints rather than default intermediate
+steps. Once you convert a large delayed cube to a table, you lose the memory
+and performance advantages of lazy array operations. Those conversions are
+best reserved for reporting, export, or compatibility with tools that require
+tabular input.
+
+For users who want a tidyverse workflow, `as_tibble.poparray()` provides that
+entry point, but it should still be understood as **EAGER**. Tidyverse code is
+often row-wise and table-oriented, whereas `tarr.pop` is designed around
+dimension-aware arrays. The conversion is valuable, but it changes the
+computational model.
+
 ## Projection API
+
+The projection API supports forecasting workflows by separating observed cube
+data from projected values and associated uncertainty. This allows projections
+to be stored, inspected, converted, and plotted through a consistent
+interface.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -75,7 +322,22 @@ returns.
 | `as_tibble.poparray_projection()` | Convert projection to tibble output. **EAGER**. | `poparray_projection` |
 | `plot.poparray_projection()` | Plot projections as time series or pyramids. | `poparray_projection` |
 
+`project()` is the entry point for creating a `poparray_projection` from an
+existing population cube. Once created, `projection()` and `std_error()` make
+the structure explicit by exposing the main projected values and uncertainty
+components separately.
+
+As with base cubes, tabular coercions for projections are **EAGER** and are
+best used when a long-form output is required. `plot.poparray_projection()`
+provides a higher-level way to inspect projected trajectories without forcing
+the user to manually reshape the object first.
+
 ## Cube Storage and Persistence
+
+Storage functions manage where cubes live on disk and how they are created,
+saved, and reopened in the canonical HDF5-backed format. This layer is what
+allows package workflows to stay lazy across sessions instead of being limited
+to in-memory arrays.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
@@ -88,7 +350,22 @@ returns.
 | `open_poparray()` | Open a registered cube lazily. | `poparray` |
 | `open_tarr_pop()` | Backward-compatible alias for `open_poparray()`. | `poparray` |
 
+In a typical workflow, `init_cubes()` prepares the storage location,
+`create_poparray()` or `save_poparray()` writes data using the canonical
+schema, and `open_poparray()` reopens it lazily for analysis. The distinction
+between creation, saving, and opening matters because the package wants the
+on-disk representation to remain consistent with the metadata contracts used
+by `poparray`.
+
+This storage layer also reduces a common mistake in array-heavy work: losing
+track of which object is authoritative. By using canonical paths and open/save
+helpers, workflows can remain reproducible and easier to document.
+
 ## Metadata Administration
+
+Most users will read metadata more often than they write it. Metadata write
+operations are deliberately treated as elevated administration because they
+affect how a cube is interpreted throughout the package.
 
 These functions are intended for elevated metadata administration. Write/edit
 operations require `options(tarr.pop.metadata_role = "admin")` or
@@ -102,9 +379,69 @@ operations require `options(tarr.pop.metadata_role = "admin")` or
 | `data_col()` | Read or write the value-column name for a `poparray` or cube file. | poparray or cube metadata |
 | `cube_metadata()` | Read or write the bundled canonical metadata in one validated operation. | poparray or cube metadata bundle |
 
+The administrative boundary is intentional. Changing roles, semantics, or
+source metadata can silently alter the meaning of later analyses if done
+casually. Requiring an explicit admin mode helps reduce accidental edits and
+signals that these functions affect package-level invariants, not just local
+object convenience.
+
+When possible, prefer bundled or validated metadata operations over piecemeal
+manual editing. That keeps related fields synchronized and makes mistakes
+easier to catch.
+
 ## Data Conversion Helpers
+
+The helper conversion functions bridge array and data-frame representations.
+They are useful for import, export, and interoperability, but they should be
+used with awareness of the computational model being crossed.
 
 | Function | Purpose | Object Class |
 | --- | --- | --- |
 | `df_2_array()` | Convert a data frame to an array. | data frame -> array |
 | `array_2_df()` | Convert an array to a data frame. | array -> data frame |
+
+These helpers are lower-level than `as.data.frame.poparray()` or
+`as_tibble.poparray()`. They are especially useful when constructing examples,
+tests, or import pipelines that need to move between tabular source data and
+array form before wrapping that array in a `poparray`.
+
+Because they sit close to the representation boundary, they are also a place
+where users can make mistakes such as dropping labels, confusing dimension
+order, or flattening interval-valued age categories into plain text. When
+these helpers are used in package code or examples, the resulting arrays
+should be checked carefully before being treated as semantically complete
+population cubes.
+
+## Choosing Between Lazy and Eager Workflows
+
+For most package operations, the recommended approach is:
+
+- Keep data as a `poparray` while filtering, regrouping, summarizing, and
+  projecting.
+- Use named dimensions and metadata accessors rather than positional logic.
+- Convert to a data frame or tibble only when a table is genuinely needed for
+  output, reporting, or compatibility.
+
+Base R alternatives are sometimes useful, especially for simple reporting or
+inspection, but they should be labeled **EAGER** when they force realization.
+The same principle applies to tidyverse workflows: they can be practical, but
+they usually assume row-wise tabular data and therefore move the workflow out
+of the package's lazy array model.
+
+## Common Mistakes This API Tries to Prevent
+
+Several aspects of the API are intentionally opinionated because demographic
+array work is easy to get wrong in subtle ways:
+
+- Summing across overlapping groups can produce invalid totals.
+- Treating age labels as ordinary strings can break ordered grouping logic.
+- Relying on positional dimensions makes code brittle after filtering or
+  regrouping.
+- Converting to long tables too early can cause unnecessary realization and
+  memory growth.
+- Editing cube metadata casually can change analytical meaning without
+  changing numeric values.
+
+The API design addresses these risks by emphasizing semantic metadata,
+dimension roles, guarded aggregation, lazy storage, and explicit administrative
+boundaries for metadata edits.
