@@ -1,15 +1,34 @@
 # Ingestion helpers for building population cubes from tabular source data.
 
-
-
+#' Normalize common aggregate labels
+#'
+#' Converts a small set of common aggregate labels to the canonical `"All"`
+#' marker used by ingestion normalization.
+#'
+#' @param x A vector of labels.
+#'
+#' @return A character vector.
+#' @keywords internal
 normalize_totals <- function(x) {
-  TOTAL_ALIASES <- c("Total", "All", "All Ages")
+  total_aliases <- c("Total", "All", "All Ages")
   x <- as.character(x)
-  x[x %chin% TOTAL_ALIASES] <- "All"   # %chin% is a faster %in% for character
+  x[data.table::`%chin%`(x, total_aliases)] <- "All"
   x
 }
-  
 
+#' Prepare a population table for ingestion
+#'
+#' Applies schema-level normalization before validation and cube-building.
+#' This helper is intentionally limited to column checks, aggregate-label
+#' normalization, and optional dropping of `"All"` rows.
+#'
+#' @param df A source data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param drop_all Logical; remove rows containing `"All"` in any dimension.
+#' @param data_col Name of the value column.
+#'
+#' @return A data.table with normalized dimension columns.
+#' @keywords internal
 prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "population") {
   checkmate::assert_data_frame(df, min.rows = 1L)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
@@ -17,77 +36,144 @@ prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "populat
 
   required_cols <- unique(c(dims, data_col))
   missing <- setdiff(required_cols, names(df))
-  if (length(missing)) {
+  if (length(missing) > 0L) {
     cli::cli_abort(
       "Missing required columns: {.val {paste(missing, collapse = ', ')}}."
     )
   }
 
-  out <- df
+  out <- data.table::as.data.table(data.table::copy(df))
   cols <- intersect(dims, names(out))
-  # vectorized, by-reference update across all selected columns
-  out[, (cols) := lapply(.SD, normalize_totals), .SDcols = cols]
-      
-  # 
-  # for (nm in intersect(dims, names(out))) {
-  #   out[[nm]] <- normalize_totals(out[[nm]])
-  # }
+  for (col in cols) {
+    data.table::set(out, j = col, value = normalize_totals(out[[col]]))
+  }
 
   if (isTRUE(drop_all)) {
-    df <- df[df[, rowSums(.SD == "All") == 0, .SDcols = dims]]
-    #for (nm in dims) {
-    #  out <- out[out[[nm]] != "All", , drop = FALSE]
+    keep <- rowSums(as.matrix(out[, dims, with = FALSE]) == "All") == 0L
+    out <- out[keep, ]
   }
-  df
+
+  out
 }
 
-
-find_missing_population_cells <- function(df, dims) {
+#' Find missing population cells against a valid support table
+#'
+#' Computes the valid but unobserved dimension combinations by comparing
+#' observed rows to an explicit support table. When `support` is `NULL`, the
+#' observed support is returned unchanged and no missing rows are inferred.
+#'
+#' @param df Observed data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param support Optional support table listing valid dimension combinations.
+#'
+#' @return A data.table of missing dimension combinations.
+#' @keywords internal
+find_missing_population_cells <- function(df, dims, support = NULL) {
   checkmate::assert_data_frame(df)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
-  
-  
-  observed <- unique(df[, ..dims])
-  observed[[".present"]] <- TRUE
-  full <- tidyr::complete(observed, !!!rlang::syms(dims))
 
-  full[is.na(full$.present), dims, drop = FALSE]
+  observed <- unique(data.table::as.data.table(data.table::copy(df))[, dims, with = FALSE])
+
+  if (is.null(support)) {
+    return(observed[0])
+  }
+
+  checkmate::assert_data_frame(support)
+  missing <- setdiff(dims, names(support))
+  if (length(missing) > 0L) {
+    cli::cli_abort(
+      "Missing required support columns: {.val {paste(missing, collapse = ', ')}}."
+    )
+  }
+
+  skeleton <- unique(data.table::as.data.table(data.table::copy(support))[, dims, with = FALSE])
+  data.table::fsetdiff(skeleton, observed)
 }
 
+#' Apply structural completion policy to an ingestion table
+#'
+#' Handles sparse source tables without assuming that the valid cell space is
+#' the full Cartesian product of observed marginal levels. For `"zero"` and
+#' `"na"` policies an explicit `support` table is required.
+#'
+#' @param df Observed data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param policy Completion policy: `"error"`, `"zero"`, or `"na"`.
+#' @param data_col Name of the value column.
+#' @param support Optional support table listing valid dimension combinations.
+#'
+#' @return A data.table.
+#' @keywords internal
 apply_completion_policy <- function(df,
                                     dims,
                                     policy = c("error", "zero", "na"),
-                                    data_col = "population") {
+                                    data_col = "population",
+                                    support = NULL) {
   checkmate::assert_data_frame(df)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
   checkmate::assert_string(data_col, min.chars = 1L)
 
   policy <- match.arg(policy)
+  observed <- unique(data.table::as.data.table(data.table::copy(df)))
 
   if (identical(policy, "error")) {
-    missing <- find_missing_population_cells(df, dims)
+    missing <- find_missing_population_cells(observed, dims, support = support)
     if (nrow(missing) > 0L) {
       preview <- utils::capture.output(print(utils::head(missing, 5L), row.names = FALSE))
       cli::cli_abort(c(
         "Missing population cells under {.val completion_policy = 'error'}.",
-        "x" = "{nrow(missing)} dimension combinations are absent from the source table.",
+        "x" = "{nrow(missing)} valid dimension combinations are absent from the source table.",
         "i" = "First missing combinations:",
         paste(preview, collapse = "\n")
       ))
     }
-    return(df)
+    return(observed)
   }
 
-  # memory buster!!
-  full <- tidyr::complete(df, !!!rlang::syms(dims))
+  if (is.null(support)) {
+    cli::cli_abort(
+      "{.arg support} is required for {.val completion_policy = '{policy}'} to avoid unsafe Cartesian expansion."
+    )
+  }
+
+  checkmate::assert_data_frame(support)
+  missing_support_cols <- setdiff(dims, names(support))
+  if (length(missing_support_cols) > 0L) {
+    cli::cli_abort(
+      "Missing required support columns: {.val {paste(missing_support_cols, collapse = ', ')}}."
+    )
+  }
+
+  skeleton <- unique(data.table::as.data.table(data.table::copy(support))[, dims, with = FALSE])
+  full <- data.table::merge.data.table(
+    skeleton,
+    observed,
+    by = dims,
+    all.x = TRUE,
+    sort = FALSE
+  )
 
   if (identical(policy, "zero")) {
-    full[[data_col]][is.na(full[[data_col]])] <- 0
+    idx <- which(is.na(full[[data_col]]))
+    if (length(idx) > 0L) {
+      data.table::set(full, i = idx, j = data_col, value = 0)
+    }
   }
 
   full
 }
 
+#' Validate a prepared ingestion table
+#'
+#' Checks structural invariants before conversion to an array-backed cube.
+#'
+#' @param df A prepared data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param allow_na Logical; permit `NA` in the value column.
+#' @param data_col Name of the value column.
+#'
+#' @return Invisibly returns `TRUE` or errors.
+#' @keywords internal
 validate_population_df <- function(df,
                                    dims,
                                    allow_na = FALSE,
@@ -111,7 +197,7 @@ validate_population_df <- function(df,
     )
   }
 
-  dup <- duplicated(df[c(dims)])
+  dup <- duplicated(df[dims])
   if (any(dup)) {
     cli::cli_abort("{.arg df} contains duplicate rows for one or more dimension combinations.")
   }
@@ -128,6 +214,32 @@ validate_population_df <- function(df,
   invisible(TRUE)
 }
 
+#' Build and persist a poparray cube from a table
+#'
+#' Converts a validated tabular population table to an array, validates
+#' dimensional semantics against the resulting cube shape, and writes the HDF5
+#' cube once through the canonical storage path.
+#'
+#' @param df A validated data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param dim_semantics Named list of `DimSemantics` entries matching `dims`.
+#' @param filepath Output HDF5 file path.
+#' @param series_id Series identifier stored in cube metadata.
+#' @param time_dim Name of the time dimension.
+#' @param area_dim Name of the area dimension.
+#' @param source Provenance metadata list.
+#' @param data_col Name of the value column.
+#' @param overwrite Logical; overwrite existing file.
+#' @param chunkdim Chunk dimensions or `"auto"`.
+#' @param level Compression level passed to HDF5 writer.
+#' @param geo Optional geography tag.
+#' @param extendable_year Optional extendable-year flag.
+#' @param registry Optional registry metadata.
+#' @param target_chunk_bytes Target bytes for auto chunk sizing.
+#'
+#' @return Invisibly returns the low-level write result from
+#'   `pa_write_poparray_cube()`.
+#' @keywords internal
 build_poparray_from_df <- function(df,
                                    dims,
                                    dim_semantics,
@@ -160,7 +272,7 @@ build_poparray_from_df <- function(df,
     )
   }
 
-  arr_df <- df[fields]
+  arr_df <- as.data.frame(data.table::as.data.table(data.table::copy(df))[, fields, with = FALSE])
   arr <- df_2_array(arr_df, data_col = data_col)
   dim_names <- names(dimnames(arr))
 
@@ -191,6 +303,36 @@ build_poparray_from_df <- function(df,
   )
 }
 
+#' Ingest a population table into an HDF5-backed cube
+#'
+#' Runs the package-native ingestion pipeline: read, transform, normalize,
+#' structurally complete according to policy, validate, and persist.
+#'
+#' @param reader Function returning a source table.
+#' @param transformer Function transforming reader output into canonical columns.
+#' @param dims Character vector of dimension column names.
+#' @param dim_semantics Named list of `DimSemantics` entries matching `dims`.
+#' @param filepath Output HDF5 file path.
+#' @param series_id Series identifier stored in cube metadata.
+#' @param completion_policy Completion policy: `"error"`, `"zero"`, or `"na"`.
+#' @param drop_all Logical; remove rows containing `"All"` in any dimension.
+#' @param source_meta Provenance metadata list with optional `nm`, `pop_type`,
+#'   and `url` fields.
+#' @param time_dim Name of the time dimension.
+#' @param area_dim Name of the area dimension.
+#' @param overwrite Logical; overwrite existing file.
+#' @param chunkdim Chunk dimensions or `"auto"`.
+#' @param level Compression level passed to HDF5 writer.
+#' @param geo Optional geography tag.
+#' @param extendable_year Optional extendable-year flag.
+#' @param registry Optional registry metadata.
+#' @param target_chunk_bytes Target bytes for auto chunk sizing.
+#' @param data_col Name of the value column.
+#' @param support Optional support table listing valid dimension combinations.
+#' @param ... Additional arguments forwarded to `reader()` and `transformer()`.
+#'
+#' @return Invisibly returns the normalized output file path.
+#' @keywords internal
 ingest_population <- function(reader,
                               transformer = function(df, ...) df,
                               dims,
@@ -210,6 +352,7 @@ ingest_population <- function(reader,
                               registry = NULL,
                               target_chunk_bytes = 1e6,
                               data_col = "population",
+                              support = NULL,
                               ...) {
   checkmate::assert_function(reader)
   checkmate::assert_function(transformer)
@@ -225,15 +368,13 @@ ingest_population <- function(reader,
   df <- reader(...)
   df <- transformer(df, ...)
   df <- prepare_population_df(df, dims = dims, drop_all = drop_all, data_col = data_col)
-  key_cols <- c(dims, data_col)
-  df <- unique(df, by = key_cols) 
-  browser()
-  #df[, unique(c(dims, data_col)), drop = FALSE]
+  df <- unique(df, by = c(dims, data_col))
   df <- apply_completion_policy(
     df,
     dims = dims,
     policy = completion_policy,
-    data_col = data_col
+    data_col = data_col,
+    support = support
   )
   validate_population_df(
     df,

@@ -20,14 +20,91 @@ test_that("apply_completion_policy errors when source table is incomplete", {
     stringsAsFactors = FALSE
   )
 
+  support <- data.frame(
+    year = c("2020", "2020", "2020", "2020"),
+    area.name = c("A", "A", "B", "B"),
+    sex = c("Female", "Male", "Female", "Male"),
+    stringsAsFactors = FALSE
+  )
+
   expect_error(
     tarr.pop:::apply_completion_policy(
       df,
       dims = c("year", "area.name", "sex"),
-      policy = "error"
+      policy = "error",
+      support = support
     ),
     "Missing population cells"
   )
+})
+
+test_that("apply_completion_policy requires support for zero completion", {
+  df <- data.frame(
+    year = c("2020", "2020"),
+    area.name = c("A", "B"),
+    population = c(10, 11),
+    stringsAsFactors = FALSE
+  )
+
+  expect_error(
+    tarr.pop:::apply_completion_policy(
+      df,
+      dims = c("year", "area.name"),
+      policy = "zero"
+    ),
+    "support"
+  )
+})
+
+test_that("apply_completion_policy fills only supported missing cells", {
+  df <- data.frame(
+    year = c("2020", "2020", "2021"),
+    area.name = c("A", "B", "A"),
+    population = c(10, 11, 12),
+    stringsAsFactors = FALSE
+  )
+
+  support <- data.frame(
+    year = c("2020", "2020", "2021", "2021"),
+    area.name = c("A", "B", "A", "B"),
+    stringsAsFactors = FALSE
+  )
+
+  out <- tarr.pop:::apply_completion_policy(
+    df,
+    dims = c("year", "area.name"),
+    policy = "zero",
+    support = support
+  )
+
+  expect_equal(nrow(out), 4L)
+  filled <- out[year == "2021" & area.name == "B"]
+  expect_equal(filled$population, 0)
+})
+
+test_that("prepare_population_df normalizes and returns filtered values", {
+  df <- data.frame(
+    year = c("2020", "2020"),
+    area.name = c("A", "A"),
+    sex = c("Total", "Female"),
+    population = c(99, 10),
+    stringsAsFactors = FALSE
+  )
+
+  out_keep <- tarr.pop:::prepare_population_df(
+    df,
+    dims = c("year", "area.name", "sex"),
+    drop_all = FALSE
+  )
+  expect_identical(out_keep$sex, c("All", "Female"))
+
+  out_drop <- tarr.pop:::prepare_population_df(
+    df,
+    dims = c("year", "area.name", "sex"),
+    drop_all = TRUE
+  )
+  expect_equal(nrow(out_drop), 1L)
+  expect_identical(out_drop$sex, "Female")
 })
 
 test_that("build_poparray_from_df validates dim_semantics against cube dimensions", {
@@ -102,6 +179,41 @@ test_that("ingest_population writes reduced-dimension cubes with explicit semant
   expect_identical(src[["note"]], "Reduced Dimension Example")
   expect_identical(src[["population_type"]], "Synthetic")
   expect_identical(src[["source"]], "https://example.test/reduced")
+})
+
+test_that("ingest_population can use support for zero completion", {
+  fp <- tempfile("ingestion-zero-support-", fileext = ".h5")
+  dims <- c("year", "area.name")
+  sem <- make_ingestion_semantics(dims)
+  support <- data.frame(
+    year = c("2020", "2020", "2021", "2021"),
+    area.name = c("A", "B", "A", "B"),
+    stringsAsFactors = FALSE
+  )
+
+  tarr.pop:::ingest_population(
+    reader = function(...) {
+      data.frame(
+        year = c("2020", "2020", "2021"),
+        area.name = c("A", "B", "A"),
+        population = c(10, 11, 12),
+        stringsAsFactors = FALSE
+      )
+    },
+    dims = dims,
+    dim_semantics = sem,
+    filepath = fp,
+    series_id = "ingestion_zero_support",
+    completion_policy = "zero",
+    support = support
+  )
+
+  meta <- tarr.pop:::get_cube_metadata_cached(fp)
+  dimn <- tarr.pop:::read_dimnames_from_cube(fp, meta = meta)
+  arr <- as.array(HDF5Array::HDF5Array(filepath = fp, name = "cube/population"))
+  dimnames(arr) <- dimn
+
+  expect_equal(arr["2021", "B"], 0)
 })
 
 test_that("ingest_population persists through a single cube write path", {
