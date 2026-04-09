@@ -1,10 +1,14 @@
 # Ingestion helpers for building population cubes from tabular source data.
 
+
+
 normalize_totals <- function(x) {
+  TOTAL_ALIASES <- c("Total", "All", "All Ages")
   x <- as.character(x)
-  x[x %in% c("Total", "All", "All Ages")] <- "All"
+  x[x %chin% TOTAL_ALIASES] <- "All"   # %chin% is a faster %in% for character
   x
 }
+  
 
 prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "population") {
   checkmate::assert_data_frame(df, min.rows = 1L)
@@ -20,24 +24,30 @@ prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "populat
   }
 
   out <- df
-  for (nm in intersect(dims, names(out))) {
-    out[[nm]] <- normalize_totals(out[[nm]])
-  }
+  cols <- intersect(dims, names(out))
+  # vectorized, by-reference update across all selected columns
+  out[, (cols) := lapply(.SD, normalize_totals), .SDcols = cols]
+      
+  # 
+  # for (nm in intersect(dims, names(out))) {
+  #   out[[nm]] <- normalize_totals(out[[nm]])
+  # }
 
   if (isTRUE(drop_all)) {
-    for (nm in dims) {
-      out <- out[out[[nm]] != "All", , drop = FALSE]
-    }
+    df <- df[df[, rowSums(.SD == "All") == 0, .SDcols = dims]]
+    #for (nm in dims) {
+    #  out <- out[out[[nm]] != "All", , drop = FALSE]
   }
-
-  out
+  df
 }
+
 
 find_missing_population_cells <- function(df, dims) {
   checkmate::assert_data_frame(df)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
-
-  observed <- unique(df[dims])
+  
+  
+  observed <- unique(df[, ..dims])
   observed[[".present"]] <- TRUE
   full <- tidyr::complete(observed, !!!rlang::syms(dims))
 
@@ -68,6 +78,7 @@ apply_completion_policy <- function(df,
     return(df)
   }
 
+  # memory buster!!
   full <- tidyr::complete(df, !!!rlang::syms(dims))
 
   if (identical(policy, "zero")) {
@@ -214,7 +225,10 @@ ingest_population <- function(reader,
   df <- reader(...)
   df <- transformer(df, ...)
   df <- prepare_population_df(df, dims = dims, drop_all = drop_all, data_col = data_col)
-  df <- df[, unique(c(dims, data_col)), drop = FALSE]
+  key_cols <- c(dims, data_col)
+  df <- unique(df, by = key_cols) 
+  browser()
+  #df[, unique(c(dims, data_col)), drop = FALSE]
   df <- apply_completion_policy(
     df,
     dims = dims,

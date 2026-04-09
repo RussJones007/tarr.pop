@@ -6,6 +6,7 @@
 #' @importFrom cli cli_abort
 #' @importFrom rhdf5 h5createFile h5createDataset h5write
 #' @importFrom HDF5Array HDF5Array writeHDF5Array
+#' @import data.table
 #' @importFrom dplyr filter summarise arrange mutate group_by ungroup transmute select left_join if_else across all_of count where
 #' @importFrom abind asub
 #' @importFrom ggplot2 autoplot aes geom_bar scale_y_continuous scale_fill_manual coord_flip labs theme_minimal
