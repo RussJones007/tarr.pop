@@ -82,21 +82,39 @@ test_that("apply_completion_policy fills only supported missing cells", {
   expect_equal(filled$population, 0)
 })
 
-test_that("prepare_population_df normalizes and returns filtered values", {
+test_that("apply_completion_policy errors when support has duplicate cells", {
   df <- data.frame(
     year = c("2020", "2020"),
-    area.name = c("A", "A"),
-    sex = c("Total", "Female"),
-    population = c(99, 10),
+    area.name = c("A", "B"),
+    population = c(10, 11),
     stringsAsFactors = FALSE
   )
 
-  out_keep <- tarr.pop:::prepare_population_df(
-    df,
-    dims = c("year", "area.name", "sex"),
-    drop_all = FALSE
+  support <- data.frame(
+    year = c("2020", "2020", "2020"),
+    area.name = c("A", "A", "B"),
+    stringsAsFactors = FALSE
   )
-  expect_identical(out_keep$sex, c("All", "Female"))
+
+  expect_error(
+    tarr.pop:::apply_completion_policy(
+      df,
+      dims = c("year", "area.name"),
+      policy = "zero",
+      support = support
+    ),
+    "support.*duplicate rows"
+  )
+})
+
+test_that("prepare_population_df filters aggregate aliases directly", {
+  df <- data.frame(
+    year = c("2020", "2020", "2020"),
+    area.name = c("A", "A", "A"),
+    sex = c("Total", "All Ages", "Female"),
+    population = c(99, 98, 10),
+    stringsAsFactors = FALSE
+  )
 
   out_drop <- tarr.pop:::prepare_population_df(
     df,
@@ -105,6 +123,41 @@ test_that("prepare_population_df normalizes and returns filtered values", {
   )
   expect_equal(nrow(out_drop), 1L)
   expect_identical(out_drop$sex, "Female")
+})
+
+test_that("prepare_population_df mutates the incoming table by reference", {
+  df <- data.table::data.table(
+    year = c("2020", "2020"),
+    area.name = c("A", "A"),
+    sex = c("Total", "Female"),
+    population = c(99, 10)
+  )
+
+  out <- tarr.pop:::prepare_population_df(
+    df,
+    dims = c("year", "area.name", "sex"),
+    drop_all = FALSE
+  )
+
+  expect_true(data.table::address(df) == data.table::address(out))
+  expect_identical(df$sex, c("Total", "Female"))
+})
+
+test_that("apply_completion_policy converts plain data.frame inputs to data.table in place", {
+  df <- data.frame(
+    year = c("2020", "2020"),
+    area.name = c("A", "B"),
+    population = c(10, 11),
+    stringsAsFactors = FALSE
+  )
+
+  tarr.pop:::apply_completion_policy(
+    df,
+    dims = c("year", "area.name"),
+    policy = "error"
+  )
+
+  expect_true(data.table::is.data.table(df))
 })
 
 test_that("build_poparray_from_df validates dim_semantics against cube dimensions", {
@@ -153,9 +206,9 @@ test_that("ingest_population writes reduced-dimension cubes with explicit semant
     filepath = fp,
     series_id = "ingestion_reduced",
     source_meta = list(
-      nm = "Reduced Dimension Example",
-      pop_type = "Synthetic",
-      url = "https://example.test/reduced"
+      note = "Reduced Dimension Example",
+      population_type = "Synthetic",
+      source = "https://example.test/reduced"
     )
   )
 
@@ -214,6 +267,30 @@ test_that("ingest_population can use support for zero completion", {
   dimnames(arr) <- dimn
 
   expect_equal(arr["2021", "B"], 0)
+})
+
+test_that("ingest_population errors when source has duplicate cells", {
+  fp <- tempfile("ingestion-dup-cells-", fileext = ".h5")
+  dims <- c("year", "area.name")
+  sem <- make_ingestion_semantics(dims)
+
+  expect_error(
+    tarr.pop:::ingest_population(
+      reader = function(...) {
+        data.frame(
+          year = c("2020", "2020"),
+          area.name = c("A", "A"),
+          population = c(10, 11),
+          stringsAsFactors = FALSE
+        )
+      },
+      dims = dims,
+      dim_semantics = sem,
+      filepath = fp,
+      series_id = "ingestion_dup_cells"
+    ),
+    "duplicate rows"
+  )
 })
 
 test_that("ingest_population persists through a single cube write path", {

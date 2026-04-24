@@ -1,33 +1,18 @@
 # Ingestion helpers for building population cubes from tabular source data.
 
-#' Normalize common aggregate labels
-#'
-#' Converts a small set of common aggregate labels to the canonical `"All"`
-#' marker used by ingestion normalization.
-#'
-#' @param x A vector of labels.
-#'
-#' @return A character vector.
-#' @keywords internal
-normalize_totals <- function(x) {
-  total_aliases <- c("Total", "All", "All Ages")
-  x <- as.character(x)
-  x[data.table::`%chin%`(x, total_aliases)] <- "All"
-  x
-}
-
 #' Prepare a population table for ingestion
 #'
-#' Applies schema-level normalization before validation and cube-building.
-#' This helper is intentionally limited to column checks, aggregate-label
-#' normalization, and optional dropping of `"All"` rows.
+#' Applies schema-level filtering before validation and cube-building.
+#' Aggregate rows are invalid physical rows for `poparray` cubes and are removed
+#' directly rather than normalized to a canonical label. When `df` is a plain
+#' `data.frame`, it is converted to a `data.table` in place.
 #'
 #' @param df A source data.frame or data.table.
 #' @param dims Character vector of dimension column names.
 #' @param drop_all Logical; remove rows containing `"All"` in any dimension.
 #' @param data_col Name of the value column.
 #'
-#' @return A data.table with normalized dimension columns.
+#' @return A data.table with aggregate rows removed when requested.
 #' @keywords internal
 prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "population") {
   checkmate::assert_data_frame(df, min.rows = 1L)
@@ -42,25 +27,28 @@ prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "populat
     )
   }
 
-  out <- data.table::as.data.table(data.table::copy(df))
-  cols <- intersect(dims, names(out))
-  for (col in cols) {
-    data.table::set(out, j = col, value = normalize_totals(out[[col]]))
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
   }
 
   if (isTRUE(drop_all)) {
-    keep <- rowSums(as.matrix(out[, dims, with = FALSE]) == "All") == 0L
-    out <- out[keep, ]
+    aggregate_aliases <- c("All", "Total", "All Ages")
+    keep <- rep(TRUE, nrow(df))
+    for (col in dims) {
+      keep <- keep & !data.table::`%chin%`(as.character(df[[col]]), aggregate_aliases)
+    }
+    df <- df[keep, ]
   }
 
-  out
+ df
 }
 
 #' Find missing population cells against a valid support table
 #'
 #' Computes the valid but unobserved dimension combinations by comparing
 #' observed rows to an explicit support table. When `support` is `NULL`, the
-#' observed support is returned unchanged and no missing rows are inferred.
+#' observed support is returned unchanged and no missing rows are inferred. The
+#' input tables are used directly; no defensive copies are made.
 #'
 #' @param df Observed data.frame or data.table.
 #' @param dims Character vector of dimension column names.
@@ -72,13 +60,20 @@ find_missing_population_cells <- function(df, dims, support = NULL) {
   checkmate::assert_data_frame(df)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
 
-  observed <- unique(data.table::as.data.table(data.table::copy(df))[, dims, with = FALSE])
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
+  }
+
+  observed <- df[, dims, with = FALSE]
 
   if (is.null(support)) {
     return(observed[0])
   }
 
   checkmate::assert_data_frame(support)
+  if (!data.table::is.data.table(support)) {
+    data.table::setDT(support)
+  }
   missing <- setdiff(dims, names(support))
   if (length(missing) > 0L) {
     cli::cli_abort(
@@ -86,7 +81,12 @@ find_missing_population_cells <- function(df, dims, support = NULL) {
     )
   }
 
-  skeleton <- unique(data.table::as.data.table(data.table::copy(support))[, dims, with = FALSE])
+  support_dup <- duplicated(support[, dims, with = FALSE])
+  if (any(support_dup)) {
+    cli::cli_abort("{.arg support} contains duplicate rows for one or more dimension combinations.")
+  }
+
+  skeleton <- support[, dims, with = FALSE]
   data.table::fsetdiff(skeleton, observed)
 }
 
@@ -94,7 +94,8 @@ find_missing_population_cells <- function(df, dims, support = NULL) {
 #'
 #' Handles sparse source tables without assuming that the valid cell space is
 #' the full Cartesian product of observed marginal levels. For `"zero"` and
-#' `"na"` policies an explicit `support` table is required.
+#' `"na"` policies an explicit `support` table is required. The input table is
+#' normalized to a `data.table` and then used directly.
 #'
 #' @param df Observed data.frame or data.table.
 #' @param dims Character vector of dimension column names.
@@ -114,7 +115,12 @@ apply_completion_policy <- function(df,
   checkmate::assert_string(data_col, min.chars = 1L)
 
   policy <- match.arg(policy)
-  observed <- unique(data.table::as.data.table(data.table::copy(df)))
+
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
+  }
+
+  observed <- df
 
   if (identical(policy, "error")) {
     missing <- find_missing_population_cells(observed, dims, support = support)
@@ -137,6 +143,9 @@ apply_completion_policy <- function(df,
   }
 
   checkmate::assert_data_frame(support)
+  if (!data.table::is.data.table(support)) {
+    data.table::setDT(support)
+  }
   missing_support_cols <- setdiff(dims, names(support))
   if (length(missing_support_cols) > 0L) {
     cli::cli_abort(
@@ -144,7 +153,12 @@ apply_completion_policy <- function(df,
     )
   }
 
-  skeleton <- unique(data.table::as.data.table(data.table::copy(support))[, dims, with = FALSE])
+  support_dup <- anyDuplicated(support[, dims, with = FALSE])
+  if (support_dup > 0L) {
+    cli::cli_abort("{.arg support} contains duplicate rows for one or more dimension combinations.")
+  }
+
+  skeleton <- support[, dims, with = FALSE]
   full <- data.table::merge.data.table(
     skeleton,
     observed,
@@ -190,15 +204,19 @@ validate_population_df <- function(df,
     )
   }
 
-  bad_dim <- vapply(df[dims], function(x) any(is.na(x)), logical(1))
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
+  }
+
+  bad_dim <- vapply(dims, function(col) anyNA(df[[col]]), logical(1), USE.NAMES = TRUE)
   if (any(bad_dim)) {
     cli::cli_abort(
       "Dimension columns cannot contain NA values: {.val {paste(names(bad_dim)[bad_dim], collapse = ', ')}}."
     )
   }
 
-  dup <- duplicated(df[dims])
-  if (any(dup)) {
+  dup <- anyDuplicated(df[, dims, with = FALSE])
+  if (dup > 0L) {
     cli::cli_abort("{.arg df} contains duplicate rows for one or more dimension combinations.")
   }
 
@@ -272,7 +290,11 @@ build_poparray_from_df <- function(df,
     )
   }
 
-  arr_df <- as.data.frame(data.table::as.data.table(data.table::copy(df))[, fields, with = FALSE])
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
+  }
+
+  arr_df <- as.data.frame(df[, fields, with = FALSE])
   arr <- df_2_array(arr_df, data_col = data_col)
   dim_names <- names(dimnames(arr))
 
@@ -316,8 +338,8 @@ build_poparray_from_df <- function(df,
 #' @param series_id Series identifier stored in cube metadata.
 #' @param completion_policy Completion policy: `"error"`, `"zero"`, or `"na"`.
 #' @param drop_all Logical; remove rows containing `"All"` in any dimension.
-#' @param source_meta Provenance metadata list with optional `nm`, `pop_type`,
-#'   and `url` fields.
+#' @param source_meta Provenance metadata list with optional `note`,
+#'   `population_type`, and `source` fields.
 #' @param time_dim Name of the time dimension.
 #' @param area_dim Name of the area dimension.
 #' @param overwrite Logical; overwrite existing file.
@@ -368,7 +390,6 @@ ingest_population <- function(reader,
   df <- reader(...)
   df <- transformer(df, ...)
   df <- prepare_population_df(df, dims = dims, drop_all = drop_all, data_col = data_col)
-  df <- unique(df, by = c(dims, data_col))
   df <- apply_completion_policy(
     df,
     dims = dims,
@@ -384,9 +405,9 @@ ingest_population <- function(reader,
   )
 
   source <- list(
-    note = source_meta$nm %||% "Unknown",
-    population_type = source_meta$pop_type %||% "Unknown",
-    source = source_meta$url %||% "",
+    note = source_meta$note %||% "Unknown",
+    population_type = source_meta$population_type %||% "Unknown",
+    source = source_meta$source %||% "",
     updated = as.character(Sys.Date())
   )
 
