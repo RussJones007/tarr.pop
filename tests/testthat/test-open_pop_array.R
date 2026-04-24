@@ -81,6 +81,26 @@ test_that("open_poparray preserves stored data_col when not overridden", {
   expect_equal(data_col(out), "custom_population")
 })
 
+test_that("cached cube metadata includes dim_semantics for reuse", {
+  fp <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
+  expect_true(nzchar(fp))
+
+  meta <- tarr.pop:::get_cube_metadata_cached(fp)
+
+  expect_true(is.list(meta$dim_semantics))
+  expect_identical(names(meta$dim_semantics), meta$dim_order)
+
+  dsem <- tarr.pop:::read_dim_semantics_from_cube(
+    fp,
+    dim_order = meta$dim_order,
+    time_dim = meta$roles$time,
+    area_dim = meta$roles$area,
+    meta = meta
+  )
+
+  expect_identical(dsem, meta$dim_semantics)
+})
+
 test_that("population catalog entries resolve to live series ids", {
   reset_test_cube_root()
   reg_ids <- tarr.pop:::tarr_series_registry()$series_id

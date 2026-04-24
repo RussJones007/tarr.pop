@@ -266,7 +266,7 @@ get_cube_metadata <- function(path) {
   })
   names(dimnames) <- dim_order
 
-  list(
+  meta <- list(
     path = normalizePath(path, winslash = "/", mustWork = TRUE),
     info = info,
     dim_order = dim_order,
@@ -287,6 +287,15 @@ get_cube_metadata <- function(path) {
       if (is.null(val) || !nzchar(val)) "population" else val
     }
   )
+
+  meta$dim_semantics <- parse_dim_semantics_from_meta(
+    meta = meta,
+    dim_order = meta$dim_order,
+    time_dim = meta$roles$time,
+    area_dim = meta$roles$area
+  )
+
+  meta
 }
 
 get_cube_metadata_cached <- function(path) {
@@ -503,12 +512,11 @@ read_dim_semantics_from_cube <- function(path, dim_order, time_dim, area_dim, me
   if (is.null(meta)) {
     meta <- get_cube_metadata_cached(path)
   }
-  parse_dim_semantics_from_meta(
-    meta = meta,
-    dim_order = dim_order,
-    time_dim = time_dim,
-    area_dim = area_dim
-  )
+  if (!is.null(meta$dim_semantics)) {
+    return(meta$dim_semantics)
+  }
+
+  parse_dim_semantics_from_meta(meta = meta, dim_order = dim_order, time_dim = time_dim, area_dim = area_dim)
 }
 
 #' Validate migrated dimnames against cube dimensions
