@@ -41,7 +41,7 @@ df_2_array <- function(df, data_col = "value"){
   assertthat::assert_that(df %has_name% data_col)
 
   fields <- names(df)[names(df) != data_col]
-  df <- tidyr::complete(df, !!!rlang::syms(fields))  # ensure every level is available
+  #df <- tidyr::complete(df, !!!rlang::syms(fields))  # ensure every level is available
   df <- arrange(df, pick(rev(fields)))               # arrange the data frame starting with the right most non-data column
 
   dim_lens <- map(fields, \(col) length(unique(df[[col]]))) |> unlist(use.names = FALSE)

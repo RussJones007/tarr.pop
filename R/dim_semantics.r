@@ -6,11 +6,10 @@
 #'
 #' Declarative semantic contract for a single array dimension.
 #'
-#' `DimSemantics` stores intrinsic semantics only and must not store current-state
-#' facts such as whether overlaps are currently present in a filtered cube.
-#' The object describes the dimension contract and its known overlap-causing
-#' levels, while overlap status for any realized or filtered cube is computed
-#' from the active labels at that point in the workflow.
+#' `DimSemantics` stores intrinsic semantics only and must not store current-state facts such as whether overlaps are
+#' currently present in a filtered cube. The object describes the dimension contract and its known overlap-causing
+#' levels, while overlap status for any realized or filtered cube is computed from the active labels at that point in
+#' the workflow.
 #'
 #' @section Fields:
 #' - `dim_name`: Character scalar. Dimension name in the array (e.g., `"race"`).
@@ -29,8 +28,8 @@
 #' - `validated` must be non-missing logical(1).
 #' - If `partition_type == "partition"`, then `overlap_levels` must be empty.
 #'
-#' `overlap_levels = character()` does not imply unconditional safety. Poparray
-#' guards may still consider context such as level count or interval overlap tests.
+#'   `overlap_levels = character()` does not imply unconditional safety. Poparray guards may still consider context such
+#'   as level count or interval overlap tests.
 #'
 #' @name DimSemantics
 #' @docType class

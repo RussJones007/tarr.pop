@@ -238,7 +238,7 @@ pa_write_poparray_metadata <- function(filepath,
 
 #' Write an array-like object to canonical poparray HDF5 cube schema
 #'
-#' Writes data to `cube/population` and metadata to `cube/metadata/*`.
+#' Writes data inside the HDF5 file cube/population` and metadata to `cube/metadata/*`.
 #'
 #' @param x Array-like object (`DelayedArray`-compatible).
 #' @param filepath Output HDF5 path. If `NULL`, a tempfile is used.
