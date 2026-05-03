@@ -43,7 +43,7 @@ pop <- open_poparray("tdc_estimates_county")
 
 target_counties <- c("Dallas", "Tarrant", "Travis")
 
-year_labels <- as.integer(as.character(dimnames(pop)[[time_role(pop)]]))
+year_labels <- dim_labels(pop, "year") |> as.integer()
 base_years <- sort(year_labels, decreasing = TRUE)[1:7] |> sort()
 
 pop_base <- dplyr::filter(
@@ -57,20 +57,37 @@ pop_base
 
 ## 2) Collapse strata to county totals
 
-`project()` can run on stratified cubes, but for this example we project total county population.
+`project()` can run on stratified cubes, but for this example we project total county population.  To do so,
+collapse each of the dimensions that are not year or area to 'All'.  When collapsing like this, all of 
+the dimension labels (e.g. `female` and `male` for `sex`) are summed and 'All' is the new label for sex. If one of the 
+dimensions has labels or groups that overalp with another entry in that dimension, the sum will be inaccurate, 
+therefore the `collapse_dim()` function will stop with an error when unsafe sum/aggregation may occur.  There may  times that the "unsafe" behavior is desired. To allow  Set `strict` argument to `FALSE` and the `collapse_dim()` function will issue a warning but still allow the sum to happen.
 
 ```{r collapse-to-totals}
+# Get the dimensions that are not the time and area roles
 strata_dims <- setdiff(
   names(dimnames(pop_base)),
   c(time_role(pop_base), area_role(pop_base))
 )
 
 pop_totals <- pop_base
-for (dm in strata_dims) {
-  labs <- dimnames(pop_totals)[[dm]]
-  groups <- stats::setNames(rep("All", length(labs)), labs)
-  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
-}
+
+# reduce the po_base to have all in the identified dimensions
+# run through each dimension and collapse
+pop_totals <- purrr::reduce(strata_dims, 
+                     function(acc, dm){
+                       labs <- dim_labels(acc, dm)
+                       new_group <- list("All" = labs)
+                       collapse_dim(acc, dim = dm, groups = new_group)
+                     }, 
+                     .init = pop_base
+)
+
+# for (dm in strata_dims) {
+#   labs <- dim_labels(pop_totals, dm)
+#   groups <- list("All" = labs)
+#   pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
+# }
 
 pop_totals
 ```

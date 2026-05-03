@@ -2,7 +2,7 @@
 % Please edit documentation in R/group_ages.R
 \name{group_array_by_levels}
 \alias{group_array_by_levels}
-\title{Group an Array Dimension}
+\title{Group a poparray dimension by level mappings}
 \usage{
 group_array_by_levels(
   arr,
@@ -17,7 +17,7 @@ group_array_by_levels(
 \arguments{
 \item{arr}{A \code{poparray}.}
 
-\item{dim_name}{Name of dimension to group}
+\item{dim_name}{Name of the dimension to group.}
 
 \item{groups}{Group specification accepted by \code{\link[=collapse_dim]{collapse_dim()}}.}
 

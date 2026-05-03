@@ -3,23 +3,19 @@
 \name{dim_semantics}
 \alias{dim_semantics}
 \alias{dim_semantics<-}
-\title{Get or set the dim semantics contract for a poparray or cube file}
+\title{Get dim semantics contract for a poparray}
 \usage{
 dim_semantics(x)
 
 dim_semantics(x) <- value
 }
 \arguments{
-\item{x}{A \code{poparray} or HDF5 cube path.}
-
-\item{value}{Named list with one \code{DimSemantics} object per dimension.}
+\item{x}{A poparray.}
 }
 \value{
 Named list with one \code{DimSemantics} object per dimension.
 }
 \description{
 Returns the read-only per-dimension semantic contract used for guarded
-reductions and metadata persistence. When \code{x} is a cube path, the getter
-reads canonical metadata directly from the HDF5 file, and the replacement form
-writes updated metadata back to the cube file.
+reductions and metadata persistence.
 }

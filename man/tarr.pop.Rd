@@ -8,7 +8,7 @@
 \description{
 The package provides a flexible framework for storing, managing, and analyzing population data using multidimensional
 arrays. It is designed to support demographic and epidemiologic workflows where population counts are organized
-across dimensions like time, geography, age, sex, race, ethnicity, or other descriptors like income bans, home
+across dimensions like time, geography, age, sex, race, ethnicity, or other descriptors like income groups, home
 values, household size, et cetera.
 
 The package enables users to work with population data from multiple sources in a consistent structure, preserving
