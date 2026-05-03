@@ -19,6 +19,8 @@ library(ivs)
 library(janitor)
 library(data.table)
 library(tarr)
+library(rage)
+library(DelayedArray)
 
 rm(list = ls())
 
@@ -26,7 +28,7 @@ rm(list = ls())
 # source( "R/Paths.r")
 devtools::load_all()
 
-paths <- tarr::paths_defined()
+paths <- tarr:::paths_defined()
 
 # convenience function for sorting values for levels when making a factor
 sort_values <- compose(sort, unique)
