@@ -9,6 +9,28 @@ test_that("read_series_row includes discovered filepath and series_id", {
   expect_equal(normalizePath(row$filepath[[1L]], winslash = "/", mustWork = TRUE), normalizePath(path, winslash = "/", mustWork = TRUE))
 })
 
+test_that("read_series_row can reuse precomputed h5ls info", {
+  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
+  expect_true(nzchar(path))
+
+  info <- rhdf5::h5ls(path)
+  row <- tarr.pop:::read_series_row(path, info = info)
+
+  expect_true("filepath" %in% names(row))
+  expect_true("series_id" %in% names(row))
+})
+
+test_that("h5_has_cube_schema accepts precomputed h5ls info", {
+  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
+  expect_true(nzchar(path))
+
+  info <- rhdf5::h5ls(path)
+  expect_identical(
+    tarr.pop:::h5_has_cube_schema(path, info = info),
+    tarr.pop:::h5_has_cube_schema(path)
+  )
+})
+
 test_that("open_poparray uses discovered filepath from canonical scan row", {
   path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(path))
@@ -116,4 +138,16 @@ test_that("population catalog entries can be opened lazily", {
   pop_ids <- unlist(population, use.names = TRUE)
   objs <- lapply(pop_ids, open_poparray)
   expect_true(all(vapply(objs, methods::is, logical(1), class2 = "poparray")))
+})
+
+test_that("validate_hdf5_metadata_shape is disabled by default", {
+  reset_test_cube_root()
+  sid <- tarr.pop:::tarr_series_registry()$series_id[[1L]]
+  obj <- open_poparray(sid)
+
+  old <- getOption("tarr.pop.audit_hdf5_metadata")
+  on.exit(options(tarr.pop.audit_hdf5_metadata = old), add = TRUE)
+  options(tarr.pop.audit_hdf5_metadata = FALSE)
+
+  expect_true(isTRUE(tarr.pop:::validate_hdf5_metadata_shape(obj)))
 })

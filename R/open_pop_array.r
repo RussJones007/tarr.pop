@@ -78,8 +78,10 @@ h5_read_scalar_chr_if_present <- function(path, name, info = NULL) {
 #'
 #' @return Logical scalar.
 #' @keywords internal
-h5_has_cube_schema <- function(path) {
-  info <- tryCatch(rhdf5::h5ls(path), error = function(e) NULL)
+h5_has_cube_schema <- function(path, info = NULL) {
+  if (is.null(info)) {
+    info <- tryCatch(rhdf5::h5ls(path), error = function(e) NULL)
+  }
   if (is.null(info)) {
     return(FALSE)
   }
@@ -97,8 +99,10 @@ h5_has_cube_schema <- function(path) {
 #'
 #' @return One-row data.frame.
 #' @keywords internal
-read_series_row <- function(path) {
-  info <- rhdf5::h5ls(path)
+read_series_row <- function(path, info = NULL) {
+  if (is.null(info)) {
+    info <- rhdf5::h5ls(path)
+  }
 
   series_id <- h5_read_scalar_chr_if_present(path, "cube/metadata/series_id", info = info)
   if (is.null(series_id) || !nzchar(series_id)) {
@@ -414,14 +418,23 @@ reset_poparray_cache <- function() {
     return(cache)
   }
 
-  keep <- vapply(inventory$filepath, h5_has_cube_schema, logical(1))
-  files <- inventory$filepath[keep]
+  scans <- lapply(inventory$filepath, function(path) {
+    info <- tryCatch(rhdf5::h5ls(path), error = function(e) NULL)
+    list(
+      path = path,
+      info = info,
+      has_schema = h5_has_cube_schema(path, info = info)
+    )
+  })
+
+  keep <- vapply(scans, `[[`, logical(1), "has_schema")
   inventory <- inventory[keep, , drop = FALSE]
-  if (length(files) == 0L) {
+  scans <- scans[keep]
+  if (length(scans) == 0L) {
     stop("No migrated cubes with /cube/metadata were found in cube storage.")
   }
 
-  rows <- lapply(files, read_series_row)
+  rows <- lapply(scans, function(scan) read_series_row(scan$path, info = scan$info))
   reg <- dplyr::bind_rows(rows)
   reg <- dplyr::left_join(
     reg,
@@ -585,10 +598,6 @@ open_poparray <- function(series_id,
   }
 
   path <- row$filepath[[1L]]
-
-  if (!file.exists(path)) {
-    stop("HDF5 file not found for series '", series_id, "': ", path)
-  }
 
   meta <- get_cube_metadata_cached(path)
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)

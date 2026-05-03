@@ -221,6 +221,9 @@ is_hdf5_backed_delayed <- function(x) {
 }
 
 validate_hdf5_metadata_shape <- function(x) {
+  if (!isTRUE(getOption("tarr.pop.audit_hdf5_metadata", FALSE))) {
+    return(TRUE)
+  }
   sd <- tryCatch(DelayedArray::seed(x), error = function(e) NULL)
   if (is.null(sd) || !is(sd, "HDF5ArraySeed")) return(TRUE)
   fp <- tryCatch(sd@filepath, error = function(e) "")
