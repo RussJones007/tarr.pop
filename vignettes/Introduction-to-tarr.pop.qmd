@@ -240,6 +240,7 @@ pop_totals <- pop_small |>
   ) |>
   collapse_dim(
     dim = "race.eth",
+    strict = FALSE,
     groups = stats::setNames(
       rep("All", length(dimnames(pop_small)$race.eth )),
       dimnames(pop_small)$race.eth

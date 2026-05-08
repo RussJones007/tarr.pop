@@ -78,7 +78,7 @@ pop_totals <- purrr::reduce(strata_dims,
                      function(acc, dm){
                        labs <- dim_labels(acc, dm)
                        new_group <- list("All" = labs)
-                       collapse_dim(acc, dim = dm, groups = new_group)
+                       collapse_dim(acc, dim = dm, groups = new_group, strict = FALSE)
                      }, 
                      .init = pop_base
 )

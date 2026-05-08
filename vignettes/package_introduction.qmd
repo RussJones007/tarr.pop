@@ -172,7 +172,7 @@ pop_totals <- pop_small
 for (dm in strata_dims) {
   labs <- dimnames(pop_totals)[[dm]]
   groups <- stats::setNames(rep("All", length(labs)), labs)
-  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups)
+  pop_totals <- collapse_dim(pop_totals, dim = dm, groups = groups, strict = FALSE)
 }
 
 pop_totals
