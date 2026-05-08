@@ -415,3 +415,4 @@ get_source <- function(obj){
 # Checks if an expression is missing, such as missing arguments or when looking for missing
 # in ... type arguments
 is_missing_arg <- function(e){identical (e, quote(expr=))}
+

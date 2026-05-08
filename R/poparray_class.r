@@ -15,12 +15,13 @@ setClass(
   "poparray",
   contains = "DelayedArray",
   slots = c(
-    time_role = "character",
-    area_role = "character",
-    strata_roles = "character",
+    time_role     = "character",
+    area_role     = "character",
+    strata_roles  = "character",
     dim_semantics = "list",
-    data_col = "character",
-    source = "list"
+    data_col      = "character",
+    source        = "list",
+    dn_cache      = "list"   # dimension name cache
   )
 )
 
@@ -166,6 +167,8 @@ default_dim_semantics <- function(dim_names, time_dim, area_dim) {
   out
 }
 
+
+
 ensure_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim) {
   defaults <- default_dim_semantics(dim_names, time_dim, area_dim)
   if (is.null(dim_semantics) || !is.list(dim_semantics)) {
@@ -310,6 +313,37 @@ setValidity("poparray", function(object) {
   TRUE
 })
 
+# dimnames methods ------------------------------------------------------------------------------------------------
+
+#' dimnames method for poparry
+#'
+#'  The dimnames() function is time expensive.  This method caches the dimension names
+#'  to prevent pinging the on disk file.  
+#'
+#' @param poparray 
+#'
+#' @returns the poparray
+
+setMethod("dimnames", "poparray",
+          function(x) {
+            # During object creation, 'x@dn_cache' will be NULL or undefined.
+            if(length(x@dn_cache) > 0) {
+              return(x@dn_cache)
+            }
+            
+            callNextMethod()
+          }
+)
+
+
+setReplaceMethod("dimnames", "poparray",
+                 function(x, value) {
+                   x <- callNextMethod()    # store new dimnames
+                   x@dn_cache <- value       # update the cache
+                   x
+                 }
+)
+
 #' Construct a poparray
 #'
 #' Creates a role-aware `poparray` that extends `DelayedArray` and stores role and
@@ -388,7 +422,8 @@ setValidity("poparray", function(object) {
     strata_roles = setdiff(nms, c(time_dim, area_dim)),
     dim_semantics = dim_semantics,
     data_col = data_col,
-    source = src
+    source = src,
+    dn_cache = dimnames(x)
   )
   # Transitional compatibility for remaining S3 wrappers/shims.
   attr(obj, "data_col") <- data_col
