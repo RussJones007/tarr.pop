@@ -173,6 +173,6 @@ est_poparray <- new_poparray(x = DelayedArray(tdc.est.array),
              dim_semantics = semantics, 
              area_dim = "area.name", 
              time_dim = "year",
-             source = "Texas Demographhic Cebter, Estimates program"
+             source = "Texas Demographhic Center, Estimates program"
              )  
   
