@@ -16,11 +16,12 @@ prepare_population_df(df, dims, drop_all = TRUE, data_col = "population")
 \item{data_col}{Name of the value column.}
 }
 \value{
-A data.table with normalized dimension columns.
+A data.table with aggregate rows removed when requested.
 }
 \description{
-Applies schema-level normalization before validation and cube-building.
-This helper is intentionally limited to column checks, aggregate-label
-normalization, and optional dropping of \code{"All"} rows.
+Applies schema-level filtering before validation and cube-building.
+Aggregate rows are invalid physical rows for \code{poparray} cubes and are removed
+directly rather than normalized to a canonical label. When \code{df} is a plain
+\code{data.frame}, it is converted to a \code{data.table} in place.
 }
 \keyword{internal}

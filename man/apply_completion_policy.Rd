@@ -29,6 +29,7 @@ A data.table.
 \description{
 Handles sparse source tables without assuming that the valid cell space is
 the full Cartesian product of observed marginal levels. For \code{"zero"} and
-\code{"na"} policies an explicit \code{support} table is required.
+\code{"na"} policies an explicit \code{support} table is required. The input table is
+normalized to a \code{data.table} and then used directly.
 }
 \keyword{internal}

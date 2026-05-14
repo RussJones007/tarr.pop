@@ -4,7 +4,7 @@
 \alias{h5_has_cube_schema}
 \title{Check if a file has the cube metadata schema}
 \usage{
-h5_has_cube_schema(path)
+h5_has_cube_schema(path, info = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}

@@ -19,6 +19,7 @@ A data.table of missing dimension combinations.
 \description{
 Computes the valid but unobserved dimension combinations by comparing
 observed rows to an explicit support table. When \code{support} is \code{NULL}, the
-observed support is returned unchanged and no missing rows are inferred.
+observed support is returned unchanged and no missing rows are inferred. The
+input tables are used directly; no defensive copies are made.
 }
 \keyword{internal}

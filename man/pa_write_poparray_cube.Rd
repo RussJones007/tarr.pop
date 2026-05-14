@@ -60,6 +60,6 @@ pa_write_poparray_cube(
 List with \code{filepath}, \code{dataset}, and \code{chunkdim}.
 }
 \description{
-Writes data to \code{cube/population} and metadata to \verb{cube/metadata/*}.
+Writes data inside the HDF5 file cube/population\verb{and metadata to}cube/metadata/*`.
 }
 \keyword{internal}

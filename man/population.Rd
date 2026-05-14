@@ -85,26 +85,26 @@ an infant \verb{< 1} label and a top-coded \verb{95 +} label. \code{race.eth} is
 population
 }
 \description{
-The \code{population} object is list containing a named catalog of the population cubes currently available.
-Entries are grouped by source agency and table
-type. Each entry stores a \code{series_id} string is basically the cube file name minus the extension. The series name is
-passed to the \code{\link[=open_poparray]{open_poparray()}} function and \link{poparray} is returned .
+\code{population} is a list containing a named catalog of the population cubes currently available.
+Entries are grouped by source agency and table type. Each entry stores a \code{series_id} string is basically the cube
+file name minus the extension. The series name is passed to the \code{\link[=open_poparray]{open_poparray()}} function and a \link{poparray} object
+is returned.
 }
 \details{
-A \code{poparray} extends \code{DelayedArray} (typically backed by an HDF5 file) and stores
-explicit dimension labels, role metadata, as part of the  dimension  meta data. See \link{DimSemantics} for how each
-dimension is described. The meta data is used to allow filtering and aggregation before realization, reducing memory
-use and helping guard against unsafe aggregation wwhen non-cluinve categories are present.
+A \code{poparray} extends \code{DelayedArray} (typically backed by an HDF5 file) and stores explicit dimension labels, and
+roles as part of the  dimension  metadata. See \link{DimSemantics} for how each dimension is described. The meta data is
+used to enable safe  filtering and aggregation before realization, reducing memory use and helping guard against
+unsafe aggregation when non-exclusive categories are present.
 
-The available cubes are sourced from include:
+The available cubes are sourced from :
 \itemize{
 \item \href{https://www.census.gov/}{U.S. Census Bureau}
 \item \href{https://demographics.texas.gov/}{Texas Demographic Center}
 \item \href{https://seer.cancer.gov/data-software/uspopulations.html}{National Cancer Institute SEER Program}
 }
 
-Most cubes use county-level demographic dimensions and contain Age, Sex, Race, and  Ethnicity (\strong{ASRE}). The
-\code{census_zcta_estimates} cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
+Most cubes use are at the county-level wit demographic dimensions liske  Age, Sex, Race, and  Ethnicity (\strong{ASRE}).
+The \code{census_zcta_estimates} cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
 rather than ASRE county slices.
 
 Common workflow:
@@ -116,7 +116,7 @@ Common workflow:
 }
 
 Dimension labels and categories differ by source. The package standardizes
-names where possible, but label sets still vary, especially for age and
+names where possible, but label/category sets still vary, especially for age and
 race/ethnicity dimensions.
 
 Notes:

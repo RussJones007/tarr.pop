@@ -45,8 +45,8 @@ ingest_population(
 
 \item{drop_all}{Logical; remove rows containing \code{"All"} in any dimension.}
 
-\item{source_meta}{Provenance metadata list with optional \code{nm}, \code{pop_type},
-and \code{url} fields.}
+\item{source_meta}{Provenance metadata list with optional \code{note},
+\code{population_type}, and \code{source} fields.}
 
 \item{time_dim}{Name of the time dimension.}
 

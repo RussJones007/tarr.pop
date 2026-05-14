@@ -4,7 +4,7 @@
 \alias{read_series_row}
 \title{Read one series index row from canonical metadata}
 \usage{
-read_series_row(path)
+read_series_row(path, info = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}

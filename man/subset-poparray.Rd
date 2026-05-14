@@ -7,21 +7,17 @@
 \arguments{
 \item{x}{A \code{poparray}.}
 
-\item{...}{Indices, either positional (like base arrays) or named by
-dimension (for example \code{x[year = "2020", sex = "Female"]}). Missing
-positional indices are treated as \code{TRUE}.}
+\item{...}{Indices, either positional (like base arrays) or named by dimension (for example \code{x[year = "2020", sex = "Female"]}). Missing positional indices are treated as \code{TRUE}.}
 
 \item{drop}{Logical; passed to the backend \code{[} call. Defaults to \code{FALSE}.}
 }
 \value{
-A \code{poparray} when both role dimensions remain after subsetting;
-otherwise the underlying delayed subset.
+A \code{poparray} when both role dimensions remain after subsetting; otherwise the underlying delayed subset.
 }
 \description{
-Subsets a \code{poparray} while preserving dimension metadata and roles whenever
-the resulting object still contains both the time and area dimensions.
-The method defaults to \code{drop = FALSE}, so selecting a single time or area
-level does not silently strip the \code{poparray} class.
+Subsets a \code{poparray} while preserving dimension metadata and roles whenever the resulting object still contains both
+the time and area dimensions. The method defaults to \code{drop = FALSE}, so selecting a single time or area level does
+not silently strip the \code{poparray} class.
 }
 \details{
 Named subscripts are supported and are matched against dimension names.

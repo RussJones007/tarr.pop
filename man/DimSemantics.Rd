@@ -8,11 +8,10 @@
 Declarative semantic contract for a single array dimension.
 }
 \details{
-\code{DimSemantics} stores intrinsic semantics only and must not store current-state
-facts such as whether overlaps are currently present in a filtered cube.
-The object describes the dimension contract and its known overlap-causing
-levels, while overlap status for any realized or filtered cube is computed
-from the active labels at that point in the workflow.
+\code{DimSemantics} stores intrinsic semantics only and must not store current-state facts such as whether overlaps are
+currently present in a filtered cube. The object describes the dimension contract and its known overlap-causing
+levels, while overlap status for any realized or filtered cube is computed from the active labels at that point in
+the workflow.
 }
 \section{Fields}{
 
@@ -36,10 +35,10 @@ from the active labels at that point in the workflow.
 \item \code{partition_type} must be one of \code{partition}, \code{set}, \code{unknown}.
 \item \code{validated} must be non-missing logical(1).
 \item If \code{partition_type == "partition"}, then \code{overlap_levels} must be empty.
-}
 
-\code{overlap_levels = character()} does not imply unconditional safety. Poparray
-guards may still consider context such as level count or interval overlap tests.
+\code{overlap_levels = character()} does not imply unconditional safety. Poparray guards may still consider context such
+as level count or interval overlap tests.
+}
 }
 
 \keyword{internal}
