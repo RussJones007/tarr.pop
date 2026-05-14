@@ -14,6 +14,10 @@ Interpret user intent and route to the correct specialized `tarr_pop` skill whil
 
 This skill acts as the central controller for all `tarr_pop`-related requests.
 
+Apply `tarr-pop-repo-guard` first for shared repository constraints. Use
+`tarr-pop-repo-guard/references/repo-guidelines.md` as the source of truth for
+repo-wide laziness, dimensional, style, testing, and documentation rules.
+
 ---
 
 # Use this skill when
@@ -28,7 +32,7 @@ This skill acts as the central controller for all `tarr_pop`-related requests.
 
 ---
 
-# Core rules (ALWAYS APPLY)
+# Core rules (in addition to tarr-pop-repo-guard)
 
 - Prefer lazy operations (DelayedArray / HDF5Array)
 - NEVER recommend realization unless explicitly labeled **EAGER**

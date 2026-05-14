@@ -14,6 +14,10 @@ Design, validate, and maintain the HDF5-backed storage contract for `poparray` o
 
 This skill governs schema design, metadata layout, persistence, and shared cube storage strategies.
 
+Apply `tarr-pop-repo-guard` first for shared repository constraints. Use
+`tarr-pop-repo-guard/references/repo-guidelines.md` as the source of truth for
+repo-wide laziness, dimensional, style, testing, and documentation rules.
+
 ------------------------------------------------------------------------
 
 # Use this skill when
@@ -30,7 +34,7 @@ This skill governs schema design, metadata layout, persistence, and shared cube 
 
 ------------------------------------------------------------------------
 
-# Core rules (ALWAYS APPLY)
+# Core rules (in addition to tarr-pop-repo-guard)
 
 -   Prefer lazy operations (DelayedArray / HDF5Array)
 -   NEVER recommend realization unless explicitly labeled **EAGER**

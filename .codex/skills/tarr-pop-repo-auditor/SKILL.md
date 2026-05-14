@@ -16,6 +16,10 @@ Audit the `tarr_pop` codebase to identify:
 
 This skill acts as a code-quality gate for the package.
 
+Apply `tarr-pop-repo-guard` first for shared repository constraints. Use
+`tarr-pop-repo-guard/references/repo-guidelines.md` as the source of truth for
+repo-wide laziness, dimensional, style, testing, and documentation rules.
+
 ------------------------------------------------------------------------
 
 # Use this skill when
@@ -32,7 +36,7 @@ This skill acts as a code-quality gate for the package.
 
 ------------------------------------------------------------------------
 
-# Core rules (ALWAYS APPLY)
+# Core rules (in addition to tarr-pop-repo-guard)
 
 -   Prefer lazy operations (DelayedArray / HDF5Array)
 -   NEVER recommend realization unless explicitly labeled **EAGER**
