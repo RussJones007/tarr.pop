@@ -10,3 +10,14 @@ scripts
 experiment.r
 inst/extdata/backup_pre_cube_schema
 data-raw/deprecated
+# Vignette outputs
+vignettes/*.html
+vignettes/*.utf8.md
+vignettes/*_files/
+
+# knitr / quarto cache
+vignettes/**/_cache/
+vignettes/**/.quarto/
+
+.quarto/
+*_files/
