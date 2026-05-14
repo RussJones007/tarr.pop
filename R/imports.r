@@ -17,7 +17,7 @@
 #' @importFrom scales label_percent label_date label_date_short label_comma label_ordinal label_wrap percent
 #' @importFrom tidyr complete expand pivot_wider pivot_longer replace_na nest unnest
 #' @importFrom stringr str_detect str_extract str_glue regex str_remove str_replace str_sub str_trim str_flatten str_flatten_comma
-#' @importFrom purrr map map_lgl imap walk compose partial keep discard negate reduce attr_getter map_int
+#' @importFrom purrr map map_lgl imap walk compose partial keep discard negate reduce attr_getter map_int map2
 #' @importFrom rlang set_names syms `!!!` `!!` `%||%`
 # @importFrom magrittr set_attr extract extract2 set_attributes set_class
 ## usethis namespace: end

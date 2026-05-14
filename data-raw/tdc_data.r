@@ -1,3 +1,4 @@
+
 # -------------------------------------------------------------------------------------->
 # Script: tdc_data.r
 # Description:
@@ -7,6 +8,8 @@
 #   Projections are created that can cover several decades, but the figures are based on assumptions
 #   that may not hold through the whole time period.
 #   data.table is used to save memory and increase processing speed
+#   
+#   This can be used as an example of how to read , process and save population figures to a poparray.
 #
 # Steps:
 # For each type of population product, estimates and projections
@@ -15,7 +18,7 @@
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
-# Created: `r Sys.Date()`
+# Created: `May 4 2026
 # Revised:
 # -------------------------------------------------------------------------------------->
 
@@ -26,11 +29,13 @@ process_age_char <- compose(
   ~ str_remove_all(.x, regex(" (ye?a??rs?|Ages)", ignore_case = TRUE))
 )
 
+
+
 # 1. Read the csv files,convert variables to appropriate type, change names or values. --------------------------
 
 #' Reads population estimates files downloaded from the Texas Demographic Center.  All variable transformations
 #' are done in this function - one place.
-#' # chnages some of the value labels, for example TDC has chnaged "anglo" to "white".  So "white" s used for
+#' # changes some of the value labels, for example TDC has chnaged "anglo" to "white".  So "white" s used for
 #' all records.  TDC combine race and ethnicity.   Function removes "nh-" from non-hispanic race as that is already 
 #' known.  Column names use the older R convention f spaces in the name if needed, e.g., age.char, area.name, etc
 #' @param .pattern a regex pattern to match the files to read.
@@ -38,7 +43,7 @@ process_age_char <- compose(
 #' @returns A list of data frames, each containing population estimates for a specific year.
 read_estimate <- function(.pattern, .counties){
   # get the files to read
-  pth   <- file.path(paths$population,"Estimates/Texas Demographic Center/asre")
+  pth   <- file.path(tarr::paths$population,"Estimates/Texas Demographic Center/asre")
   files <- list.files(path = pth, pattern = .pattern, full.names = TRUE, )
   
   columns <- cols(County = col_factor(),
@@ -66,6 +71,7 @@ read_estimate <- function(.pattern, .counties){
 
 csvs <- read_estimate(.pattern = "20[1-2][0-9]_ASRE_Estimate_alldata\\.csv", .counties = names(county_fips))
 
+# bind the list of read csvs and convert to a data.table
 tdc.estimates <- bind_rows(csvs) |>
   relocate(year, .after = asian_female) |>
   setDT()
@@ -122,9 +128,16 @@ tdc_estimates_no_all <- tdc.estimates[
     !Reduce(`|`, lapply(.SD, \(x) x == "All")),
     .SDcols = cols
   ]
+][
+  , (cols) := lapply(.SD, droplevels), .SDcols = cols
 ]
+
 rm(ord_ages, tdc.estimates,cols, columns)
 
+setcolorder(
+  tdc_estimates_no_all,
+  c("year", "area.name", "sex", "age.char", "race.eth", "population")
+)
 
 tdc.est.array <- df_2_array(tdc_estimates_no_all, data_col = "population")
 
@@ -143,12 +156,16 @@ semantics <- list(
                            validated      = TRUE,
                            notes          = "The estimate if for July 1 of the year in this dimension"
                            ),
-  area   = new_dim_semantics(dim_name = "area.name",
+  area.name   = new_dim_semantics(dim_name = "area.name",
                          domain           = "area",
                          partition_type   ="partition",
                          scale_type       = "nominal",
                          validated        = TRUE,
+                         #overlap_levels   = "Texas",
                          notes            = "County names in title case"),
+  sex     = new_dim_semantics(dim_name = "sex", domain = "sex", 
+                              partition_type = "partition", 
+                              scale_type = "nominal", validated = TRUE),
   age.char = new_dim_semantics(dim_name = "age.char",
                            domain         = "age interval",
                            partition_type = "set", 
@@ -163,16 +180,39 @@ semantics <- list(
                                scale_type = "nominal",
                                TRUE,
                                notes = "Race and hispnic ethiniciy are combined. There is no addtional information \n
-                               to identify a hispnic black or hispnic white.  Te hispnic category is treated as a `race`."),
-  sex     = new_dim_semantics(dim_name = "sex", domain = "sex", 
-                              partition_type = "partition", 
-                              scale_type = "nominal", validated = TRUE)
+                               to identify a hispanic black or hispanic white.  Te hispnic category is treated as a `race`.")
 )
 
-est_poparray <- new_poparray(x = DelayedArray(tdc.est.array),
-             dim_semantics = semantics, 
-             area_dim = "area.name", 
-             time_dim = "year",
-             source = "Texas Demographhic Center, Estimates program"
-             )  
-  
+setdiff(tdc.est.array |> dimnames() |> names(), names(semantics))
+
+cube_root <- init_cubes()
+tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
+
+pa_write_poparray_cube(
+  x = tdc.est.array,
+  filepath = tdc_estimates_file,
+  dimnames_list = dimnames(tdc.est.array),
+  overwrite = TRUE,
+  time_dim = "year",
+  area_dim = "area.name",
+  dim_semantics = semantics,
+  source = list(source = "Texas Demographic Center, Estimates program"),
+  data_col = "population",
+  series_id = "tdc_estimates_county"
+)
+
+tdc_estimates_h5 <- HDF5Array::HDF5Array(
+  filepath = tdc_estimates_file,
+  name = "cube/population"
+)
+dimnames(tdc_estimates_h5) <- dimnames(tdc.est.array)
+
+est_poparray <- new_poparray(
+  x = tdc_estimates_h5,
+  dimnames_list = dimnames(tdc.est.array),
+  dim_semantics = semantics,
+  area_dim = "area.name",
+  time_dim = "year",
+  source = list(source = "Texas Demographic Center, Estimates program")
+)
+

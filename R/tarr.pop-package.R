@@ -12,7 +12,7 @@
 #' This allows for safe aggregation, filtering, and transformation of population data while maintaining reproducibility
 #' and interpretability.
 #'
-#' Population data are stored using disk-backed arrays via [DelayedArray] and [HDF5Array], allowing users to work with
+#' Population data are stored using  [DelayedArray] and [HDF5Array] disk-backed arrays, allowing users to work with
 #' large data sets that exceed available memory. Operations such as filtering, sub-setting, and projection are performed
 #' lazily, minimizing memory usage and improving performance by avoiding unnecessary data realization.
 #'
@@ -26,6 +26,7 @@
 #' * Decennial censuses and Estimates [U.S. Census Bureau](https://www.census.gov/)
 #' * [Texas Demographic Center Estimates program](https://demographics.texas.gov/Data/TPEPP/Estimates/)
 #' * [Texas Demographic Center Projections program](https://demographics.texas.gov/Data/TPEPP/Projections/)
+#' * [National Cancer Institute SEER Program](https://seer.cancer.gov/data-software/uspopulations.html)
 #' @keywords package
 #' @name tarr.pop
 "_PACKAGE"

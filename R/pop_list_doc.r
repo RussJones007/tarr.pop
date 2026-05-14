@@ -14,23 +14,23 @@
 # Population table/array documentation ====
 #' Population Tables/Arrays
 #'
-#' The `population` object is list containing a named catalog of the population cubes currently available. 
-#' Entries are grouped by source agency and table
-#' type. Each entry stores a `series_id` string is basically the cube file name minus the extension. The series name is 
-#' passed to the [open_poparray()] function and [poparray] is returned .
+#' `population` is a list containing a named catalog of the population cubes currently available. 
+#' Entries are grouped by source agency and table type. Each entry stores a `series_id` string is basically the cube
+#' file name minus the extension. The series name is passed to the [open_poparray()] function and a [poparray] object 
+#' is returned.
 #'
-#' A `poparray` extends `DelayedArray` (typically backed by an HDF5 file) and stores
-#' explicit dimension labels, role metadata, as part of the  dimension  meta data. See [DimSemantics] for how each
-#' dimension is described. The meta data is used to allow filtering and aggregation before realization, reducing memory
-#' use and helping guard against unsafe aggregation wwhen non-cluinve categories are present.
+#' A `poparray` extends `DelayedArray` (typically backed by an HDF5 file) and stores explicit dimension labels, and
+#' roles as part of the  dimension  metadata. See [DimSemantics] for how each dimension is described. The meta data is
+#' used to enable safe  filtering and aggregation before realization, reducing memory use and helping guard against
+#' unsafe aggregation when non-exclusive categories are present.
 #'
-#' The available cubes are sourced from include:
+#' The available cubes are sourced from :
 #' * [U.S. Census Bureau](https://www.census.gov/)
 #' * [Texas Demographic Center](https://demographics.texas.gov/)
 #' * [National Cancer Institute SEER Program](https://seer.cancer.gov/data-software/uspopulations.html)
 #'
-#' Most cubes use county-level demographic dimensions and contain Age, Sex, Race, and  Ethnicity (**ASRE**). The
-#' `census_zcta_estimates` cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
+#' Most cubes use are at the county-level wit demographic dimensions liske  Age, Sex, Race, and  Ethnicity (**ASRE**).
+#' The `census_zcta_estimates` cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
 #' rather than ASRE county slices.
 #'
 #' Common workflow:
@@ -40,7 +40,7 @@
 #' * coerce to tabular output: [as.data.frame()] or [tibble::as_tibble()] (**EAGER**)
 #'
 #' Dimension labels and categories differ by source. The package standardizes
-#' names where possible, but label sets still vary, especially for age and
+#' names where possible, but label/category sets still vary, especially for age and
 #' race/ethnicity dimensions.
 #'
 #' Notes:

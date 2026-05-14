@@ -330,18 +330,32 @@ build_poparray_from_df <- function(df,
 #' Runs the package-native ingestion pipeline: read, transform, normalize,
 #' structurally complete according to policy, validate, and persist.
 #'
+#' `ingest_population()` is the supported high-level entry point for importing
+#' tabular population data into the package's HDF5-backed cube format. The
+#' function is designed for source-specific ingestion scripts that can supply a
+#' reader and, when needed, a transformer that maps raw source columns to the
+#' canonical dimension columns required for cube construction.
+#'
 #' @param reader Function returning a source table.
 #' @param transformer Function transforming reader output into canonical columns.
-#' @param dims Character vector of dimension column names.
-#' @param dim_semantics Named list of `DimSemantics` entries matching `dims`.
+#'   Defaults to the identity function.
+#' @param dims Character vector of dimension column names. These columns,
+#'   together with `data_col`, must be present after `transformer()` runs.
+#' @param dim_semantics Named list of `DimSemantics` entries matching `dims` in
+#'   the same order.
 #' @param filepath Output HDF5 file path.
-#' @param series_id Series identifier stored in cube metadata.
+#' @param series_id Series identifier stored in cube metadata and used by
+#'   [open_poparray()] to locate the cube later.
 #' @param completion_policy Completion policy: `"error"`, `"zero"`, or `"na"`.
 #' @param drop_all Logical; remove rows containing `"All"` in any dimension.
+#'   This is usually the correct setting because aggregate rows are invalid
+#'   physical rows for `poparray` storage.
 #' @param source_meta Provenance metadata list with optional `note`,
 #'   `population_type`, and `source` fields.
-#' @param time_dim Name of the time dimension.
-#' @param area_dim Name of the area dimension.
+#' @param time_dim Name of the time dimension. Its semantics entry must have
+#'   `partition_type = "partition"`.
+#' @param area_dim Name of the area dimension. Its semantics entry must have
+#'   `partition_type = "partition"`.
 #' @param overwrite Logical; overwrite existing file.
 #' @param chunkdim Chunk dimensions or `"auto"`.
 #' @param level Compression level passed to HDF5 writer.
@@ -354,7 +368,8 @@ build_poparray_from_df <- function(df,
 #' @param ... Additional arguments forwarded to `reader()` and `transformer()`.
 #'
 #' @return Invisibly returns the normalized output file path.
-#' @keywords internal
+#'
+#' @export
 ingest_population <- function(reader,
                               transformer = function(df, ...) df,
                               dims,
