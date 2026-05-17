@@ -31,26 +31,34 @@ ingest_population(
 \arguments{
 \item{reader}{Function returning a source table.}
 
-\item{transformer}{Function transforming reader output into canonical columns.}
+\item{transformer}{Function transforming reader output into canonical columns.
+Defaults to the identity function.}
 
-\item{dims}{Character vector of dimension column names.}
+\item{dims}{Character vector of dimension column names. These columns,
+together with \code{data_col}, must be present after \code{transformer()} runs.}
 
-\item{dim_semantics}{Named list of \code{DimSemantics} entries matching \code{dims}.}
+\item{dim_semantics}{Named list of \code{DimSemantics} entries matching \code{dims} in
+the same order.}
 
 \item{filepath}{Output HDF5 file path.}
 
-\item{series_id}{Series identifier stored in cube metadata.}
+\item{series_id}{Series identifier stored in cube metadata and used by
+\code{\link[=open_poparray]{open_poparray()}} to locate the cube later.}
 
 \item{completion_policy}{Completion policy: \code{"error"}, \code{"zero"}, or \code{"na"}.}
 
-\item{drop_all}{Logical; remove rows containing \code{"All"} in any dimension.}
+\item{drop_all}{Logical; remove rows containing \code{"All"} in any dimension.
+This is usually the correct setting because aggregate rows are invalid
+physical rows for \code{poparray} storage.}
 
 \item{source_meta}{Provenance metadata list with optional \code{note},
 \code{population_type}, and \code{source} fields.}
 
-\item{time_dim}{Name of the time dimension.}
+\item{time_dim}{Name of the time dimension. Its semantics entry must have
+\code{partition_type = "partition"}.}
 
-\item{area_dim}{Name of the area dimension.}
+\item{area_dim}{Name of the area dimension. Its semantics entry must have
+\code{partition_type = "partition"}.}
 
 \item{overwrite}{Logical; overwrite existing file.}
 
@@ -79,4 +87,10 @@ Invisibly returns the normalized output file path.
 Runs the package-native ingestion pipeline: read, transform, normalize,
 structurally complete according to policy, validate, and persist.
 }
-\keyword{internal}
+\details{
+\code{ingest_population()} is the supported high-level entry point for importing
+tabular population data into the package's HDF5-backed cube format. The
+function is designed for source-specific ingestion scripts that can supply a
+reader and, when needed, a transformer that maps raw source columns to the
+canonical dimension columns required for cube construction.
+}

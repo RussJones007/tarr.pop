@@ -18,7 +18,7 @@ library(nanoparquet)
 library(ivs)
 library(janitor)
 library(data.table)
-library(tarr)
+#library(tarr)
 library(rage)
 library(DelayedArray)
 

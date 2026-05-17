@@ -164,9 +164,10 @@ tp_projection_hdf5_writer <- function(out_dim,
   checkmate::assert_integerish(chunkdim, len = length(out_dim), lower = 1, any.missing = FALSE)
   chunkdim[[stat_k]] <- out_dim[[stat_k]]    # force stat chunk to full length
   
-  path <- file.path(
-    dir,
-    paste0(prefix, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".h5")
+  path <- tempfile(
+    pattern = paste0(prefix, "_"),
+    tmpdir = dir,
+    fileext = ".h5"
   )
   
   rhdf5::h5createFile(path)
@@ -699,10 +700,11 @@ infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
 
 #' Project a population cube forward in time
 #'
-#' Fits independent time-series models for each non-time cell of a `poparray`
-#' cube and forecasts population counts for `h` future years. Each unique
-#' combination of non-time dimensions (e.g., county × sex × age × race ×
-#' ethnicity) is modeled separately.
+#' Fits independent time-series models for each non-time cell of a `poparray` cube and forecasts population counts for
+#' `h` future years. Each unique combination of non-time dimensions (e.g., county × sex × age × race × ethnicity) is
+#' modeled separately.  “project() is **EAGER** at the series-fitting step: each time series is realized as a numeric vector
+#' and modeled independently, while results are written to an HDF5-backed delayed output cube.”
+
 #'
 #' The projection method may be `"auto"`, `"ETS"`, `"CAGR"`, or `"ARIMA"`.
 #' For most use cases, `"auto"` is recommended and will select the appropriate

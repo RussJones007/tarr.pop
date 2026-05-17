@@ -39,6 +39,13 @@ prepare_population_df <- function(df, dims, drop_all = TRUE, data_col = "populat
     }
     df <- df[keep, ]
   }
+  
+  # drop levles that no longer exist
+  factor_cols <- names(df)[vapply(df, is.factor, logical(1))]
+  if (length(factor_cols)) {
+    df[, (factor_cols) := lapply(.SD, droplevels), .SDcols = factor_cols]
+  }
+  
 
  df
 }
@@ -116,8 +123,15 @@ apply_completion_policy <- function(df,
 
   policy <- match.arg(policy)
 
-  if (!data.table::is.data.table(df)) {
-    data.table::setDT(df)
+  if (!data.table::is.data.table(df)) data.table::setDT(df)
+  if (!is.null(support) && !data.table::is.data.table(support)) data.table::setDT(support)
+  
+  # change any field to character for joining purposes
+  for (nm in dims) {
+    df[, (nm) := as.character(get(nm))]
+    if (!is.null(support)) {
+      support[, (nm) := as.character(get(nm))]
+    }
   }
 
   observed <- df
@@ -159,11 +173,12 @@ apply_completion_policy <- function(df,
   }
 
   skeleton <- support[, dims, with = FALSE]
+  
   full <- data.table::merge.data.table(
     skeleton,
     observed,
     by = dims,
-    all.x = TRUE,
+    all = TRUE,
     sort = FALSE
   )
 
@@ -336,6 +351,8 @@ build_poparray_from_df <- function(df,
 #' reader and, when needed, a transformer that maps raw source columns to the
 #' canonical dimension columns required for cube construction.
 #'
+#' @name ingest_population
+#'
 #' @param reader Function returning a source table.
 #' @param transformer Function transforming reader output into canonical columns.
 #'   Defaults to the identity function.
@@ -447,3 +464,4 @@ ingest_population <- function(reader,
 
   invisible(normalizePath(filepath, winslash = "/", mustWork = FALSE))
 }
+

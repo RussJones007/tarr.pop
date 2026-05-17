@@ -5,7 +5,7 @@
 # data-raw/control_def.r so that package functions and source-data paths are available.
 # -------------------------------------------------------------------------------------->
 # Created May 14, 20026
-
+#library(tarr.pop)
 # 1. Define functions used inside other functions ---------------------------
 ## Modifies Age column names, only used in the transform function below
 process_age_char <- function(x) {
@@ -23,12 +23,13 @@ ordered_age_levels <- function(x) {
   c(sort(as.character(rage::as.age_group(age_levels))), "All")
 }
 
+
 ## CSV reader function used in the master reader function below
-read_est_csv <- function(file){
+read_est_csv <- function(file, col_types){
   readr::read_csv(file = file,
                   col_types = col_types,
                   id = "file_name",
-                  progress = FALSE
+                  progress = TRUE
   ) |>
     janitor::clean_names() |>
     dplyr::mutate(year = basename(file_name) |>
@@ -49,7 +50,8 @@ read_est_csv <- function(file){
 
 read_tdc_estimates_raw <- function(
     pattern = "20[1-2][0-9]_ASRE_Estimate_alldata\\.csv",
-    input_dir = file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre")
+    input_dir = file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre"),
+    ...
 ) {
   files <- list.files(path = input_dir, pattern = pattern, full.names = TRUE)
 
@@ -64,7 +66,7 @@ read_tdc_estimates_raw <- function(
     .default = readr::col_integer()
   )
 
-  purrr::map(files, read_est_csv) |>
+  purrr::map(files, read_est_csv, col_types = col_types) |>
     dplyr::bind_rows() |>
     data.table::setDT()
 }
@@ -103,6 +105,8 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   if (!is.null(counties)) long <- long[area.name %chin% counties]
 
   if (!isTRUE(include_texas_total)) long <- long[area.name != "Texas"]
+  
+  long <- long[!is.na(population)]   # The asian population figures before 2017 are unknown
 
   data.table::setcolorder( long, c("year", "area.name", "sex", "age.char", "race.eth", "population"))
 
@@ -161,8 +165,36 @@ default_counties <- NULL
 if (exists("county_fips", inherits = TRUE)) default_counties <- setdiff(names(county_fips), "Texas")
 
 dims <- c("year", "area.name", "sex", "age.char", "race.eth")
+
+# Support table ----
+## create a support table for the years the "asian" race.eth did not exist.
+age_levels <- c("< 1", "1", "10", "11", "12", "13", "14", "15", "16", "17", 
+          "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", 
+          "28", "29", "3", "30", "31", "32", "33", "34", "35", "36", "37", 
+          "38", "39", "4", "40", "41", "42", "43", "44", "45", "46", "47", 
+          "48", "49", "5", "50", "51", "52", "53", "54", "55", "56", "57", 
+          "58", "59", "6", "60", "61", "62", "63", "64", "65", "66", "67", 
+          "68", "69", "7", "70", "71", "72", "73", "74", "75", "76", "77", 
+          "78", "79", "8", "80", "81", "82", "83", "84", "85", "85 +", 
+          "86", "87", "88", "89", "9", "90", "91", "92", "93", "94", "95 +")
+
+support_table <- expand_grid(year = 2011:2015,
+                             area.name = default_counties,
+                             sex = c("male", "female"),
+                             age.char = age_levels,
+                             race.eth = "asisan",
+                             KEEP.OUT.ATTRS = FALSE,
+                             stringsAsFactors = FALSE
+)
+
+rm(age_levels)
+
 cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
+
+# 3. Ingest -------------------------------------------------------------------------------------------------------
+undebug(ingest_population)
+debug(apply_completion_policy)
 
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
@@ -171,7 +203,7 @@ tarr.pop::ingest_population(
   dim_semantics = tdc_estimate_semantics(),
   filepath = tdc_estimates_file,
   series_id = "tdc_estimates_county",
-  completion_policy = "error",
+  completion_policy = "na",
   drop_all = TRUE,
   source_meta = list(
     note = "Texas Demographic Center county estimates",
@@ -180,6 +212,7 @@ tarr.pop::ingest_population(
   ),
   time_dim = "year",
   area_dim = "area.name",
+  support = support_table,
   overwrite = TRUE,
   data_col = "population",
   counties = default_counties,
@@ -187,3 +220,5 @@ tarr.pop::ingest_population(
 )
 
 est_poparray <- tarr.pop::open_poparray("tdc_estimates_county")
+est_poparray
+years(est_poparray)

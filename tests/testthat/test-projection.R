@@ -12,7 +12,7 @@ make_poparray_fixture <- function() {
     dimnames = dn
   )
 
-  as.poparray(
+  tarr.pop::as.poparray(
     arr,
     filepath = tempfile("projection_pop_fixture_", fileext = ".h5"),
     data_col = "population"
@@ -90,6 +90,48 @@ test_that("project returns poparray_projection with one-cube handle and source m
   expect_true(all(c("note", "source", "updated", "projection_method", "projection_level") %in% names(src)))
 })
 
+test_that("project returns an HDF5-backed delayed projection cube", {
+  pa <- make_poparray_fixture()
+
+  pr <- tarr.pop::project(pa, h = 2, method = "CAGR", level = 0.95, guard = FALSE)
+  handle <- ns_fun("pp_handle")(pr)
+  seed <- DelayedArray::seed(handle)
+
+  expect_s4_class(handle, "DelayedArray")
+  expect_s4_class(seed, "HDF5ArraySeed")
+  expect_true(file.exists(seed@filepath))
+  expect_equal(dimnames(pr)$stat, c("projection", "std_error"))
+})
+
+test_that("project preserves time and area roles and projected year labels", {
+  pa <- make_poparray_fixture()
+
+  pr <- tarr.pop::project(pa, h = 3, method = "CAGR", level = 0.95, guard = FALSE)
+  roles <- ns_fun("pp_roles")(pr)
+
+  expect_equal(roles$time, "year")
+  expect_equal(roles$area, "area.name")
+  expect_equal(dimnames(pr)$year, c("2023", "2024", "2025"))
+  expect_equal(dimnames(pr)$area.name, dimnames(pa)$area.name)
+  expect_equal(dimnames(pr)$sex, dimnames(pa)$sex)
+})
+
+test_that("project output remains delayed until explicitly realized", {
+  pa <- make_poparray_fixture()
+
+  pr <- tarr.pop::project(pa, h = 2, method = "CAGR", level = 0.95, guard = FALSE)
+  proj <- ns_fun("projection")(pr)
+  handle <- ns_fun("pp_handle")(pr)
+  seed <- DelayedArray::seed(handle)
+
+  expect_s4_class(proj, "DelayedArray")
+  expect_s4_class(seed, "HDF5ArraySeed")
+
+  one_cell <- as.numeric(proj[, 1, 1, 1])
+  expect_length(one_cell, 2)
+  expect_true(all(is.finite(one_cell)))
+})
+
 test_that("project enforces numeric-like time labels for horizon generation", {
   dn <- list(
     year = paste0("Y", 2018:2022),
@@ -101,7 +143,7 @@ test_that("project enforces numeric-like time labels for horizon generation", {
     dim = unname(lengths(dn)),
     dimnames = dn
   )
-  pa_bad <- as.poparray(arr, filepath = tempfile("projection_bad_years_", fileext = ".h5"))
+  pa_bad <- tarr.pop::as.poparray(arr, filepath = tempfile("projection_bad_years_", fileext = ".h5"))
 
   expect_error(
     tarr.pop::project(pa_bad, h = 2, method = "CAGR", level = 0.95, guard = FALSE),
