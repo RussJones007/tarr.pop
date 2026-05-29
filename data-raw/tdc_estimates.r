@@ -108,6 +108,23 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   
   long <- long[!is.na(population)]   # The asian population figures before 2017 are unknown
 
+  # remove "all" from any row.
+  dim_cols <- c("area.name", "sex", "age.char", "race.eth")
+  keep <- long[
+    ,
+    !Reduce(`|`, lapply(.SD, \(x) as.character(x) == "All")),
+    .SDcols = dim_cols
+  ]
+  long <- long[keep]
+  
+  # sort on year and area
+  setorder(long, year, area.name)
+
+  factor_cols <- names(long)[vapply(long, is.factor, logical(1))]
+  if (length(factor_cols)) {
+    long[, (factor_cols) := lapply(.SD, droplevels), .SDcols = factor_cols]
+  }
+
   data.table::setcolorder( long, c("year", "area.name", "sex", "age.char", "race.eth", "population"))
 
   long
@@ -176,25 +193,25 @@ age_levels <- c("< 1", "1", "10", "11", "12", "13", "14", "15", "16", "17",
           "58", "59", "6", "60", "61", "62", "63", "64", "65", "66", "67", 
           "68", "69", "7", "70", "71", "72", "73", "74", "75", "76", "77", 
           "78", "79", "8", "80", "81", "82", "83", "84", "85", "85 +", 
-          "86", "87", "88", "89", "9", "90", "91", "92", "93", "94", "95 +")
+          "86", "87", "88", "89", "9", "90", "91", "92", "93", "94", "95 +") |> 
+  rage::as.age_group() |> 
+  ordered()
 
-support_table <- expand_grid(year = 2011:2015,
-                             area.name = default_counties,
-                             sex = c("male", "female"),
-                             age.char = age_levels,
-                             race.eth = "asisan",
-                             KEEP.OUT.ATTRS = FALSE,
-                             stringsAsFactors = FALSE
+support_table <- expand_grid(year             = 2011:2015,
+                             area.name        = default_counties,
+                             sex              = c("male", "female"),
+                             age.char         = age_levels,
+                             race.eth         = "asisan"#,
+                             #KEEP.OUT.ATTRS   = FALSE,
+                             #stringsAsFactors = FALSE
 )
-
-rm(age_levels)
 
 cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
-undebug(ingest_population)
-debug(apply_completion_policy)
+#undebug(ingest_population)
+#debug(apply_completion_policy)
 
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
@@ -221,4 +238,5 @@ tarr.pop::ingest_population(
 
 est_poparray <- tarr.pop::open_poparray("tdc_estimates_county")
 est_poparray
-years(est_poparray)
+years(est_poparray) |> sort()
+ages(est_poparray)

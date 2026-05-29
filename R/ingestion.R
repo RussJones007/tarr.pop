@@ -124,16 +124,16 @@ apply_completion_policy <- function(df,
   policy <- match.arg(policy)
 
   if (!data.table::is.data.table(df)) data.table::setDT(df)
-  if (!is.null(support) && !data.table::is.data.table(support)) data.table::setDT(support)
-  
-  # change any field to character for joining purposes
-  for (nm in dims) {
-    df[, (nm) := as.character(get(nm))]
-    if (!is.null(support)) {
-      support[, (nm) := as.character(get(nm))]
-    }
-  }
 
+  # convert the type in the support table to those in df
+  # Check that support table coumns are the same as df and in same order
+  if (!is.null(support) && !data.table::is.data.table(support)){
+    if(!data.table::is.data.table(support)) {data.table::setDT(support)}
+    if(setdiff(names(support), names(df)) |> length()) cli::abort("The support table must have the same fields as df")
+    support <- support[names(df)]
+    support <- imap(support, ~ vctrs::vec_cast(.x, df[.y]))
+  }
+  
   observed <- df
 
   if (identical(policy, "error")) {
