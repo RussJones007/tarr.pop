@@ -233,15 +233,18 @@ validate_hdf5_metadata_shape <- function(x) {
   ds <- tryCatch(sd@name, error = function(e) "")
   if (!nzchar(fp) || !file.exists(fp) || !nzchar(ds)) return(TRUE)
   if (!grepl("^cube/population$", ds) && !grepl("^/cube/population$", ds)) return(TRUE)
-  info <- tryCatch(rhdf5::h5ls(fp), error = function(e) NULL)
-  if (is.null(info)) return("Unable to inspect HDF5 metadata layout.")
+  meta <- tryCatch(get_cube_metadata_cached(fp), error = function(e) e)
+  if (inherits(meta, "error")) {
+    return(conditionMessage(meta))
+  }
+  info <- meta$info
   has_meta_group <- any(info$group == "/cube" & info$name == "metadata")
   has_dim_order <- any(info$group == "/cube/metadata" & info$name == "dim_order")
   has_dimnames_group <- any(info$group == "/cube/metadata" & info$name == "dimnames")
   if (!has_meta_group) return("Missing required HDF5 metadata group: cube/metadata")
   if (!has_dim_order) return("Missing required HDF5 dataset: cube/metadata/dim_order")
   if (!has_dimnames_group) return("Missing required HDF5 group: cube/metadata/dimnames")
-  dim_order <- as.character(rhdf5::h5read(fp, "cube/metadata/dim_order"))
+  dim_order <- as.character(meta$dim_order)
   dn <- dimnames(x)
   nms <- names(dn)
   if (is.null(nms)) {

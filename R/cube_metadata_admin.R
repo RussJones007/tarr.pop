@@ -118,10 +118,10 @@ read_cube_metadata_admin_impl <- function(path, validate = TRUE) {
   checkmate::assert_string(path, min.chars = 1)
   meta <- get_cube_metadata_cached(path)
   out <- list(
-    roles = read_cube_roles_impl(path),
-    source = read_cube_source_impl(path),
-    data_col = read_cube_data_col_impl(path),
-    dim_semantics = read_cube_dim_semantics_impl(path, validate = FALSE)
+    roles = normalize_cube_roles(meta$roles, meta$dim_order),
+    source = normalize_cube_source(meta$source),
+    data_col = as.character(meta$data_col),
+    dim_semantics = meta$dim_semantics
   )
 
   if (isTRUE(validate)) {
