@@ -1,0 +1,329 @@
+---
+title: "Adding Data to an Existing Population Cube"
+format: html
+vignette: >
+  %\VignetteIndexEntry{Adding Data to an Existing Population Cube}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+execute:
+  eval: false
+editor:
+  markdown:
+    wrap: 100
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+# Overview
+
+This vignette shows how to add newly released population data to an existing `poparray` cube. The
+example uses the Texas Demographic Center county population estimates workflow from
+`data-raw/tdc_estimates.r`.
+
+The common use case is an annual update. For example, an existing cube may already contain TDC
+estimate years through 2023, and a new file named something like
+`2024_ASRE_Estimate_alldata.csv` has been downloaded. Rather than rebuilding the whole cube from
+all historical source files, `add_population_data()` can read only the new file, validate it against
+the existing cube, and write an updated cube with 2024 appended to the `year` dimension.
+
+The function does not edit the HDF5 dataset in place. It creates an expanded cube, copies the
+existing cube by blocks, writes the new slice, writes updated metadata, and then replaces the source
+file when requested. This keeps the existing HDF5 data lazy during the update and avoids realizing
+the full old cube in memory.
+
+# What the User Must Provide
+
+To add data, the user needs four things:
+
+1. An existing population cube, either as a file path or as a `series_id` known to
+   `open_poparray()`.
+2. A reader function that returns the newly downloaded source table.
+3. A transformer function that converts the source table to the same canonical dimensions as the
+   existing cube.
+4. The dimension order used by the cube.
+
+For the TDC estimate cube, the dimensions are:
+
+```{r dimensions}
+dims <- c("year", "area.name", "sex", "age.char", "race.eth")
+```
+
+The new file must produce records with those five dimension columns plus the value column,
+`population`.
+
+# Setup
+
+In a development workflow, the package and source-data paths are usually initialized by
+`data-raw/control_def.r`. An interactive session typically looks like this:
+
+```{r setup}
+library(tarr.pop)
+library(data.table)
+library(tidyverse)
+library(janitor)
+library(rage)
+
+devtools::load_all()
+
+cube_root <- tarr.pop::init_cubes()
+tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
+```
+
+The source CSV folder should point to the folder where the TDC estimate files were downloaded:
+
+```{r source-dir}
+input_dir <- file.path(
+  tarr::paths$population,
+  "Estimates",
+  "Texas Demographic Center",
+  "asre"
+)
+```
+
+# Reader Function
+
+The reader should return only the new source data. For an annual update, this usually means changing
+the file pattern to match the newly downloaded file.
+
+The `read_tdc_estimates_raw()` function from `data-raw/tdc_estimates.r` already supports a
+`pattern` argument, so the same reader can be reused:
+
+```{r read-2024}
+raw_2024 <- read_tdc_estimates_raw(
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir
+)
+```
+
+When using `add_population_data()`, do not call the reader yourself. Pass the reader function and
+the file-matching arguments to the API:
+
+```{r reader-api}
+reader <- read_tdc_estimates_raw
+```
+
+# Transformer Function
+
+The transformer must return the same dimensions as the existing cube. For the TDC estimate cube,
+`transform_tdc_estimates()` performs the source-specific work:
+
+```{r transformer}
+transformer <- transform_tdc_estimates
+```
+
+The transformer is responsible for:
+
+- converting the wide TDC race/sex columns to long format
+- creating `race.eth` and `sex`
+- normalizing county names into `area.name`
+- normalizing age labels into `age.char`
+- removing the Texas total when the cube is county-only
+- dropping records where `population` is `NA`
+- removing physical `"All"` aggregate rows
+
+The last point is important. In `tarr.pop`, `"All"` is treated as a virtual aggregate. It should not
+be physically stored as a dimension label in the cube.
+
+# Add the New Year
+
+The update call is:
+
+```{r add-2024}
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir,
+  counties = default_counties,
+  include_texas_total = FALSE,
+  source_meta = list(
+    note = "Texas Demographic Center county estimates, updated with 2024",
+    source = "Texas Demographic Center, Estimates program",
+    population_type = "Estimate"
+  )
+)
+```
+
+This call reads and transforms only the 2024 file. The existing cube supplies the valid labels for
+`area.name`, `sex`, `age.char`, and `race.eth`. The new data supply the new `year` label.
+
+By default, `add_population_data()` replaces the input file when `cube` is a file path. Replacement
+is done safely through a temporary HDF5 file in the same folder. If the write succeeds, the old file
+is removed and the temporary file is renamed into place.
+
+# Write to a Different File
+
+During testing, it is often safer to write the updated cube to a new file:
+
+```{r add-2024-new-file}
+updated_file <- file.path(cube_root, "base", "tdc_estimates_county_with_2024.h5")
+
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  output_filepath = updated_file,
+  overwrite = TRUE,
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir,
+  counties = default_counties,
+  include_texas_total = FALSE,
+  source_meta = list(
+    note = "Texas Demographic Center county estimates, test update with 2024",
+    source = "Texas Demographic Center, Estimates program",
+    population_type = "Estimate"
+  )
+)
+```
+
+Use this form when testing a new source file or transformer change. Once the result is inspected,
+the same call can be run without `output_filepath` to replace the production cube.
+
+# Completion Policy
+
+The `completion_policy` argument controls how missing cells in the new slice are handled.
+
+With `completion_policy = "error"`, every valid cell must be present in the new data. If a county,
+sex, age, race, and year combination is missing, the function stops and reports examples of missing
+records.
+
+```{r completion-error}
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  completion_policy = "error",
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir
+)
+```
+
+With `completion_policy = "na"`, missing valid cells are written as `NA`. This is useful when the
+source program has a known structural gap. For example, older TDC files did not include every
+`race.eth` category in every year.
+
+```{r completion-na}
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  completion_policy = "na",
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir
+)
+```
+
+With `completion_policy = "zero"`, missing valid cells are filled with zero. This should be used
+only when zero is a defensible structural value, not merely because a source record is absent.
+
+# Support Table
+
+When `support = NULL`, `add_population_data()` derives a support table from the existing cube. For a
+new year, that means crossing the new year label with the existing labels for all other dimensions.
+This is usually the correct behavior for annual updates, because the existing cube defines the
+valid cell space.
+
+If the new source file intentionally changes the valid cell space, provide an explicit support
+table:
+
+```{r explicit-support}
+support_2024 <- tidyr::expand_grid(
+  year = 2024,
+  area.name = areas(open_poparray("tdc_estimates_county")),
+  sex = sexes(open_poparray("tdc_estimates_county")),
+  age.char = ages(open_poparray("tdc_estimates_county")),
+  race.eth = c("white", "black", "asian", "other", "hispanic")
+)
+
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  completion_policy = "na",
+  support = support_2024,
+  pattern = "2024_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir
+)
+```
+
+This example uses `open_poparray()` to retrieve existing labels. That is metadata-oriented and does
+not require realizing the full cube.
+
+# Safeguards
+
+`add_population_data()` intentionally refuses some updates.
+
+It stops if the new data contain an existing `year` label. This prevents accidentally overwriting
+or duplicating a year already in the cube.
+
+```{r overlap-example}
+add_population_data(
+  cube = tdc_estimates_file,
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  add_dim = "year",
+  pattern = "2023_ASRE_Estimate_alldata\\.csv",
+  input_dir = input_dir
+)
+```
+
+If 2023 is already in the cube, this call errors.
+
+It also stops if the new data contain labels in non-appended dimensions that are not already in the
+cube. For example, if a new `race.eth` label appears in the 2024 source file, the cube's dimension
+contract has changed. In that case, decide whether the cube should be rebuilt with a new schema or
+whether a source-specific transformer should map the new label into the existing label set.
+
+# Inspect the Result
+
+After adding the new data, open the cube and inspect its metadata:
+
+```{r inspect}
+updated <- open_poparray("tdc_estimates_county")
+
+years(updated)
+areas(updated)[1:5]
+sexes(updated)
+ages(updated)[1:10]
+```
+
+Small slices can be converted to a data frame for checking. This is an **EAGER** operation because
+`as.data.frame()` realizes the selected slice. Filter or subset first.
+
+```{r inspect-slice}
+check_2024 <- updated["2024", , , , , drop = FALSE]
+
+as.data.frame(check_2024) |>
+  dplyr::filter(area.name == "Tarrant") |>
+  dplyr::slice_head(n = 10)
+```
+
+For large cubes, avoid converting the full object to a data frame. Work with selected years,
+selected areas, or other small slices.
+
+# Relationship to Full Ingestion
+
+Use `ingest_population()` when creating a cube from source files.
+
+Use `add_population_data()` when the cube already exists and the source update adds new labels along
+one dimension, usually `year`.
+
+If a new source file changes multiple dimensions at once, such as adding a new race category and a
+new year, a full rebuild may be the cleaner workflow. The cube schema is part of the data contract,
+and changing that schema should be deliberate.
+
