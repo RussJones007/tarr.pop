@@ -45,10 +45,10 @@ implied number of independent models is large.}
 A \code{poparray_projection} object.
 }
 \description{
-Fits independent time-series models for each non-time cell of a \code{poparray}
-cube and forecasts population counts for \code{h} future years. Each unique
-combination of non-time dimensions (e.g., county × sex × age × race ×
-ethnicity) is modeled separately.
+Fits independent time-series models for each non-time cell of a \code{poparray} cube and forecasts population counts for
+\code{h} future years. Each unique combination of non-time dimensions (e.g., county × sex × age × race × ethnicity) is
+modeled separately.  “project() is \strong{EAGER} at the series-fitting step: each time series is realized as a numeric vector
+and modeled independently, while results are written to an HDF5-backed delayed output cube.”
 }
 \details{
 The projection method may be \code{"auto"}, \code{"ETS"}, \code{"CAGR"}, or \code{"ARIMA"}.
