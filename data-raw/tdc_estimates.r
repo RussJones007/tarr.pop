@@ -210,8 +210,8 @@ cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
-#undebug(ingest_population)
-#debug(apply_completion_policy)
+# undebug(ingest_population)
+# undebug(apply_completion_policy)
 
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
@@ -236,7 +236,4 @@ tarr.pop::ingest_population(
   include_texas_total = FALSE
 )
 
-est_poparray <- tarr.pop::open_poparray("tdc_estimates_county")
-est_poparray
-years(est_poparray) |> sort()
-ages(est_poparray)
+

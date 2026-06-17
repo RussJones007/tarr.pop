@@ -27,8 +27,8 @@ rm(list = ls())
 # need paths defines globally for some functions to work.
 # source( "R/Paths.r")
 devtools::load_all()
-
-paths <- tarr:::paths_defined()
+paths <- tarr::paths
+#paths <- tarr:::paths_defined()
 
 # convenience function for sorting values for levels when making a factor
 sort_values <- compose(sort, unique)

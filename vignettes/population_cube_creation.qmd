@@ -1,0 +1,495 @@
+---
+title: "Creating a Population Cube"
+format: html
+vignette: >
+  %\VignetteIndexEntry{Creating a Population Cube}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+execute:
+  eval: false
+editor:
+  markdown:
+    wrap: 100
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+# Overview
+
+This vignette shows how a population cube can be created from Texas Demographic Center estimate CSV
+files. The example follows the workflow in `data-raw/tdc_estimates.r`.
+
+The purpose is not just to read files. The goal is to move from source-specific, wide-format CSV
+files into a `poparray` cube with:
+
+-   named dimensions
+-   explicit time and area roles
+-   dimension semantics
+-   HDF5-backed storage
+-   source metadata
+
+The source CSV files are local raw data, so this vignette is written as a reproducible template
+rather than code that runs during package checks. The resulting cube is written to the active cube
+store, not into the package source tree, unless the cube path has been configured that way.
+
+# Prerequisites
+
+The raw-data script assumes the same setup used by `data-raw/control_def.r`: supporting packages are
+loaded, package development helpers are available, and the source-data paths are defined.
+
+For an interactive development session, the setup looks like this:
+
+```{r setup}
+library(tidyverse)
+library(janitor)
+library(data.table)
+library(rage)
+library(DelayedArray)
+
+devtools::load_all()
+
+paths <- tarr::paths
+```
+
+The estimate CSV files are expected under the population source folder:
+
+```{r source-folder}
+input_dir <- file.path(
+  tarr::paths$population,
+  "Estimates",
+  "Texas Demographic Center",
+  "asre"
+)
+```
+
+The file names are expected to begin with a four-digit year and end with
+`_ASRE_Estimate_alldata.csv`, for example:
+
+``` text
+2017_ASRE_Estimate_alldata.csv
+2018_ASRE_Estimate_alldata.csv
+```
+
+# Workflow
+
+The cube creation workflow has five stages:
+
+1.  Define source-specific helper functions.
+2.  Read the raw CSV files into one table.
+3.  Transform the table into canonical cube columns.
+4.  Define dimension semantics and a support table.
+5.  Ingest the table into an HDF5-backed `poparray` cube.
+
+The first three stages are source-specific. They know about Texas Demographic Center column names
+and labels. The last stage uses `ingest_population()`, which is the package-level ingestion function
+for validating and writing a cube.
+
+# Clean Age Labels
+
+TDC age labels are not always in the same form that `tarr.pop` should store. For example, labels may
+include words such as `"Ages"` or `"years"`, and open-ended age groups may need spacing normalized.
+
+`process_age_char()` standardizes those labels before they become a cube dimension.
+
+```{r process-age}
+process_age_char <- function(x) {
+  x |>
+    stringr::str_remove_all(stringr::regex("Ages", ignore_case = TRUE)) |>
+    stringr::str_remove_all(stringr::regex(" (ye?a??rs?|Ages)", ignore_case = TRUE)) |>
+    stringr::str_trim(side = "both") |>
+    stringr::str_replace("5\\+", "5 +")
+}
+```
+
+Age is not treated as a plain character field. In a population cube, age labels have interval
+meaning. The helper below uses `rage::as.age_group()` to sort age groups by their interval order,
+not by alphabetic order.
+
+```{r ordered-age-levels}
+ordered_age_levels <- function(x) {
+  age_levels <- levels(x)
+  age_levels <- age_levels[age_levels != "All"]
+  c(sort(as.character(rage::as.age_group(age_levels))), "All")
+}
+```
+
+The `"All"` level is kept temporarily while source labels are being normalized. It is removed before
+the data are ingested because aggregate rows should not be physically stored in a `poparray` cube.
+
+# Read One CSV
+
+The CSV files are read with explicit column types. County, FIPS, and age are read as factors because
+their labels define dimensions. Most population columns are integer counts.
+
+`read_est_csv()` also extracts the estimate year from the file name. That makes the year a data
+column even when the file itself does not include one.
+
+```{r read-one-csv}
+read_est_csv <- function(file, col_types) {
+  readr::read_csv(
+    file = file,
+    col_types = col_types,
+    id = "file_name",
+    progress = TRUE
+  ) |>
+    janitor::clean_names() |>
+    dplyr::mutate(
+      year = basename(file_name) |>
+        stringr::str_extract("^20[1-2][0-9]") |>
+        as.integer()
+    ) |>
+    dplyr::select(-file_name) |>
+    dplyr::rename_with(\(col) {
+      col |>
+        stringr::str_replace("anglo", "white") |>
+        stringr::str_remove("^nh_")
+    })
+}
+```
+
+The name cleanup is source-specific. TDC labels changed over time, and this step normalizes older
+and newer naming so the final cube has one consistent `race.eth` dimension.
+
+# Read All Estimate Files
+
+`read_tdc_estimates_raw()` finds all matching CSV files in the source directory and uses
+`read_est_csv()` on each one. The separate files are then bound into one `data.table`.
+
+```{r read-all-csvs}
+read_tdc_estimates_raw <- function(
+    pattern = "20[1-2][0-9]_ASRE_Estimate_alldata\\.csv",
+    input_dir = file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre"),
+    ...
+) {
+  files <- list.files(path = input_dir, pattern = pattern, full.names = TRUE)
+
+  if (!length(files)) {
+    cli::cli_abort("No TDC estimate files matched {.val {pattern}} in {.file {input_dir}}.")
+  }
+
+  col_types <- readr::cols(
+    County = readr::col_factor(),
+    FIPS = readr::col_factor(),
+    Age = readr::col_factor(ordered = TRUE),
+    .default = readr::col_integer()
+  )
+
+  purrr::map(files, read_est_csv, col_types = col_types) |>
+    dplyr::bind_rows() |>
+    data.table::setDT()
+}
+```
+
+At this point the data are still close to the source layout. The demographic counts are still spread
+across many columns.
+
+# Transform to Cube Columns
+
+The transformer is the most important source-specific part of the workflow. It turns the wide TDC
+layout into the canonical long table expected by `ingest_population()`.
+
+The canonical columns for this cube are:
+
+```{r dims}
+dims <- c("year", "area.name", "sex", "age.char", "race.eth")
+```
+
+Together with the value column `population`, each row describes one cell in the eventual cube.
+
+```{r transform}
+transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = FALSE) {
+  stopifnot(data.table::is.data.table(df))
+
+  wide_names <- names(df) |>
+    stringr::str_replace_all("_", ".") |>
+    stringr::str_replace("^total$", "All.All") |>
+    stringr::str_replace("^total", "All") |>
+    stringr::str_replace("\\.total$", ".All")
+
+  data.table::setnames(df, wide_names)
+
+  long <- data.table::melt(
+    data = df,
+    id.vars = c("year", "fips", "county", "age"),
+    variable.name = "race.sex",
+    variable.factor = TRUE,
+    value.name = "population",
+    verbose = FALSE
+  )
+
+  long[
+    ,
+    c("race.eth", "sex") := data.table::tstrsplit(race.sex, split = ".", fixed = TRUE, fill = NA)
+  ][
+    ,
+    county := forcats::fct_relabel(
+      county,
+      \(x) stringr::str_to_title(gsub(" COUNTY", "", x, ignore.case = TRUE))
+    )
+  ][
+    ,
+    county := forcats::fct_recode(county, "Texas" = "State Of Texas")
+  ][
+    ,
+    age := forcats::fct_relabel(
+      age,
+      \(x) process_age_char(x) |> rage::as.age_group() |> as.character()
+    )
+  ][
+    ,
+    age := ordered(age, levels = ordered_age_levels(age))
+  ][
+    ,
+    sex := forcats::fct_na_value_to_level(sex, level = "All")
+  ][
+    ,
+    race.eth := factor(race.eth)
+  ][
+    ,
+    c("race.sex", "fips") := NULL
+  ]
+
+  data.table::setnames(long, old = c("age", "county"), new = c("age.char", "area.name"))
+
+  if (!is.null(counties)) {
+    long <- long[area.name %chin% counties]
+  }
+
+  if (!isTRUE(include_texas_total)) {
+    long <- long[area.name != "Texas"]
+  }
+
+  long <- long[!is.na(population)]
+
+  dim_cols <- c("area.name", "sex", "age.char", "race.eth")
+  keep <- long[
+    ,
+    !Reduce(`|`, lapply(.SD, \(x) as.character(x) == "All")),
+    .SDcols = dim_cols
+  ]
+  long <- long[keep]
+
+  data.table::setorder(long, year, area.name)
+
+  factor_cols <- names(long)[vapply(long, is.factor, logical(1))]
+  if (length(factor_cols)) {
+    long[, (factor_cols) := lapply(.SD, droplevels), .SDcols = factor_cols]
+  }
+
+  data.table::setcolorder(
+    long,
+    c("year", "area.name", "sex", "age.char", "race.eth", "population")
+  )
+
+  long
+}
+```
+
+This function does several jobs:
+
+The first block normalizes the source column names. Columns such as totals are renamed to make the
+implicit race and sex labels explicit. This is needed before the wide table is melted.
+
+The `melt()` call changes the data from wide format to long format. After that operation, the
+combined source column name is split into `race.eth` and `sex`.
+
+County names are normalized to title case and `"State Of Texas"` is recoded to `"Texas"`. The state
+total is then removed by default. This matters because a county cube should have an `area.name`
+dimension that is a true partition. If the state total is stored together with counties, the area
+dimension would overlap.
+
+Rows containing `"All"` are removed before ingestion. In `tarr.pop`, `"All"` is treated as a virtual
+aggregate level, not a physical level to store in a base cube. Aggregate rows can be recomputed
+later by grouping or collapsing dimensions.
+
+The final `droplevels()` call removes factor levels that are no longer present after filtering. This
+is especially important before creating a support table, because stale factor levels such as `"All"`
+or `"Texas"` can otherwise be carried into the support skeleton.
+
+# Define Dimension Semantics
+
+Every cube needs semantics for its dimensions. These semantics describe what the dimension means and
+how it can safely be used.
+
+```{r semantics}
+tdc_estimate_semantics <- function() {
+  list(
+    year = tarr.pop:::new_dim_semantics(
+      dim_name = "year",
+      domain = "time",
+      partition_type = "partition",
+      scale_type = "interval",
+      validated = TRUE,
+      notes = "July 1 estimate year."
+    ),
+    area.name = tarr.pop:::new_dim_semantics(
+      dim_name = "area.name",
+      domain = "area",
+      partition_type = "partition",
+      scale_type = "nominal",
+      validated = TRUE,
+      notes = "County-only geography. Texas state total is excluded from this cube."
+    ),
+    sex = tarr.pop:::new_dim_semantics(
+      dim_name = "sex",
+      domain = "sex",
+      partition_type = "partition",
+      scale_type = "nominal",
+      validated = TRUE
+    ),
+    age.char = tarr.pop:::new_dim_semantics(
+      dim_name = "age.char",
+      domain = "age interval",
+      partition_type = "set",
+      scale_type = "interval",
+      validated = TRUE,
+      overlap_levels = "85 +",
+      notes = "Age groups are interval-valued and may include an open upper bound."
+    ),
+    race.eth = tarr.pop:::new_dim_semantics(
+      dim_name = "race.eth",
+      domain = "race and ethnicity",
+      partition_type = "partition",
+      scale_type = "nominal",
+      validated = TRUE,
+      notes = paste(
+        "TDC combines race and Hispanic ethnicity into one dimension.",
+        "The Hispanic category is treated as a level in this partition."
+      )
+    )
+  )
+}
+```
+
+The time and area dimensions are marked as partitions. That is required by the `poparray`
+constructor because those roles must identify mutually exclusive cells.
+
+The age dimension is marked as interval-valued. Even though age labels are stored as strings, they
+represent intervals such as one-year ages and open-ended groups.
+
+# Create a Support Table
+
+The support table lists valid dimension combinations that should exist in the cube even when the
+source table does not contain an observed row. In this TDC example, the source did not include
+`asian` race and ethnicity estimates before 2017. If those cells should exist in the cube as missing
+values, the support table supplies the valid skeleton and `completion_policy = "na"` fills them with
+`NA`.
+
+Support tables should use the same dimension names and compatible classes as the transformed table.
+This is particularly important for ordered factors such as `age.char`, because their order
+determines the final cube layout.
+
+```{r support-table}
+default_counties <- NULL
+if (exists("county_fips", inherits = TRUE)) {
+  default_counties <- setdiff(names(county_fips), "Texas")
+}
+
+age_levels <- c(
+  "< 1", as.character(1:84), "85", "85 +",
+  as.character(86:94), "95 +"
+) |>
+  rage::as.age_group() |>
+  ordered()
+
+support_table <- tidyr::expand_grid(
+  year = 2011:2016,
+  area.name = default_counties,
+  sex = c("male", "female"),
+  age.char = age_levels,
+  race.eth = "asian"
+)
+```
+
+Use `completion_policy = "na"` for this case. The missing values are not zero population. They
+represent estimates that are valid for the harmonized cube schema but unavailable in the source
+files.
+
+# Ingest the Cube
+
+`ingest_population()` is the package-native ingestion entry point. It runs the reader, runs the
+transformer, removes aggregate rows when requested, applies the completion policy, validates the
+table, converts it to an array, and writes the HDF5-backed cube.
+
+```{r ingest}
+cube_root <- tarr.pop::init_cubes()
+tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
+
+tarr.pop::ingest_population(
+  reader = read_tdc_estimates_raw,
+  transformer = transform_tdc_estimates,
+  dims = dims,
+  dim_semantics = tdc_estimate_semantics(),
+  filepath = tdc_estimates_file,
+  series_id = "tdc_estimates_county",
+  completion_policy = "na",
+  drop_all = TRUE,
+  source_meta = list(
+    note = "Texas Demographic Center county estimates",
+    population_type = "Estimate",
+    source = "Texas Demographic Center, Estimates program"
+  ),
+  time_dim = "year",
+  area_dim = "area.name",
+  support = support_table,
+  overwrite = TRUE,
+  data_col = "population",
+  counties = default_counties,
+  include_texas_total = FALSE
+)
+```
+
+The output file path is:
+
+```{r output-path}
+tdc_estimates_file
+```
+
+This path is under `file.path(tarr.pop::cube_path(), "base")`. The cube path is user-configurable
+with `set_cube_path()`.
+
+# Open and Verify the Cube
+
+After ingestion, reopen the cube by its series identifier.
+
+```{r verify}
+est_poparray <- tarr.pop::open_poparray("tdc_estimates_county")
+est_poparray
+
+dim(est_poparray)
+names(dimnames(est_poparray))
+tarr.pop::time_role(est_poparray)
+tarr.pop::area_role(est_poparray)
+```
+
+The object is a `poparray` backed by HDF5. Opening it is lazy: the full cube is not read into
+memory. Values are read only when a later operation requires them.
+
+Useful checks after creating a cube include:
+
+```{r verify-labels}
+tarr.pop::years(est_poparray)
+tarr.pop::ages(est_poparray)
+tarr.pop::dim_semantics(est_poparray)
+tarr.pop::get_source(est_poparray)
+```
+
+# Common Problems
+
+A support table with mismatched classes can produce joins that appear to lose observed values. Build
+support from the same labels and factor order used in the transformed table, especially for
+`age.char`.
+
+Rows containing `"All"` should be removed before ingestion. The base cube should store detailed
+cells, not aggregate rows. Aggregate `"All"` results can be created later from the cube.
+
+The Texas state total should not be stored in the county cube. Keeping `"Texas"` together with
+counties makes `area.name` overlap, which violates the partition semantics expected for the area
+role.
+
+Converting a cube to a data frame or tibble is **EAGER** because it realizes cube values into rows.
+Creation and opening of the HDF5-backed cube are designed so that the resulting `poparray` remains
+lazy for downstream analysis.
