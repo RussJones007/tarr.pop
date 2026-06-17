@@ -329,3 +329,90 @@ test_that("ingest_population persists through a single cube write path", {
   expect_equal(writes, 1L)
   expect_true(file.exists(fp))
 })
+
+test_that("add_population_data appends a new year to an existing cube", {
+  fp <- tempfile("population-add-year-", fileext = ".h5")
+  dims <- c("year", "area.name", "sex")
+  sem <- make_ingestion_semantics(dims)
+
+  base_df <- data.frame(
+    year = rep("2023", 4),
+    area.name = rep(c("A", "B"), each = 2),
+    sex = rep(c("Female", "Male"), 2),
+    population = c(10, 11, 12, 13),
+    stringsAsFactors = FALSE
+  )
+
+  tarr.pop:::build_poparray_from_df(
+    df = base_df,
+    dims = dims,
+    dim_semantics = sem,
+    filepath = fp,
+    series_id = "population_add_year",
+    source = list(note = "base", source = "test", population_type = "estimate"),
+    overwrite = TRUE
+  )
+
+  new_df <- data.frame(
+    year = rep("2024", 4),
+    area.name = rep(c("A", "B"), each = 2),
+    sex = rep(c("Female", "Male"), 2),
+    population = c(20, 21, 22, 23),
+    stringsAsFactors = FALSE
+  )
+
+  out <- add_population_data(
+    cube = fp,
+    reader = function(...) new_df,
+    dims = dims,
+    source_meta = list(note = "updated")
+  )
+
+  expect_equal(out, normalizePath(fp, winslash = "/", mustWork = FALSE))
+
+  meta <- tarr.pop:::get_cube_metadata_cached(fp)
+  dimn <- tarr.pop:::read_dimnames_from_cube(fp, meta = meta)
+  arr <- as.array(HDF5Array::HDF5Array(filepath = fp, name = "cube/population"))
+  dimnames(arr) <- dimn
+
+  expect_identical(dimn$year, c("2023", "2024"))
+  expect_equal(arr["2023", "A", "Female"], 10)
+  expect_equal(arr["2024", "B", "Male"], 23)
+  expect_identical(tarr.pop:::read_source_from_cube(fp, meta = meta)[["note"]], "updated")
+})
+
+test_that("add_population_data errors on overlapping append labels", {
+  fp <- tempfile("population-add-overlap-", fileext = ".h5")
+  dims <- c("year", "area.name")
+  sem <- make_ingestion_semantics(dims)
+
+  tarr.pop:::build_poparray_from_df(
+    df = data.frame(
+      year = c("2024", "2024"),
+      area.name = c("A", "B"),
+      population = c(10, 11),
+      stringsAsFactors = FALSE
+    ),
+    dims = dims,
+    dim_semantics = sem,
+    filepath = fp,
+    series_id = "population_add_overlap",
+    overwrite = TRUE
+  )
+
+  expect_error(
+    add_population_data(
+      cube = fp,
+      reader = function(...) {
+        data.frame(
+          year = c("2024", "2024"),
+          area.name = c("A", "B"),
+          population = c(20, 21),
+          stringsAsFactors = FALSE
+        )
+      },
+      dims = dims
+    ),
+    "overlaps existing"
+  )
+})
