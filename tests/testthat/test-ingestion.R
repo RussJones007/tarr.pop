@@ -82,6 +82,56 @@ test_that("apply_completion_policy fills only supported missing cells", {
   expect_equal(filled$population, 0)
 })
 
+test_that("apply_completion_policy allows support-only factor levels", {
+  df <- data.frame(
+    year = factor(c("2024", "2024")),
+    area.name = factor(c("A", "B"), levels = c("A", "B")),
+    population = c(10, 11)
+  )
+
+  support <- data.frame(
+    year = factor(c("2024", "2024", "2024")),
+    area.name = c("A", "B", "C"),
+    stringsAsFactors = FALSE
+  )
+
+  out <- tarr.pop:::apply_completion_policy(
+    df,
+    dims = c("year", "area.name"),
+    policy = "zero",
+    support = support
+  )
+
+  expect_equal(nrow(out), 3L)
+  expect_true(is.factor(out$area.name))
+  expect_true("C" %in% levels(out$area.name))
+  expect_equal(out[area.name == "C"]$population, 0)
+})
+
+test_that("apply_completion_policy preserves ordered factor support order", {
+  df <- data.frame(
+    year = "2024",
+    age.char = ordered("1", levels = c("1")),
+    population = 10
+  )
+
+  support <- data.frame(
+    year = "2024",
+    age.char = ordered(c("< 1", "1", "2"), levels = c("< 1", "1", "2"))
+  )
+
+  out <- tarr.pop:::apply_completion_policy(
+    df,
+    dims = c("year", "age.char"),
+    policy = "na",
+    support = support
+  )
+
+  expect_true(is.ordered(out$age.char))
+  expect_identical(levels(out$age.char), c("< 1", "1", "2"))
+  expect_equal(nrow(out), 3L)
+})
+
 test_that("apply_completion_policy errors when support has duplicate cells", {
   df <- data.frame(
     year = c("2020", "2020"),

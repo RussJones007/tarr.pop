@@ -97,6 +97,44 @@ find_missing_population_cells <- function(df, dims, support = NULL) {
   data.table::fsetdiff(skeleton, observed)
 }
 
+align_completion_dim_types <- function(df, support, dims) {
+  for (col in dims) {
+    observed_col <- df[[col]]
+    support_col <- support[[col]]
+
+    if (is.factor(observed_col) || is.factor(support_col)) {
+      observed_levels <- if (is.factor(observed_col)) {
+        levels(observed_col)
+      } else {
+        unique(as.character(observed_col))
+      }
+      support_levels <- if (is.factor(support_col)) {
+        levels(support_col)
+      } else {
+        unique(as.character(support_col))
+      }
+      levels_col <- unique(c(support_levels, observed_levels))
+      ordered_col <- is.ordered(observed_col) || is.ordered(support_col)
+
+      df[, (col) := factor(as.character(observed_col), levels = levels_col, ordered = ordered_col)]
+      support[, (col) := factor(as.character(support_col), levels = levels_col, ordered = ordered_col)]
+      next
+    }
+
+    if (is.character(observed_col) || is.character(support_col)) {
+      df[, (col) := as.character(observed_col)]
+      support[, (col) := as.character(support_col)]
+      next
+    }
+
+    ptype <- vctrs::vec_ptype_common(observed_col, support_col)
+    df[, (col) := vctrs::vec_cast(observed_col, ptype)]
+    support[, (col) := vctrs::vec_cast(support_col, ptype)]
+  }
+
+  invisible(TRUE)
+}
+
 #' Apply structural completion policy to an ingestion table
 #'
 #' Handles sparse source tables without assuming that the valid cell space is
@@ -136,9 +174,7 @@ apply_completion_policy <- function(df,
         "Missing required support columns: {.val {paste(missing_support_cols, collapse = ', ')}}."
       )
     }
-    for (col in dims) {
-      support[, (col) := list(vctrs::vec_cast(support[[col]], df[[col]]))]
-    }
+    align_completion_dim_types(df, support, dims)
   }
   
   observed <- df

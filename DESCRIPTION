@@ -23,6 +23,7 @@ Imports:
     dplyr,
     tidyr,
     tibble,
+    vctrs,
     ivs,
     rlang,
     methods,
