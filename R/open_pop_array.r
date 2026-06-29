@@ -592,6 +592,11 @@ open_poparray <- function(series_id,
                           dataset = "cube/population",
                           data_col = NULL) {
   reg <- tarr_series_registry()
+  
+  # change to test through network simulated mounted folder
+  # reg <- reg |> 
+  #   mutate(filepath = str_replace(filepath, "/home/russ/R/Projects/Population/Cubes/base/", "/mnt/office_share/"))
+  
   row <- reg[reg$series_id == series_id, , drop = FALSE]
   if (nrow(row) != 1L) {
     stop("Unknown series_id: ", series_id)
