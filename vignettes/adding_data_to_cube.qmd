@@ -24,10 +24,10 @@ example uses the Texas Demographic Center county population estimates workflow f
 `data-raw/tdc_estimates.r`.
 
 The common use case is an annual update. For example, an existing cube may already contain TDC
-estimate years through 2023, and a new file named something like
-`2024_ASRE_Estimate_alldata.csv` has been downloaded. Rather than rebuilding the whole cube from
-all historical source files, `add_population_data()` can read only the new file, validate it against
-the existing cube, and write an updated cube with 2024 appended to the `year` dimension.
+estimate years through 2023, and a new file named something like `2024_ASRE_Estimate_alldata.csv`
+has been downloaded. Rather than rebuilding the whole cube from all historical source files,
+`add_population_data()` can read only the new file, validate it against the existing cube, and write
+an updated cube with 2024 appended to the `year` dimension.
 
 The function does not edit the HDF5 dataset in place. It creates an expanded cube, copies the
 existing cube by blocks, writes the new slice, writes updated metadata, and then replaces the source
@@ -38,12 +38,12 @@ the full old cube in memory.
 
 To add data, the user needs four things:
 
-1. An existing population cube, either as a file path or as a `series_id` known to
-   `open_poparray()`.
-2. A reader function that returns the newly downloaded source table.
-3. A transformer function that converts the source table to the same canonical dimensions as the
-   existing cube.
-4. The dimension order used by the cube.
+1.  An existing population cube, either as a file path or as a `series_id` known to
+    `open_poparray()`.
+2.  A reader function that returns the newly downloaded source table.
+3.  A transformer function that converts the source table to the same canonical dimensions as the
+    existing cube.
+4.  The dimension order used by the cube.
 
 For the TDC estimate cube, the dimensions are:
 
@@ -88,8 +88,8 @@ input_dir <- file.path(
 The reader should return only the new source data. For an annual update, this usually means changing
 the file pattern to match the newly downloaded file.
 
-The `read_tdc_estimates_raw()` function from `data-raw/tdc_estimates.r` already supports a
-`pattern` argument, so the same reader can be reused:
+The `read_tdc_estimates_raw()` function from `data-raw/tdc_estimates.r` already supports a `pattern`
+argument, so the same reader can be reused:
 
 ```{r read-2024}
 raw_2024 <- read_tdc_estimates_raw(
@@ -116,13 +116,13 @@ transformer <- transform_tdc_estimates
 
 The transformer is responsible for:
 
-- converting the wide TDC race/sex columns to long format
-- creating `race.eth` and `sex`
-- normalizing county names into `area.name`
-- normalizing age labels into `age.char`
-- removing the Texas total when the cube is county-only
-- dropping records where `population` is `NA`
-- removing physical `"All"` aggregate rows
+-   converting the wide TDC race/sex columns to long format
+-   creating `race.eth` and `sex`
+-   normalizing county names into `area.name`
+-   normalizing age labels into `age.char`
+-   removing the Texas total when the cube is county-only
+-   dropping records where `population` is `NA`
+-   removing physical `"All"` aggregate rows
 
 The last point is important. In `tarr.pop`, `"All"` is treated as a virtual aggregate. It should not
 be physically stored as a dimension label in the cube.
@@ -232,8 +232,8 @@ only when zero is a defensible structural value, not merely because a source rec
 
 When `support = NULL`, `add_population_data()` derives a support table from the existing cube. For a
 new year, that means crossing the new year label with the existing labels for all other dimensions.
-This is usually the correct behavior for annual updates, because the existing cube defines the
-valid cell space.
+This is usually the correct behavior for annual updates, because the existing cube defines the valid
+cell space.
 
 If the new source file intentionally changes the valid cell space, provide an explicit support
 table:
@@ -267,8 +267,8 @@ not require realizing the full cube.
 
 `add_population_data()` intentionally refuses some updates.
 
-It stops if the new data contain an existing `year` label. This prevents accidentally overwriting
-or duplicating a year already in the cube.
+It stops if the new data contain an existing `year` label. This prevents accidentally overwriting or
+duplicating a year already in the cube.
 
 ```{r overlap-example}
 add_population_data(
@@ -326,4 +326,3 @@ one dimension, usually `year`.
 If a new source file changes multiple dimensions at once, such as adding a new race category and a
 new year, a full rebuild may be the cleaner workflow. The cube schema is part of the data contract,
 and changing that schema should be deliberate.
-
