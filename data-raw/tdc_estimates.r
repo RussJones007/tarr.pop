@@ -5,7 +5,7 @@
 # data-raw/control_def.r so that package functions and source-data paths are available.
 # -------------------------------------------------------------------------------------->
 # Created May 14, 20026
-#library(tarr.pop)
+
 # 1. Define functions used inside other functions ---------------------------
 ## Modifies Age column names, only used in the transform function below
 process_age_char <- function(x) {
@@ -81,10 +81,12 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
     stringr::str_replace("\\.total$", ".All")
 
   data.table::setnames(df, wide_names)
-
+  
+  if(any(names(df) %in% "fips")) df[, fips := NULL]
+  
   long <- data.table::melt(
     data = df,
-    id.vars = c("year", "fips", "county", "age"),
+    id.vars = c("year", "county", "age"),
     variable.name = "race.sex",
     variable.factor = TRUE,
     value.name = "population",
@@ -92,13 +94,13 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   )
 
   long[ , c("race.eth", "sex") := data.table::tstrsplit(race.sex, split = ".", fixed = TRUE, fill = NA)
-  ][    , county   := forcats::fct_relabel(county, \(x) stringr::str_to_title(gsub(" COUNTY", "", x, ignore.case = TRUE)))
+  ][    , county   := forcats::fct_relabel(county, \(x) county_names(gsub(" COUNTY", "", x, ignore.case = TRUE)))
   ][    , county   := forcats::fct_recode(county, "Texas" = "State Of Texas")
   ][    , age      := forcats::fct_relabel(age,\(x) process_age_char(x) |> rage::as.age_group() |> as.character())
   ][    , age      := ordered(age, levels = ordered_age_levels(age))
   ][    , sex      := forcats::fct_na_value_to_level(sex, level = "All")
   ][    , race.eth := factor(race.eth)
-  ][    , c("race.sex", "fips") := NULL]
+  ][    , c("race.sex") := NULL]
 
   data.table::setnames(long, old = c("age", "county"), new = c("age.char", "area.name"))
 
@@ -197,21 +199,22 @@ age_levels <- c("< 1", "1", "10", "11", "12", "13", "14", "15", "16", "17",
   rage::as.age_group() |> 
   ordered()
 
-support_table <- expand_grid(year             = 2011:2015,
-                             area.name        = default_counties,
-                             sex              = c("male", "female"),
+support_table <- expand_grid(year             = 2011:2013,
+                             area.name        = sort_values(default_counties) |> factor(),
+                             sex              = c("male", "female") |> sort() |> factor(),
                              age.char         = age_levels,
                              race.eth         = "asisan"#,
                              #KEEP.OUT.ATTRS   = FALSE,
                              #stringsAsFactors = FALSE
 )
 
+
 cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
+# undebug(transform_tdc_estimates)
 # undebug(ingest_population)
-# undebug(apply_completion_policy)
 
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,

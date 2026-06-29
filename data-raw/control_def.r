@@ -33,6 +33,16 @@ paths <- tarr::paths
 # convenience function for sorting values for levels when making a factor
 sort_values <- compose(sort, unique)
 
+# function to handle Texas County names using a reference vector from county_fips
+county_names <- function(x) {
+  to_title <- compose(str_to_lower, str_to_title)
+  x <- to_title(x)
+  county_lookup <- set_names(names(county_fips), to_title(names(county_fips)))  
+  ndx <- match(x, names(county_lookup))
+  x[!is.na(ndx)] <- county_lookup[ndx[!is.na(ndx)]]
+  return(x)
+}
+
 # check files are in location expected relative to the package home directory
 fls <- c(
   "data-raw/pop_def.r",
