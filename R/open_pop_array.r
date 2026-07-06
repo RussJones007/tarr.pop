@@ -188,6 +188,11 @@ cube_registry_inventory <- function(root = resolve_cube_dir()) {
   )
 }
 
+.cube_registry_inventory_memoised <- memoise::memoise(
+  cube_registry_inventory,
+  cache = memoise::cache_memory()
+)
+
 read_cube_registry_cache <- function(cache_file) {
   if (is.null(cache_file) || !file.exists(cache_file)) {
     return(NULL)
@@ -402,6 +407,7 @@ parse_dim_semantics_from_meta <- function(meta, dim_order = meta$dim_order, time
 
 reset_poparray_cache <- function() {
   rm(list = ls(envir = .cube_metadata_cache, all.names = TRUE), envir = .cube_metadata_cache)
+  memoise::forget(.cube_registry_inventory_memoised)
   memoise::forget(.tarr_series_registry_memoised)
   invisible(TRUE)
 }
@@ -456,7 +462,7 @@ reset_poparray_cache <- function() {
 
 tarr_series_registry <- function(root = resolve_cube_dir()) {
   cube_dir <- normalizePath(root, winslash = "/", mustWork = TRUE)
-  inventory <- cube_registry_inventory(cube_dir)
+  inventory <- .cube_registry_inventory_memoised(cube_dir)
   .tarr_series_registry_memoised(cube_dir, inventory)
 }
 

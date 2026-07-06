@@ -128,6 +128,52 @@ test_that("subsetting to one level removes overlap risk for selected set dims", 
   expect_silent(sum(sliced))
 })
 
+test_that("sum allows multiple active set levels after named overlaps are removed", {
+  dn <- list(
+    year = "2020",
+    area.name = "A",
+    race.eth = c("All races", "Asian", "Black", "White")
+  )
+  arr <- array(
+    seq_len(prod(unname(lengths(dn)))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+  dsem <- default_dim_semantics(names(dn), "year", "area.name")
+  dsem$race.eth <- pa_update_dim_semantics(
+    dsem$race.eth,
+    partition_type = "set",
+    overlap_levels = "All races",
+    validated = TRUE
+  )
+  fp <- tempfile("active_set_levels_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = arr,
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+  dx <- HDF5Array::HDF5Array(filepath = fp, name = "cube/population")
+  dimnames(dx) <- dn
+  pa <- new_poparray(
+    x = dx,
+    dimnames_list = dn,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+
+  expect_error(sum(pa), "Unsafe reduction blocked")
+
+  filtered <- pa[, , c("Asian", "Black", "White"), drop = FALSE]
+  expect_identical(dim_semantics(filtered)$race.eth@overlap_levels, "All races")
+  expect_silent(sum(filtered))
+  expect_equal(sum(filtered), sum(as.array(filtered)))
+})
+
 test_that("dropped dimensions remove semantic entry", {
   fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
   after_dn <- fx$dn[c("year", "area.name")]
@@ -244,6 +290,50 @@ test_that("interval dimensions derive overlap risk from labels", {
 
   expect_error(sum(pa), "Unsafe reduction blocked")
   expect_silent(sum(pa[, , "0-9", drop = FALSE]))
+})
+
+test_that("sum allows multiple non-overlapping intervals after filtering", {
+  dn <- list(
+    year = "2020",
+    area.name = "A",
+    age.char = c("0-9", "5-14", "15-19", "20-24")
+  )
+  arr <- array(
+    seq_len(prod(unname(lengths(dn)))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+  dsem <- default_dim_semantics(names(dn), "year", "area.name")
+  dsem$age.char <- pa_update_dim_semantics(
+    dsem$age.char,
+    partition_type = "set",
+    validated = TRUE
+  )
+  fp <- tempfile("active_interval_levels_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = arr,
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+  dx <- HDF5Array::HDF5Array(filepath = fp, name = "cube/population")
+  dimnames(dx) <- dn
+  pa <- new_poparray(
+    x = dx,
+    dimnames_list = dn,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+
+  expect_error(sum(pa), "Unsafe reduction blocked")
+
+  filtered <- pa[, , c("15-19", "20-24"), drop = FALSE]
+  expect_silent(sum(filtered))
+  expect_equal(sum(filtered), sum(as.array(filtered)))
 })
 
 test_that("ensure_dim_semantics coerces legacy entries", {

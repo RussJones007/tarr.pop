@@ -141,9 +141,9 @@ test_that("tarr_series_registry reuses cache until file inventory changes", {
 
   local_cube_option(root)
   testthat::local_mocked_bindings(
-    read_series_row = function(path) {
+    read_series_row = function(path, info = NULL) {
       calls <<- calls + 1L
-      orig(path)
+      orig(path, info = info)
     },
     .package = "tarr.pop"
   )
@@ -184,7 +184,29 @@ test_that("tarr_series_registry memoisation avoids repeated cache reads", {
   expect_equal(cache_reads, 1L)
 })
 
-test_that("tarr_series_registry refreshes cache when a cube timestamp changes", {
+test_that("cube registry inventory is memoised until caches are reset", {
+  root <- tempfile("cube-root-")
+  base_dir <- file.path(root, "base")
+  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+
+  first <- file.path(base_dir, "first.h5")
+  second <- file.path(base_dir, "second.h5")
+  expect_true(file.create(first))
+
+  tarr.pop:::reset_poparray_cache()
+  inventory1 <- tarr.pop:::.cube_registry_inventory_memoised(root)
+  expect_true(file.create(second))
+  inventory2 <- tarr.pop:::.cube_registry_inventory_memoised(root)
+
+  expect_equal(inventory2, inventory1)
+
+  tarr.pop:::reset_poparray_cache()
+  inventory3 <- tarr.pop:::.cube_registry_inventory_memoised(root)
+  expect_equal(nrow(inventory3), 2L)
+  expect_true(normalizePath(second, winslash = "/", mustWork = TRUE) %in% inventory3$filepath)
+})
+
+test_that("tarr_series_registry refreshes after a cube timestamp changes and cache is reset", {
   root <- tempfile("cube-root-")
   base_dir <- file.path(root, "base")
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
@@ -198,9 +220,9 @@ test_that("tarr_series_registry refreshes cache when a cube timestamp changes", 
 
   local_cube_option(root)
   testthat::local_mocked_bindings(
-    read_series_row = function(path) {
+    read_series_row = function(path, info = NULL) {
       calls <<- calls + 1L
-      orig(path)
+      orig(path, info = info)
     },
     .package = "tarr.pop"
   )
@@ -208,6 +230,7 @@ test_that("tarr_series_registry refreshes cache when a cube timestamp changes", 
   tarr.pop:::tarr_series_registry()
   Sys.sleep(1)
   Sys.setFileTime(dst, Sys.time() + 2)
+  tarr.pop:::reset_poparray_cache()
   tarr.pop:::tarr_series_registry()
 
   expect_equal(calls, 2L)

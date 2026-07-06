@@ -32,7 +32,7 @@ pa_dim_has_overlap_risk <- function(sem, labels) {
     return(FALSE)
   }
 
-  labs <- as.character(labels)
+  labs <- unique(as.character(labels))
   if (length(labs) <= 1L) {
     return(FALSE)
   }
@@ -42,7 +42,8 @@ pa_dim_has_overlap_risk <- function(sem, labels) {
   }
 
   if (length(sem@overlap_levels) > 0L) {
-    return(any(labs %in% sem@overlap_levels))
+    active_overlap_levels <- intersect(labs, as.character(sem@overlap_levels))
+    return(length(active_overlap_levels) > 0L)
   }
 
   TRUE
