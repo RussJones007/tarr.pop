@@ -1,7 +1,7 @@
 Package: tarr.pop
 Type: Package
 Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
-Version: 0.0.0.9214
+Version: 0.0.0.9215
 Description: Popuation figures and functions to retrive subsets of the data.  
     Contains population figures for Texas,  Tarrant county,  comparable 
     large counties, and counties in the metroplex. Data sources include
@@ -11,7 +11,6 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Authors@R: 
     person(given = "Russell", family = "Jones",  role = c("aut", "cre"), email = "RussJones007@gmail.com")
 Depends: 
@@ -51,3 +50,4 @@ URL: https://github.com/RussJones007/tarr.pop
 BugReports: https://github.com/RussJones007/tarr.pop/issues
 VignetteBuilder: quarto, knitr
 SystemRequirements: Quarto (https://quarto.org)
+Config/roxygen2/version: 8.0.0

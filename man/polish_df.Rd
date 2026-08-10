@@ -6,13 +6,6 @@
 \usage{
 polish_df(df, stringsAsFactors = TRUE, time_dim = "year")
 }
-\arguments{
-\item{df}{}
-
-\item{stringsAsFactors}{}
-
-\item{time_dim}{}
-}
 \value{
 a data frame
 }

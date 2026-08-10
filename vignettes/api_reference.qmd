@@ -19,35 +19,38 @@ library(tarr.pop)
 
 This document is the long-form reference for the user-facing API. It is organized around the way
 population cubes are created, inspected, transformed, summarized, projected, and stored. Each
-section also explains how the functions are intended to be used together. 
+section also explains how the functions are intended to be used together.
 
-The package is built around delayed (lazy), dimension-aware population arrays - `poparrays`. As most of the arrays have
-three or more dimensions they are often referred to as 'cubes'. In normal use, a `poparray` should remain lazy for as
-long as possible so that filtering, grouping, and many summaries can be expressed without materializing the full cube in
-memory. When the cube is materialized, only the needed data is retrieved from the cube. This matters both for
-performance and for correctness: The package is designed to preserve dimension names, roles, and semantic metadata while
-preventing unsafe aggregations across dimensions with overlapping categories. For example, census bureau race categories
-can be overlapping with a single "race" and "race in combination" like "Asian" and "Asian or in combination" where you would
-not not want to naively `sum()` across as totals would include duplicates.
+The package is built around delayed (lazy), dimension-aware population arrays - `poparrays`. As most
+of the arrays have three or more dimensions they are often referred to as 'cubes'. In normal use, a
+`poparray` should remain lazy for as long as possible so that filtering, grouping, and many
+summaries can be expressed without materializing the full cube in memory. When the cube is
+materialized, only the needed data is retrieved from the cube. This matters both for performance and
+for correctness: The package is designed to preserve dimension names, roles, and semantic metadata
+while preventing unsafe aggregations across dimensions with overlapping categories. For example,
+census bureau race categories can be overlapping with a single "race" and "race in combination" like
+"Asian" and "Asian or in combination" where you would not not want to naively `sum()` across as
+totals would include duplicates.
 
-Two ideas appear throughout this reference: 
+Two ideas appear throughout this reference:
 
-1. A `poparray` is not just an array of numbers. It is an array plus dimensional meaning, including time, area, and category semantics. Every poparray must have at least two dimensions that encode the time and area roles. 
+1.  A `poparray` is not just an array of numbers. It is an array plus dimensional meaning, including
+    time, area, and category semantics. Every poparray must have at least two dimensions that encode
+    the time and area roles.
 
+2.  Long-table or tibble conversions are often convenient, but they are intentionally marked
+    **EAGER** because they realize cube values into a tabular structure.
 
-2. Long-table or tibble conversions are often convenient, but they are intentionally marked **EAGER** because they
-realize cube values into a tabular structure.
+## Arrays, Data Frames, Lazy Work, and Eager Work
 
-## Arrays, Data Frames, Lazy Work, and Eager Work 
+Many R users spend most of their time with data frames, so it is worth being explicit about how an
+array-based workflow differs. A data frame is organized as rows and columns. Each row is usually
+treated as one observation, and each column is treated as one variable. That is an excellent
+general-purpose structure, but it is not always the most natural structure for population data.
 
-Many R users spend most of their time with data frames, so it is worth being explicit about how an array-based workflow
-differs. A data frame is organized as rows and columns. Each row is usually treated as one observation, and each column
-is treated as one variable. That is an excellent general-purpose structure, but it is not always the most natural
-structure for population data. 
-
-Population data is often defined by several dimensions at once: year, area, age, sex, race, and ethnicity are all part
-of what a value means. In a data frame, that multi-dimensional structure is present, but it is implicit. In an array,
-the structure is explicit. 
+Population data is often defined by several dimensions at once: year, area, age, sex, race, and
+ethnicity are all part of what a value means. In a data frame, that multi-dimensional structure is
+present, but it is implicit. In an array, the structure is explicit.
 
 One way to picture the difference is this:
 
@@ -83,14 +86,17 @@ columns, however those labels are not repaeted, rather named only once. Each cel
 addressed by its position on every dimension at once.
 ```
 
-The most important conceptual shift from data frames to arrays is this: arrays do not start from rows.
-They start from dimensions. That means the structure of the data is not reconstructed from repeated
-columns each time you work with it. The structure is already built into the object. Another 
-important difference betwewn the two is that arrays are composed one of one data type - logical, integer, double, or character whereas 
+The most important conceptual shift from data frames to arrays is this: arrays do not start from
+rows. They start from dimensions. That means the structure of the data is not reconstructed from
+repeated columns each time you work with it. The structure is already built into the object. Another
+important difference betwewn the two is that arrays are composed one of one data type - logical,
+integer, double, or character whereas
 
 This matters for both correctness and efficiency. In a data frame, each row repeats the labels
 needed to identify the cell: the year value appears again and again, the area name appears again and
-again, etcera. In an array, those labels are stored once per dimension and the values live in the multi-dimensional grid. That is much more compact, especially when the same categories repeat across many combinations.
+again, etcera. In an array, those labels are stored once per dimension and the values live in the
+multi-dimensional grid. That is much more compact, especially when the same categories repeat across
+many combinations.
 
 Another way to picture the memory difference is:
 
@@ -162,9 +168,9 @@ Most workflows follow a common pattern:
 4.  Compute summaries or create projections.
 5.  Convert to a data frame or tibble only when tabular output is actually needed.
 
-The package design tries to prevent common mistakes. For example, age is treated as interval data rather than plain
-strings, and grouping/collapse operations are expected to respect semantic safety rather than summing across overlapping
-labels by accident. 
+The package design tries to prevent common mistakes. For example, age is treated as interval data
+rather than plain strings, and grouping/collapse operations are expected to respect semantic safety
+rather than summing across overlapping labels by accident.
 
 ```{r open_inspect}
 
@@ -190,7 +196,7 @@ introduces a second class, `poparray_projection`, which keeps projected values a
 uncertainty in a structured form.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `new_poparray()` | Construct a `poparray` from an HDF5-backed delayed array. | `poparray` |
 | `as.poparray()` | Coerce supported objects to `poparray`. | `poparray` |
 | `is.poparray()` | Test whether an object is a `poparray`. | logical / `poparray` |
@@ -208,7 +214,7 @@ usually the first thing to inspect when you are trying to understand a cube, ver
 script, or document how downstream code interprets each dimension.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `time_role()` | Get the time dimension name. | `poparray` |
 | `area_role()` | Get the area dimension name. | `poparray` |
 | `data_col()` | Get the value-column name used for tabular coercion. | `poparray`, `poparray_projection` |
@@ -234,13 +240,13 @@ get_source(census_est)
 
 ```
 
-
 ## Dimension Label/Cateogry Accessors
 
 Label accessors provide a readable way to inspect valid values along standard dimensions such as
-year, area, age, sex, race, and ethnicity. They are plural forms of the actual dimension  name. 
-The accessors are only valid if the cube actually has a dimension name that matches. 
-They are useful both in interactive analysis and in code that needs to validate user choices before subsetting or regrouping.  
+year, area, age, sex, race, and ethnicity. They are plural forms of the actual dimension name. The
+accessors are only valid if the cube actually has a dimension name that matches. They are useful
+both in interactive analysis and in code that needs to validate user choices before subsetting or
+regrouping.
 
 | Function        | Purpose                              | Object Class           |
 |-----------------|--------------------------------------|------------------------|
@@ -267,7 +273,6 @@ areas(census_est) |> head()
 years(census_est)
 ```
 
-
 ## Filtering and Subsetting
 
 Filtering narrows a cube by label while preserving the dimensional structure that remains. In normal
@@ -275,7 +280,7 @@ workflows, this should stay lazy: the goal is to describe the slice you want, no
 materialize it.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `filter.poparray()` | Restrict dimensions by label predicates without materializing data. | `poparray` |
 | `%between%` | Range helper for ordered dimension filtering. | predicate helper |
 | `split.poparray()` | Split a cube into slices by one dimension. | `poparray` |
@@ -304,17 +309,16 @@ years(tarrant_est)
 
 ```
 
-
 ## Grouped Aggregation
 
 Aggregation is where semantic errors become easy to make, so the grouped aggregation API is
 deliberately explicit. These functions are meant to collapse a dimension category/labels into groups
 while checking that the operation is meaningful.
 
-| Function         | Purpose                                                                 | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
-| `collapse_dim()` | Collapse one dimension into group with semantic safety checks. |
-| `group_ages()`   | Age-specific grouped collapse built on `collapse_dim()`.       |
+| Function         | Purpose                                                        | Object Class |
+|------------------|----------------------------------------------------------------|--------------|
+| `collapse_dim()` | Collapse one dimension into group with semantic safety checks. |              |
+| `group_ages()`   | Age-specific grouped collapse built on `collapse_dim()`.       |              |
 
 `collapse_dim()` is the general tool for regrouping labels. `group_ages()` is the specialized helper
 for age intervals, where overlap and ordering matter especially strongly. These functions are
@@ -332,7 +336,7 @@ other representations. The distinction to keep in mind is that many summaries ca
 block-wise, while tabular coercion is usually **EAGER**.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `summary.poparray()` | Return summary statistics for a `poparray`. | `poparray` |
 | `as.data.frame.poparray()` | Convert a `poparray` to a long data frame. **EAGER**. | `poparray` |
 | `as_tibble.poparray()` | Convert a `poparray` to a tibble. **EAGER**. | `poparray` |
@@ -362,7 +366,7 @@ values and associated uncertainty. This allows projections to be stored, inspect
 plotted through a consistent interface.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `project()` | Build a projection from a `poparray`. | `poparray` -\> `poparray_projection` |
 | `projection()` | Extract projected values. | `poparray_projection` |
 | `std_error()` | Extract standard errors. | `poparray_projection` |
@@ -416,7 +420,7 @@ These functions are intended for elevated metadata administration. Write/edit op
 `options(tarr.pop.metadata_role = "admin")` or `Sys.setenv(TARR_POP_METADATA_ROLE = "admin")`.
 
 | Function | Purpose | Object Class |
-|---------------------------------|---------------------------------|---------------------------------|
+|----|----|----|
 | `dim_semantics()` | Read or write `dim_semantics` metadata for a `poparray` or cube file. | poparray or cube metadata |
 | `roles()` | Read or write role metadata for a `poparray` or cube file. | poparray or cube metadata |
 | `source_meta()` | Read or write source/provenance metadata for a `poparray` or cube file. | poparray or cube metadata |

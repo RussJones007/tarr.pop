@@ -1,6 +1,8 @@
 ---
 title: "Creating a Population Cube"
 format: html
+execute:
+  cache: true
 vignette: >
   %\VignetteIndexEntry{Creating a Population Cube}
   %\VignetteEngine{quarto::html}

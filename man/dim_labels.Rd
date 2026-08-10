@@ -33,7 +33,7 @@ years(arr, ...)
 \item{dimname}{the name of the dimension to get the labels return}
 
 \item{remove}{is a character vector which will be removed when returning the labels for a dimension.
-Alternatively this can be a regex expression created by the \code{\link[stringr:modifiers]{stringr::regex()}} function}
+Alternatively this can be a regex expression created by the \code{\link[stringr:regex]{stringr::regex()}} function}
 
 \item{...}{used by the wrapper functions to pass arguments to the dim_labels() function.}
 

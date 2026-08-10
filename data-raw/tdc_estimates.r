@@ -203,7 +203,7 @@ support_table <- expand_grid(year             = 2011:2013,
                              area.name        = sort_values(default_counties) |> factor(),
                              sex              = c("male", "female") |> sort() |> factor(),
                              age.char         = age_levels,
-                             race.eth         = "asisan"#,
+                             race.eth         = "asian"#,
                              #KEEP.OUT.ATTRS   = FALSE,
                              #stringsAsFactors = FALSE
 )
@@ -214,7 +214,9 @@ tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
 # undebug(transform_tdc_estimates)
-# undebug(ingest_population)
+#undebug(ingest_population)
+#undebug(validate_population_df)
+#debug(df_2_array)
 
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
@@ -240,3 +242,4 @@ tarr.pop::ingest_population(
 )
 
 
+rm(pa)

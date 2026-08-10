@@ -1,6 +1,8 @@
 ---
 title: "Introduction to tarr.pop"
 format: html
+execute:
+  cache: true
 vignette: >
   %\VignetteIndexEntry{"Introduction to tarr.pop"}
   %\VignetteEngine{quarto::html}

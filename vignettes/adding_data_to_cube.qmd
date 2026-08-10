@@ -1,6 +1,8 @@
 ---
 title: "Adding Data to an Existing Population Cube"
 format: html
+execute:
+  cache: true
 vignette: >
   %\VignetteIndexEntry{Adding Data to an Existing Population Cube}
   %\VignetteEngine{quarto::html}

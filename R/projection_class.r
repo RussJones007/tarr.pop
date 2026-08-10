@@ -998,7 +998,6 @@ as.data.frame.poparray_projection <- function(x,
                                               include_confidence = FALSE,
                                               bytes_threshold = 40e6) {
   
-  browser()
   out <- projection_to_df(
     x,
     include_level = include_level,

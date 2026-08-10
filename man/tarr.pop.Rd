@@ -16,7 +16,7 @@ important semantic information about each dimension (e.g., whether categories ar
 This allows for safe aggregation, filtering, and transformation of population data while maintaining reproducibility
 and interpretability.
 
-Population data are stored using  \link[DelayedArray:DelayedArray-class]{DelayedArray::DelayedArray} and \link[HDF5Array:HDF5Array-class]{HDF5Array::HDF5Array} disk-backed arrays, allowing users to work with
+Population data are stored using  \link[DelayedArray:DelayedArray]{DelayedArray} and \link[HDF5Array:HDF5Array]{HDF5Array} disk-backed arrays, allowing users to work with
 large data sets that exceed available memory. Operations such as filtering, sub-setting, and projection are performed
 lazily, minimizing memory usage and improving performance by avoiding unnecessary data realization.
 
