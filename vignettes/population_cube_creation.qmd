@@ -3,12 +3,11 @@ title: "Creating a Population Cube"
 format: html
 execute:
   cache: true
+  eval: false
 vignette: >
   %\VignetteIndexEntry{Creating a Population Cube}
   %\VignetteEngine{quarto::html}
   %\VignetteEncoding{UTF-8}
-execute:
-  eval: false
 editor:
   markdown:
     wrap: 100

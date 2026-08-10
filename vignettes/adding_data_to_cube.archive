@@ -7,8 +7,6 @@ vignette: >
   %\VignetteIndexEntry{Adding Data to an Existing Population Cube}
   %\VignetteEngine{quarto::html}
   %\VignetteEncoding{UTF-8}
-execute:
-  eval: false
 editor:
   markdown:
     wrap: 100
