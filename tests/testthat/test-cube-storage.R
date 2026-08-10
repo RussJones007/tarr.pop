@@ -283,6 +283,46 @@ test_that("reset_poparray_cache clears metadata and registry memoisation", {
   expect_equal(registry_reads, 2L)
 })
 
+test_that("metadata cache hits avoid repeated file freshness checks", {
+  path <- system.file("extdata", "seer_estimates_county_1y.h5", package = "tarr.pop")
+  expect_true(nzchar(path))
+
+  metadata_reads <- 0L
+  key_reads <- 0L
+  orig_meta <- tarr.pop:::get_cube_metadata
+  orig_key <- tarr.pop:::cube_metadata_cache_key
+
+  tarr.pop:::reset_poparray_cache()
+  testthat::local_mocked_bindings(
+    get_cube_metadata = function(path) {
+      metadata_reads <<- metadata_reads + 1L
+      orig_meta(path)
+    },
+    cube_metadata_cache_key = function(path) {
+      key_reads <<- key_reads + 1L
+      orig_key(path)
+    },
+    .package = "tarr.pop"
+  )
+
+  tarr.pop:::get_cube_metadata_cached(path)
+  tarr.pop:::get_cube_metadata_cached(path)
+
+  expect_equal(metadata_reads, 1L)
+  expect_equal(key_reads, 1L)
+
+  tarr.pop:::get_cube_metadata_cached(path, refresh = TRUE)
+
+  expect_equal(metadata_reads, 1L)
+  expect_equal(key_reads, 2L)
+
+  tarr.pop:::reset_poparray_cache()
+  tarr.pop:::get_cube_metadata_cached(path)
+
+  expect_equal(metadata_reads, 2L)
+  expect_equal(key_reads, 3L)
+})
+
 test_that("startup setup is non-fatal when cube folder is unknown", {
   cfg_dir <- tempfile("cube-config-")
 

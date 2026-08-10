@@ -253,6 +253,11 @@ cube_registry_cache_current <- function(cache, inventory) {
 .cube_metadata_cache <- new.env(parent = emptyenv())
 .tarr_series_registry_cache <- memoise::cache_memory()
 
+cube_metadata_path_cache_key <- function(path) {
+  checkmate::assert_string(path, min.chars = 1)
+  paste("path", enc2utf8(as.character(path)), sep = "::")
+}
+
 cube_metadata_cache_key <- function(path) {
   info <- file.info(path)
   if (!isTRUE(file.exists(path)) || is.na(info$mtime[[1L]])) {
@@ -307,15 +312,30 @@ get_cube_metadata <- function(path) {
   meta
 }
 
-get_cube_metadata_cached <- function(path) {
-  key <- cube_metadata_cache_key(path)
+assign_cube_metadata_cache <- function(meta, keys = character()) {
+  keys <- unique(c(keys, cube_metadata_path_cache_key(meta$path)))
+  for (key in keys) {
+    assign(key, meta, envir = .cube_metadata_cache)
+  }
+  invisible(meta)
+}
 
-  if (exists(key, envir = .cube_metadata_cache, inherits = FALSE)) {
-    return(get(key, envir = .cube_metadata_cache, inherits = FALSE))
+get_cube_metadata_cached <- function(path, refresh = FALSE) {
+  path_key <- cube_metadata_path_cache_key(path)
+
+  if (!isTRUE(refresh) && exists(path_key, envir = .cube_metadata_cache, inherits = FALSE)) {
+    return(get(path_key, envir = .cube_metadata_cache, inherits = FALSE))
+  }
+
+  mtime_key <- cube_metadata_cache_key(path)
+  if (exists(mtime_key, envir = .cube_metadata_cache, inherits = FALSE)) {
+    meta <- get(mtime_key, envir = .cube_metadata_cache, inherits = FALSE)
+    assign_cube_metadata_cache(meta, keys = c(path_key, mtime_key))
+    return(meta)
   }
 
   meta <- get_cube_metadata(path)
-  assign(key, meta, envir = .cube_metadata_cache)
+  assign_cube_metadata_cache(meta, keys = c(path_key, mtime_key))
   meta
 }
 
