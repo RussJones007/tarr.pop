@@ -24,5 +24,6 @@ Reads the configured cube path from, in order:
 \details{
 In interactive sessions, when no configuration exists yet, the user is
 prompted for the cube folder and the choice is persisted. In non-interactive
-sessions, an error is thrown so initial setup happens explicitly.
+sessions, an error is thrown when a cube path is required so initial setup
+happens explicitly.
 }

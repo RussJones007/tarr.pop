@@ -44,12 +44,13 @@ tarr_pop_startup_setup <- function(interactive_session = interactive()) {
   path <- configured_cube_path()
   if (is.null(path) || !nzchar(path)) {
     if (!isTRUE(interactive_session)) {
-      cli::cli_abort(c(
-        "Cube folder is not configured.",
-        "i" = "Load {.pkg tarr.pop} interactively for initial cube setup."
-      ))
+      return(invisible(FALSE))
     }
+
     path <- prompt_for_cube_path()
+    if (is.null(path) || !nzchar(path)) {
+      return(invisible(FALSE))
+    }
   }
 
   init_cubes(path)

@@ -55,7 +55,7 @@ test_that("cube_path errors in non-interactive sessions when cube folder is unkn
     .package = "tarr.pop"
   )
 
-  expect_error(cube_path(), "Load.*interactive session")
+  expect_error(cube_path(), "set_cube_path.*init_cubes")
 })
 
 test_that("init_cubes creates expected storage subdirectories", {
@@ -283,7 +283,7 @@ test_that("reset_poparray_cache clears metadata and registry memoisation", {
   expect_equal(registry_reads, 2L)
 })
 
-test_that("startup setup errors non-interactively when cube folder is unknown", {
+test_that("startup setup is non-fatal when cube folder is unknown", {
   cfg_dir <- tempfile("cube-config-")
 
   local_cube_option(NULL)
@@ -294,10 +294,7 @@ test_that("startup setup errors non-interactively when cube folder is unknown", 
     .package = "tarr.pop"
   )
 
-  expect_error(
-    tarr.pop:::tarr_pop_startup_setup(interactive_session = FALSE),
-    "interactive.*cube setup"
-  )
+  expect_false(tarr.pop:::tarr_pop_startup_setup(interactive_session = FALSE))
 })
 
 test_that("startup setup prompts interactively and initializes cubes", {

@@ -83,7 +83,8 @@ prompt_for_cube_path <- function(default = tarr_pop_default_cube_path()) {
 #'
 #' In interactive sessions, when no configuration exists yet, the user is
 #' prompted for the cube folder and the choice is persisted. In non-interactive
-#' sessions, an error is thrown so initial setup happens explicitly.
+#' sessions, an error is thrown when a cube path is required so initial setup
+#' happens explicitly.
 #'
 #' @param create Logical; create the resolved directory if needed.
 #' @param legacy_ok Deprecated compatibility argument; ignored.
@@ -98,7 +99,7 @@ cube_path <- function(create = FALSE, legacy_ok = TRUE) {
     if (is.null(path) || !nzchar(path)) {
       cli::cli_abort(c(
         "Cube folder is not configured.",
-        "i" = "Load {.pkg tarr.pop} in an interactive session for initial setup."
+        "i" = "Call {.fn set_cube_path} or {.fn init_cubes} with the folder that stores population cubes."
       ))
     }
     path <- set_cube_path(path, create = create, persist = TRUE)
