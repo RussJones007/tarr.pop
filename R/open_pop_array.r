@@ -224,11 +224,14 @@ read_cube_registry_cache <- function(cache_file) {
     return(NULL)
   }
 
-  req <- c("filepath", "filename", "file_created", "file_modified")
+  req <- c("series_id", "filepath", "filename")
   if (!all(req %in% names(out))) {
     return(NULL)
   }
 
+  out$series_id <- as.character(out$series_id)
+  out$filepath <- as.character(out$filepath)
+  out$filename <- as.character(out$filename)
   out
 }
 
@@ -242,35 +245,8 @@ write_cube_registry_cache <- function(registry, cache_file) {
   invisible(registry)
 }
 
-cube_registry_cache_current <- function(cache, inventory) {
-  if (!is.data.frame(cache) || !is.data.frame(inventory)) {
-    return(FALSE)
-  }
-
-  if (nrow(cache) != nrow(inventory)) {
-    return(FALSE)
-  }
-
-  cols <- c("filepath", "filename", "file_created", "file_modified")
-  if (!all(cols %in% names(cache))) {
-    return(FALSE)
-  }
-
-  identical(as.character(cache$filepath), as.character(inventory$filepath)) &&
-    identical(as.character(cache$filename), as.character(inventory$filename)) &&
-    identical(as.numeric(cache$file_created), as.numeric(inventory$file_created)) &&
-    identical(as.numeric(cache$file_modified), as.numeric(inventory$file_modified))
-}
-
-#' Series registry read from migrated HDF5 metadata
-#'
-#' Scans the cube `base/` directory recursively for HDF5 files and builds the
-#' registry from canonical `cube/metadata/*` fields in migrated files. When a
-#' cache file is available under `cache/cube_registry.rds`, it is reused until
-#' the file inventory changes.
-#'
-#' @return data.frame of available series.
-#' @keywords internal
+# Series registry lookup reads the lightweight persisted index only. Rebuilding
+# the index is explicit through rebuild_poparray_registry().
 .cube_metadata_cache <- new.env(parent = emptyenv())
 .tarr_series_registry_cache <- memoise::cache_memory()
 
@@ -455,16 +431,33 @@ reset_poparray_cache <- function() {
   invisible(TRUE)
 }
 
-.tarr_series_registry_impl <- function(cube_dir, inventory) {
+.tarr_series_registry_impl <- function(cube_dir) {
   cache_file <- cube_registry_cache_file(cube_dir)
-
-  if (nrow(inventory) == 0L) {
-    return(data.frame(stringsAsFactors = FALSE))
+  reg <- read_cube_registry_cache(cache_file)
+  if (is.null(reg)) {
+    cli::cli_abort(c(
+      "No poparray registry was found for cube storage.",
+      "i" = "Call {.fn rebuild_poparray_registry} after adding, removing, or changing cubes.",
+      "i" = "Call {.fn init_cubes} to initialize a new cube storage root."
+    ))
   }
 
-  cache <- read_cube_registry_cache(cache_file)
-  if (cube_registry_cache_current(cache, inventory)) {
-    return(cache)
+  if (anyNA(reg$series_id) || any(!nzchar(reg$series_id))) {
+    cli::cli_abort("The poparray registry contains blank or missing {.field series_id} values.")
+  }
+
+  dup <- unique(reg$series_id[duplicated(reg$series_id)])
+  if (length(dup) > 0L) {
+    cli::cli_abort("Duplicate {.field series_id} values in poparray registry: {.val {dup}}.")
+  }
+
+  reg
+}
+
+build_poparray_registry <- function(cube_dir, inventory = cube_registry_inventory(cube_dir)) {
+  checkmate::assert_string(cube_dir, min.chars = 1)
+  if (nrow(inventory) == 0L) {
+    return(data.frame(stringsAsFactors = FALSE))
   }
 
   scans <- lapply(inventory$filepath, function(path) {
@@ -480,7 +473,7 @@ reset_poparray_cache <- function() {
   inventory <- inventory[keep, , drop = FALSE]
   scans <- scans[keep]
   if (length(scans) == 0L) {
-    stop("No migrated cubes with /cube/metadata were found in cube storage.")
+    cli::cli_abort("No migrated cubes with /cube/metadata were found in cube storage.")
   }
 
   rows <- lapply(scans, function(scan) read_series_row(scan$path, info = scan$info))
@@ -494,8 +487,33 @@ reset_poparray_cache <- function() {
     reg <- reg[order(reg$series_id), , drop = FALSE]
   }
   rownames(reg) <- NULL
-  write_cube_registry_cache(reg, cache_file)
   reg
+}
+
+resolve_registry_filepath <- function(row, root = resolve_cube_dir()) {
+  if (!is.data.frame(row) || nrow(row) != 1L) {
+    cli::cli_abort("{.arg row} must be one registry row.")
+  }
+
+  candidates <- character()
+  if ("filepath" %in% names(row) && nzchar(as.character(row$filepath[[1L]]))) {
+    candidates <- c(candidates, as.character(row$filepath[[1L]]))
+  }
+  if ("filename" %in% names(row) && nzchar(as.character(row$filename[[1L]]))) {
+    candidates <- c(candidates, file.path(resolve_cube_base_dir(root), as.character(row$filename[[1L]])))
+  }
+
+  candidates <- unique(candidates)
+  found <- candidates[file.exists(candidates)]
+  if (length(found) == 0L) {
+    sid <- if ("series_id" %in% names(row)) as.character(row$series_id[[1L]]) else NA_character_
+    cli::cli_abort(c(
+      "The HDF5 file registered for series {.val {sid}} was not found.",
+      "i" = "Call {.fn rebuild_poparray_registry} after moving, removing, or replacing cube files."
+    ))
+  }
+
+  normalizePath(found[[1L]], winslash = "/", mustWork = TRUE)
 }
 
 .tarr_series_registry_memoised <- memoise::memoise(
@@ -505,8 +523,30 @@ reset_poparray_cache <- function() {
 
 tarr_series_registry <- function(root = resolve_cube_dir()) {
   cube_dir <- normalizePath(root, winslash = "/", mustWork = TRUE)
-  inventory <- .cube_registry_inventory_memoised(cube_dir)
-  .tarr_series_registry_memoised(cube_dir, inventory)
+  .tarr_series_registry_memoised(cube_dir)
+}
+
+#' Rebuild the lightweight poparray registry
+#'
+#' Scans the active cube storage `base/` directory for HDF5 cubes, reads only
+#' the metadata needed to identify and locate each series, and writes the
+#' lightweight registry to `cache/cube_registry.rds`.
+#'
+#' The authoritative dimensional metadata and `DimSemantics` remain inside each
+#' HDF5 cube and are not duplicated into the registry.
+#'
+#' @param root Cube storage root. Defaults to the active [cube_path()].
+#'
+#' @return A data.frame with one row per registered series.
+#' @export
+rebuild_poparray_registry <- function(root = resolve_cube_dir()) {
+  cube_dir <- normalizePath(root, winslash = "/", mustWork = TRUE)
+  inventory <- cube_registry_inventory(cube_dir)
+  reg <- build_poparray_registry(cube_dir, inventory = inventory)
+  write_cube_registry_cache(reg, cube_registry_cache_file(cube_dir, create = TRUE))
+  memoise::forget(.cube_registry_inventory_memoised)
+  memoise::forget(.tarr_series_registry_memoised)
+  reg
 }
 
 #' Read dimnames metadata from migrated cube
@@ -652,18 +692,23 @@ open_tarr_pop <- function(...) {
 open_poparray <- function(series_id,
                           dataset = "cube/population",
                           data_col = NULL) {
-  reg <- tarr_series_registry()
+  checkmate::assert_string(series_id, min.chars = 1)
+  root <- resolve_cube_dir()
+  reg <- tarr_series_registry(root)
   
   # change to test through network simulated mounted folder
   # reg <- reg |> 
   #   mutate(filepath = str_replace(filepath, "/home/russ/R/Projects/Population/Cubes/base/", "/mnt/office_share/"))
   
   row <- reg[reg$series_id == series_id, , drop = FALSE]
-  if (nrow(row) != 1L) {
-    stop("Unknown series_id: ", series_id)
+  if (nrow(row) == 0L) {
+    cli::cli_abort("Unknown {.field series_id}: {.val {series_id}}.")
+  }
+  if (nrow(row) > 1L) {
+    cli::cli_abort("Duplicate registry rows found for {.field series_id}: {.val {series_id}}.")
   }
 
-  path <- row$filepath[[1L]]
+  path <- resolve_registry_filepath(row, root = root)
 
   meta <- get_cube_metadata_cached(path)
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)

@@ -194,7 +194,7 @@ init_cubes <- function(path = cube_path(), persist = TRUE) {
   invisible(vapply(dirs, dir.create, logical(1), recursive = TRUE, showWarnings = FALSE))
 
   copy_bundled_cubes_to_base(root)
-  tarr_series_registry()
+  rebuild_poparray_registry(root)
 
   invisible(root)
 }
@@ -260,16 +260,13 @@ resolve_cube_base_dir <- function(root = resolve_cube_dir()) {
   normalizePath(root, winslash = "/", mustWork = TRUE)
 }
 
-cube_registry_cache_file <- function(root = resolve_cube_dir()) {
+cube_registry_cache_file <- function(root = resolve_cube_dir(), create = FALSE) {
   checkmate::assert_string(root, min.chars = 1)
 
-  base_dir <- tarr_pop_cube_base_dir(root)
-  if (!dir.exists(base_dir)) {
-    return(NULL)
-  }
-
   cache_dir <- tarr_pop_cube_cache_dir(root)
-  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  if (isTRUE(create)) {
+    dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  }
   normalizePath(
     tarr_pop_cube_registry_cache_file(root),
     winslash = "/",

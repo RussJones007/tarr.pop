@@ -9,6 +9,36 @@ test_that("read_series_row includes discovered filepath and series_id", {
   expect_equal(normalizePath(row$filepath[[1L]], winslash = "/", mustWork = TRUE), normalizePath(path, winslash = "/", mustWork = TRUE))
 })
 
+write_open_test_cube <- function(root, series_id) {
+  base_dir <- file.path(root, "base")
+  dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+  dn <- list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B"),
+    sex = c("Female", "Male")
+  )
+  fp <- file.path(base_dir, paste0(series_id, ".h5"))
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(dn)))), dim = unname(lengths(dn)), dimnames = dn),
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "year", "area.name"),
+    series_id = series_id,
+    geo = "county",
+    extendable_year = "TRUE",
+    source = list(
+      note = series_id,
+      population_type = "estimate",
+      source = "unit-test",
+      updated = "2026-08-20"
+    )
+  )
+  normalizePath(fp, winslash = "/", mustWork = TRUE)
+}
+
 test_that("read_series_row can reuse precomputed h5ls info", {
   path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(path))
@@ -82,9 +112,10 @@ test_that("dataset and group existence checks are pure inventory checks", {
 test_that("open_poparray uses discovered filepath from canonical scan row", {
   path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(path))
+  withr::local_options(list(tarr.pop.cube_path = tempdir()))
 
   testthat::local_mocked_bindings(
-    tarr_series_registry = function() {
+    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
       data.frame(
         series_id = "mock_series",
         filename = "stale_name.h5",
@@ -136,7 +167,7 @@ test_that("open_poparray preserves stored data_col when not overridden", {
   )
 
   testthat::local_mocked_bindings(
-    tarr_series_registry = function() {
+    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
       data.frame(
         series_id = "custom_data_col_series",
         filename = basename(tmp),
@@ -146,9 +177,63 @@ test_that("open_poparray preserves stored data_col when not overridden", {
     },
     .package = "tarr.pop"
   )
+  withr::local_options(list(tarr.pop.cube_path = tempdir()))
 
   out <- open_poparray("custom_data_col_series")
   expect_equal(data_col(out), "custom_population")
+})
+
+test_that("open_poparray looks up a known series from persisted registry", {
+  root <- tempfile("open-registry-known-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  write_open_test_cube(root, "known_series")
+  rebuild_poparray_registry(root)
+
+  out <- open_poparray("known_series")
+
+  expect_s4_class(out, "poparray")
+  expect_equal(data_col(out), "population")
+})
+
+test_that("open_poparray errors for unknown series_id", {
+  root <- tempfile("open-registry-unknown-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  write_open_test_cube(root, "known_series")
+  rebuild_poparray_registry(root)
+
+  expect_error(open_poparray("missing_series"), "Unknown .*series_id")
+})
+
+test_that("tarr_series_registry errors on duplicate series_id", {
+  root <- tempfile("open-registry-duplicate-")
+  dir.create(file.path(root, "cache"), recursive = TRUE, showWarnings = FALSE)
+  withr::local_options(list(tarr.pop.cube_path = root))
+  reg <- data.frame(
+    series_id = c("dupe", "dupe"),
+    filepath = c("/tmp/first.h5", "/tmp/second.h5"),
+    filename = c("first.h5", "second.h5"),
+    stringsAsFactors = FALSE
+  )
+  saveRDS(reg, file.path(root, "cache", "cube_registry.rds"))
+  reset_poparray_cache()
+
+  expect_error(tarr.pop:::tarr_series_registry(), "Duplicate .*series_id")
+})
+
+test_that("open_poparray errors when registered HDF5 file is missing", {
+  root <- tempfile("open-registry-missing-file-")
+  dir.create(file.path(root, "cache"), recursive = TRUE, showWarnings = FALSE)
+  withr::local_options(list(tarr.pop.cube_path = root))
+  reg <- data.frame(
+    series_id = "missing_file_series",
+    filepath = file.path(root, "base", "missing_file_series.h5"),
+    filename = "missing_file_series.h5",
+    stringsAsFactors = FALSE
+  )
+  saveRDS(reg, file.path(root, "cache", "cube_registry.rds"))
+  reset_poparray_cache()
+
+  expect_error(open_poparray("missing_file_series"), "HDF5 file registered")
 })
 
 test_that("open_poparray enumerates selected cube metadata hierarchy once", {
@@ -163,6 +248,7 @@ test_that("open_poparray enumerates selected cube metadata hierarchy once", {
     dimnames = dn
   )
   fp <- tempfile("open_inventory_once_", fileext = ".h5")
+  withr::local_options(list(tarr.pop.cube_path = tempdir()))
   pa_write_poparray_cube(
     x = arr,
     filepath = fp,
@@ -178,7 +264,7 @@ test_that("open_poparray enumerates selected cube metadata hierarchy once", {
   original_inventory <- tarr.pop:::h5_inventory
   reset_poparray_cache()
   testthat::local_mocked_bindings(
-    tarr_series_registry = function() {
+    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
       data.frame(
         series_id = "open_inventory_once",
         filename = basename(fp),
@@ -197,6 +283,44 @@ test_that("open_poparray enumerates selected cube metadata hierarchy once", {
 
   expect_s4_class(out, "poparray")
   expect_lte(inventory_reads, 1L)
+})
+
+test_that("open_poparray does not interrogate unrelated HDF5 cubes", {
+  root <- tempfile("open-registry-single-touch-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  selected <- write_open_test_cube(root, "selected_series")
+  unrelated <- write_open_test_cube(root, "unrelated_series")
+  rebuild_poparray_registry(root)
+  reset_poparray_cache()
+
+  touched <- character()
+  original_inventory <- tarr.pop:::h5_inventory
+  testthat::local_mocked_bindings(
+    h5_inventory = function(path) {
+      touched <<- c(touched, normalizePath(path, winslash = "/", mustWork = TRUE))
+      original_inventory(path)
+    },
+    .package = "tarr.pop"
+  )
+
+  out <- open_poparray("selected_series")
+
+  expect_s4_class(out, "poparray")
+  expect_true(selected %in% touched)
+  expect_false(unrelated %in% touched)
+})
+
+test_that("open_poparray keeps population data HDF5 DelayedArray-backed", {
+  root <- tempfile("open-registry-delayed-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  write_open_test_cube(root, "delayed_series")
+  rebuild_poparray_registry(root)
+
+  out <- open_poparray("delayed_series")
+
+  expect_s4_class(out, "poparray")
+  expect_true(methods::is(out, "DelayedArray"))
+  expect_true(tarr.pop:::is_hdf5_backed_delayed(out))
 })
 
 test_that("cached cube metadata includes dim_semantics for reuse", {

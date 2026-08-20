@@ -197,9 +197,10 @@ test_that("HDF5 round-trip preserves dim_semantics", {
 
   tmp <- tempfile("dim_semantics_roundtrip_", fileext = ".h5")
   save_poparray(pa, filepath = tmp, overwrite = TRUE, series_id = "dim_semantics_roundtrip")
+  withr::local_options(list(tarr.pop.cube_path = tempdir()))
 
   testthat::local_mocked_bindings(
-    tarr_series_registry = function() {
+    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
       data.frame(
         series_id = "dim_semantics_roundtrip",
         filename = basename(tmp),
@@ -226,9 +227,10 @@ test_that("dim semantics metadata is stable across cached and uncached opens", {
 
   tmp <- tempfile("dim_semantics_cache_", fileext = ".h5")
   save_poparray(pa, filepath = tmp, overwrite = TRUE, series_id = "dim_semantics_cache")
+  withr::local_options(list(tarr.pop.cube_path = tempdir()))
 
   testthat::local_mocked_bindings(
-    tarr_series_registry = function() {
+    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
       data.frame(
         series_id = "dim_semantics_cache",
         filename = basename(tmp),

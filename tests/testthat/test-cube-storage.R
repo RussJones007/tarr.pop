@@ -96,7 +96,7 @@ test_that("init_cubes seeds base cubes from extdata and initializes registry cac
   expect_true(nrow(reg) > 0L)
 })
 
-test_that("tarr_series_registry scans base recursively and ignores derived cubes", {
+test_that("rebuild_poparray_registry scans base recursively and ignores derived cubes", {
   root <- tempfile("cube-root-")
   base_dir <- file.path(root, "base")
   nested_base_dir <- file.path(base_dir, "nested")
@@ -119,14 +119,14 @@ test_that("tarr_series_registry scans base recursively and ignores derived cubes
 
   local_cube_option(root)
 
-  reg <- tarr.pop:::tarr_series_registry()
+  reg <- rebuild_poparray_registry(root)
 
   expect_true(all(c(dst1, dst2) %in% reg$filepath))
   expect_false(dst3 %in% reg$filepath)
   expect_true(all(file.exists(reg$filepath)))
 })
 
-test_that("tarr_series_registry reuses cache until file inventory changes", {
+test_that("tarr_series_registry reads persisted registry without rebuilding", {
   root <- tempfile("cube-root-")
   base_dir <- file.path(root, "base")
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
@@ -148,7 +148,7 @@ test_that("tarr_series_registry reuses cache until file inventory changes", {
     .package = "tarr.pop"
   )
 
-  reg1 <- tarr.pop:::tarr_series_registry()
+  reg1 <- rebuild_poparray_registry(root)
   reg2 <- tarr.pop:::tarr_series_registry()
 
   expect_true(file.exists(cache_file))
@@ -169,6 +169,7 @@ test_that("tarr_series_registry memoisation avoids repeated cache reads", {
   orig <- tarr.pop:::read_cube_registry_cache
 
   local_cube_option(root)
+  rebuild_poparray_registry(root)
   tarr.pop:::reset_poparray_cache()
   testthat::local_mocked_bindings(
     read_cube_registry_cache = function(cache_file) {
@@ -206,7 +207,7 @@ test_that("cube registry inventory is memoised until caches are reset", {
   expect_true(normalizePath(second, winslash = "/", mustWork = TRUE) %in% inventory3$filepath)
 })
 
-test_that("tarr_series_registry refreshes after a cube timestamp changes and cache is reset", {
+test_that("tarr_series_registry does not refresh changed cubes without explicit rebuild", {
   root <- tempfile("cube-root-")
   base_dir <- file.path(root, "base")
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
@@ -227,11 +228,15 @@ test_that("tarr_series_registry refreshes after a cube timestamp changes and cac
     .package = "tarr.pop"
   )
 
-  tarr.pop:::tarr_series_registry()
+  rebuild_poparray_registry(root)
   Sys.sleep(1)
   Sys.setFileTime(dst, Sys.time() + 2)
   tarr.pop:::reset_poparray_cache()
   tarr.pop:::tarr_series_registry()
+
+  expect_equal(calls, 1L)
+
+  rebuild_poparray_registry(root)
 
   expect_equal(calls, 2L)
 })
@@ -254,6 +259,7 @@ test_that("reset_poparray_cache clears metadata and registry memoisation", {
   orig_reg <- tarr.pop:::read_cube_registry_cache
 
   local_cube_option(root)
+  rebuild_poparray_registry(root)
   tarr.pop:::reset_poparray_cache()
   testthat::local_mocked_bindings(
     get_cube_metadata = function(path, info = NULL) {
