@@ -4,10 +4,12 @@
 \alias{read_roles_from_cube}
 \title{Read dimension roles metadata from migrated cube}
 \usage{
-read_roles_from_cube(path, meta = NULL)
+read_roles_from_cube(path, meta = NULL, info = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}
+
+\item{info}{Optional HDF5 inventory data frame from \code{h5_inventory()}.}
 }
 \value{
 Named list with time, area, strata.

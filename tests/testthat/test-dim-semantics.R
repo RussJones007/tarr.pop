@@ -246,6 +246,130 @@ test_that("dim semantics metadata is stable across cached and uncached opens", {
   expect_equal(dim_semantics(out_cached), dim_semantics(out_uncached))
 })
 
+test_that("read_dim_semantics_from_cube reads canonical current-schema semantics", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
+  fp <- tempfile("dim_semantics_current_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(fx$dn)))), dim = unname(lengths(fx$dn)), dimnames = fx$dn),
+    filepath = fp,
+    dimnames_list = fx$dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+
+  out <- read_dim_semantics_from_cube(
+    fp,
+    dim_order = names(fx$dn),
+    time_dim = "year",
+    area_dim = "area.name"
+  )
+
+  expect_identical(names(out), names(fx$dn))
+  expect_true(all(vapply(out, S7::S7_inherits, logical(1), class = DimSemantics)))
+  expect_identical(unname(vapply(out, function(x) x@dim_name, character(1))), names(fx$dn))
+})
+
+test_that("read_dim_semantics_from_cube errors when dim_semantics group is missing", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
+  fp <- tempfile("dim_semantics_missing_group_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(fx$dn)))), dim = unname(lengths(fx$dn)), dimnames = fx$dn),
+    filepath = fp,
+    dimnames_list = fx$dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+  rhdf5::h5delete(fp, "cube/metadata/dim_semantics")
+
+  expect_error(
+    read_dim_semantics_from_cube(fp, names(fx$dn), "year", "area.name"),
+    "cube/metadata/dim_semantics"
+  )
+})
+
+test_that("read_dim_semantics_from_cube errors when required current-schema fields are missing", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
+  fp <- tempfile("dim_semantics_missing_field_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(fx$dn)))), dim = unname(lengths(fx$dn)), dimnames = fx$dn),
+    filepath = fp,
+    dimnames_list = fx$dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+  rhdf5::h5delete(fp, "cube/metadata/dim_semantics/sex/dim_name")
+
+  expect_error(
+    read_dim_semantics_from_cube(fp, names(fx$dn), "year", "area.name"),
+    "cube/metadata/dim_semantics/sex"
+  )
+})
+
+test_that("read_dim_semantics_from_cube supports legacy class/validated semantics", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = FALSE)
+  fp <- tempfile("dim_semantics_legacy_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(fx$dn)))), dim = unname(lengths(fx$dn)), dimnames = fx$dn),
+    filepath = fp,
+    dimnames_list = fx$dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+  rhdf5::h5delete(fp, "cube/metadata/dim_semantics")
+  pa_h5_create_group(fp, "cube/metadata/dim_semantics")
+  for (nm in names(fx$dn)) {
+    base <- paste0("cube/metadata/dim_semantics/", nm)
+    pa_h5_create_group(fp, base)
+    cls <- if (nm %in% c("year", "area.name")) "partition" else "set"
+    pa_h5_write_dataset(fp, paste0(base, "/class"), cls)
+    pa_h5_write_dataset(fp, paste0(base, "/validated"), as.character(nm %in% c("year", "area.name")))
+  }
+
+  out <- read_dim_semantics_from_cube(fp, names(fx$dn), "year", "area.name")
+
+  expect_identical(names(out), names(fx$dn))
+  expect_true(pa_is_partition(out$year))
+  expect_true(pa_is_partition(out$area.name))
+  expect_true(pa_is_set(out$sex))
+})
+
+test_that("read_dim_semantics_from_cube scans HDF5 hierarchy at most once", {
+  fx <- make_dim_semantics_fixture(include_strata = TRUE, overlap_strata = TRUE)
+  fp <- tempfile("dim_semantics_scan_once_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = array(seq_len(prod(unname(lengths(fx$dn)))), dim = unname(lengths(fx$dn)), dimnames = fx$dn),
+    filepath = fp,
+    dimnames_list = fx$dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = fx$dsem
+  )
+
+  inventory_reads <- 0L
+  original_inventory <- tarr.pop:::h5_inventory
+  testthat::local_mocked_bindings(
+    h5_inventory = function(path) {
+      inventory_reads <<- inventory_reads + 1L
+      original_inventory(path)
+    },
+    .package = "tarr.pop"
+  )
+
+  out <- read_dim_semantics_from_cube(fp, names(fx$dn), "year", "area.name")
+
+  expect_identical(names(out), names(fx$dn))
+  expect_lte(inventory_reads, 1L)
+})
+
 test_that("interval dimensions derive overlap risk from labels", {
   dn <- list(
     year = c("2020", "2021"),

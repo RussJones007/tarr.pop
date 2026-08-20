@@ -256,9 +256,9 @@ test_that("reset_poparray_cache clears metadata and registry memoisation", {
   local_cube_option(root)
   tarr.pop:::reset_poparray_cache()
   testthat::local_mocked_bindings(
-    get_cube_metadata = function(path) {
+    get_cube_metadata = function(path, info = NULL) {
       metadata_reads <<- metadata_reads + 1L
-      orig_meta(path)
+      orig_meta(path, info = info)
     },
     read_cube_registry_cache = function(cache_file) {
       registry_reads <<- registry_reads + 1L
@@ -294,9 +294,9 @@ test_that("metadata cache hits avoid repeated file freshness checks", {
 
   tarr.pop:::reset_poparray_cache()
   testthat::local_mocked_bindings(
-    get_cube_metadata = function(path) {
+    get_cube_metadata = function(path, info = NULL) {
       metadata_reads <<- metadata_reads + 1L
-      orig_meta(path)
+      orig_meta(path, info = info)
     },
     cube_metadata_cache_key = function(path) {
       key_reads <<- key_reads + 1L

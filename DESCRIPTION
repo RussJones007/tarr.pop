@@ -39,7 +39,9 @@ Imports:
     Matrix,
     rage,
     yaml,
-    memoise
+    memoise,
+    rhdf5,
+    data.table
 Suggests: 
     knitr,
     rmarkdown,

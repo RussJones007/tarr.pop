@@ -13,7 +13,7 @@ test_that("read_series_row can reuse precomputed h5ls info", {
   path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(path))
 
-  info <- rhdf5::h5ls(path)
+  info <- tarr.pop:::h5_inventory(path)
   row <- tarr.pop:::read_series_row(path, info = info)
 
   expect_true("filepath" %in% names(row))
@@ -24,11 +24,59 @@ test_that("h5_has_cube_schema accepts precomputed h5ls info", {
   path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(path))
 
-  info <- rhdf5::h5ls(path)
+  info <- tarr.pop:::h5_inventory(path)
   expect_identical(
     tarr.pop:::h5_has_cube_schema(path, info = info),
     tarr.pop:::h5_has_cube_schema(path)
   )
+})
+
+test_that("dataset and group existence checks are pure inventory checks", {
+  dn <- list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B"),
+    sex = c("Female", "Male")
+  )
+  arr <- array(
+    seq_len(prod(unname(lengths(dn)))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+  dsem <- default_dim_semantics(names(dn), "year", "area.name")
+  fp <- tempfile("existence_scan_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = arr,
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = dsem
+  )
+
+  info <- tarr.pop:::h5_inventory(fp)
+  h5ls_calls <- 0L
+  original_h5ls <- rhdf5::h5ls
+  testthat::local_mocked_bindings(
+    h5ls = function(...) {
+      h5ls_calls <<- h5ls_calls + 1L
+      original_h5ls(...)
+    },
+    .package = "rhdf5"
+  )
+
+  expect_true(tarr.pop:::h5_dataset_exists(info, "cube/metadata/dim_order"))
+  expect_true(tarr.pop:::h5_dataset_exists(info, "/cube/metadata/dim_order"))
+  expect_true(tarr.pop:::h5_dataset_exists(info, "cube/metadata/roles/time"))
+  expect_true(tarr.pop:::h5_dataset_exists(info, "/cube/metadata/dim_semantics/sex/domain"))
+  expect_false(tarr.pop:::h5_dataset_exists(info, "cube/metadata/not_a_dataset"))
+  expect_false(tarr.pop:::h5_dataset_exists(info, "cube/metadata/dimnames"))
+
+  expect_true(tarr.pop:::h5_group_exists(info, "cube/metadata/dimnames"))
+  expect_true(tarr.pop:::h5_group_exists(info, "/cube/metadata/dim_semantics/sex"))
+  expect_false(tarr.pop:::h5_group_exists(info, "cube/metadata/dim_order"))
+
+  expect_equal(h5ls_calls, 0L)
 })
 
 test_that("open_poparray uses discovered filepath from canonical scan row", {
@@ -101,6 +149,54 @@ test_that("open_poparray preserves stored data_col when not overridden", {
 
   out <- open_poparray("custom_data_col_series")
   expect_equal(data_col(out), "custom_population")
+})
+
+test_that("open_poparray enumerates selected cube metadata hierarchy once", {
+  dn <- list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B"),
+    sex = c("Female", "Male")
+  )
+  arr <- array(
+    seq_len(prod(unname(lengths(dn)))),
+    dim = unname(lengths(dn)),
+    dimnames = dn
+  )
+  fp <- tempfile("open_inventory_once_", fileext = ".h5")
+  pa_write_poparray_cube(
+    x = arr,
+    filepath = fp,
+    dimnames_list = dn,
+    overwrite = TRUE,
+    time_dim = "year",
+    area_dim = "area.name",
+    dim_semantics = default_dim_semantics(names(dn), "year", "area.name"),
+    series_id = "open_inventory_once"
+  )
+
+  inventory_reads <- 0L
+  original_inventory <- tarr.pop:::h5_inventory
+  reset_poparray_cache()
+  testthat::local_mocked_bindings(
+    tarr_series_registry = function() {
+      data.frame(
+        series_id = "open_inventory_once",
+        filename = basename(fp),
+        filepath = fp,
+        stringsAsFactors = FALSE
+      )
+    },
+    h5_inventory = function(path) {
+      inventory_reads <<- inventory_reads + 1L
+      original_inventory(path)
+    },
+    .package = "tarr.pop"
+  )
+
+  out <- open_poparray("open_inventory_once")
+
+  expect_s4_class(out, "poparray")
+  expect_lte(inventory_reads, 1L)
 })
 
 test_that("cached cube metadata includes dim_semantics for reuse", {

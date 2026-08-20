@@ -4,10 +4,12 @@
 \alias{read_dimnames_from_cube}
 \title{Read dimnames metadata from migrated cube}
 \usage{
-read_dimnames_from_cube(path, meta = NULL)
+read_dimnames_from_cube(path, meta = NULL, info = NULL)
 }
 \arguments{
 \item{path}{HDF5 file path.}
+
+\item{info}{Optional HDF5 inventory data frame from \code{h5_inventory()}.}
 }
 \value{
 Named list of character vectors.
