@@ -9,10 +9,10 @@ test_that("read_series_row includes discovered filepath and series_id", {
   expect_equal(normalizePath(row$filepath[[1L]], winslash = "/", mustWork = TRUE), normalizePath(path, winslash = "/", mustWork = TRUE))
 })
 
-write_open_test_cube <- function(root, series_id) {
+write_open_test_cube <- function(root, series_id, dimnames_list = NULL) {
   base_dir <- file.path(root, "base")
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
-  dn <- list(
+  dn <- dimnames_list %||% list(
     year = c("2020", "2021"),
     area.name = c("A", "B"),
     sex = c("Female", "Male")
@@ -37,6 +37,24 @@ write_open_test_cube <- function(root, series_id) {
     )
   )
   normalizePath(fp, winslash = "/", mustWork = TRUE)
+}
+
+open_test_dims_2d <- function() {
+  list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B")
+  )
+}
+
+open_test_dims_6d <- function() {
+  list(
+    year = c("2020", "2021"),
+    area.name = c("A", "B"),
+    sex = c("Female", "Male"),
+    age.char = c("0-4", "5-9"),
+    race = c("White", "Black"),
+    ethnicity = c("Hispanic", "Non-Hispanic")
+  )
 }
 
 test_that("read_series_row can reuse precomputed h5ls info", {
@@ -308,6 +326,65 @@ test_that("open_poparray does not interrogate unrelated HDF5 cubes", {
   expect_s4_class(out, "poparray")
   expect_true(selected %in% touched)
   expect_false(unrelated %in% touched)
+})
+
+test_that("open_poparray hierarchy scans do not scale with dimensionality", {
+  root <- tempfile("open-registry-dim-scan-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  two_d <- write_open_test_cube(root, "two_dimensional", open_test_dims_2d())
+  six_d <- write_open_test_cube(root, "six_dimensional", open_test_dims_6d())
+  rebuild_poparray_registry(root)
+
+  original_inventory <- tarr.pop:::h5_inventory
+  count_scans <- function(series_id) {
+    touched <- character()
+    reset_poparray_cache()
+    testthat::local_mocked_bindings(
+      h5_inventory = function(path) {
+        touched <<- c(touched, normalizePath(path, winslash = "/", mustWork = TRUE))
+        original_inventory(path)
+      },
+      .package = "tarr.pop"
+    )
+    out <- open_poparray(series_id)
+    list(out = out, touched = touched)
+  }
+
+  two <- count_scans("two_dimensional")
+  six <- count_scans("six_dimensional")
+
+  expect_s4_class(two$out, "poparray")
+  expect_s4_class(six$out, "poparray")
+  expect_lte(sum(two$touched == two_d), 1L)
+  expect_lte(sum(six$touched == six_d), 1L)
+  expect_equal(sum(two$touched == six_d), 0L)
+  expect_equal(sum(six$touched == two_d), 0L)
+})
+
+test_that("DimSemantics reconstruction and validObject do not rescan HDF5 hierarchy", {
+  root <- tempfile("open-registry-validity-scan-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  selected <- write_open_test_cube(root, "six_dimensional", open_test_dims_6d())
+  rebuild_poparray_registry(root)
+  reset_poparray_cache()
+
+  touched <- character()
+  original_inventory <- tarr.pop:::h5_inventory
+  testthat::local_mocked_bindings(
+    h5_inventory = function(path) {
+      touched <<- c(touched, normalizePath(path, winslash = "/", mustWork = TRUE))
+      original_inventory(path)
+    },
+    .package = "tarr.pop"
+  )
+
+  out <- open_poparray("six_dimensional")
+  scans_after_open <- length(touched)
+
+  expect_named(dim_semantics(out), names(open_test_dims_6d()))
+  expect_lte(sum(touched == selected), 1L)
+  expect_true(methods::validObject(out))
+  expect_equal(length(touched), scans_after_open)
 })
 
 test_that("open_poparray keeps population data HDF5 DelayedArray-backed", {
