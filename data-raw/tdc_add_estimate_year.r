@@ -25,6 +25,10 @@ input_dir <- file.path(
 )
 update_pattern <- sprintf("^%d_ASRE_Estimate_alldata\\.csv$", update_year)
 
+
+# 1. Source specific helper functions -----------------------------------------------------------------------------
+
+## Function for age labels processing ---- 
 process_tdc_update_age <- function(x) {
   x |>
     stringr::str_remove_all(stringr::regex("Ages", ignore_case = TRUE)) |>
@@ -33,11 +37,13 @@ process_tdc_update_age <- function(x) {
     stringr::str_replace("5\\+", "5 +")
 }
 
+## Create an ordered factor from the ages labels ---
 ordered_tdc_update_ages <- function(x) {
   age_levels <- setdiff(levels(x), "All")
   c(sort(as.character(rage::as.age_group(age_levels))), "All")
 }
 
+## Read a tdc csv file ----
 read_tdc_update_csv <- function(file, col_types) {
   readr::read_csv(
     file = file,
@@ -59,6 +65,9 @@ read_tdc_update_csv <- function(file, col_types) {
     })
 }
 
+
+# 2. FUnction to read the raw CSV file and transform the data. -----------------------------------------------------------------------
+## Reader function for the CSV ----
 read_tdc_estimate_year <- function(...) {
   files <- list.files(
     path = input_dir,
@@ -73,17 +82,27 @@ read_tdc_estimate_year <- function(...) {
     ))
   }
 
+  # handle different column names, like what happened in the 2024 data
+  header <- readr::read_csv(file = files[[1L]], n_max = 0) |> names()
+  county_name <- if("Area Name" %in% header) "Area Name" else "County"
+  fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
+
   col_types <- readr::cols(
-    County = readr::col_factor(),
-    FIPS = readr::col_factor(),
+    !!county_name := readr::col_factor(),
+    !! fips_name  := readr::col_factor(),
     Age = readr::col_factor(ordered = TRUE),
     .default = readr::col_integer()
   )
-
+  
   read_tdc_update_csv(files[[1L]], col_types = col_types) |>
+    dplyr::rename(
+      County = dplyr::any_of(c("County", "Area Name")),
+      FIPS   = dplyr::any_of(c("FIPS", "Area Code"))
+    ) |> 
     data.table::setDT()
-}
+  }
 
+## Data transformation function ----
 transform_tdc_estimate_year <- function(
     df,
     counties = NULL,
@@ -195,6 +214,7 @@ if (!file.exists(tdc_estimates_file)) {
   ))
 }
 
+debug(add_population_data)
 tarr.pop::add_population_data(
   cube = tdc_estimates_file,
   reader = read_tdc_estimate_year,
