@@ -23,6 +23,7 @@ input_dir <- file.path(
   "Texas Demographic Center",
   "asre"
 )
+
 update_pattern <- sprintf("^%d_ASRE_Estimate_alldata\\.csv$", update_year)
 
 
@@ -43,7 +44,9 @@ ordered_tdc_update_ages <- function(x) {
   c(sort(as.character(rage::as.age_group(age_levels))), "All")
 }
 
-## Read a tdc csv file ----
+## The read fiunction for tdc csv file ----
+### Reads the csv, formts names to snake case, adds the year of the estimate
+### and for later files subs in "white" for waht used to be "anglo" 
 read_tdc_update_csv <- function(file, col_types) {
   readr::read_csv(
     file = file,
@@ -66,7 +69,7 @@ read_tdc_update_csv <- function(file, col_types) {
 }
 
 
-# 2. FUnction to read the raw CSV file and transform the data. -----------------------------------------------------------------------
+# 2. Functions to read the raw CSV file and transform the data. -----------------------------------------------------------------------
 ## Reader function for the CSV ----
 read_tdc_estimate_year <- function(...) {
   files <- list.files(
@@ -94,10 +97,10 @@ read_tdc_estimate_year <- function(...) {
     .default = readr::col_integer()
   )
   
-  read_tdc_update_csv(files[[1L]], col_types = col_types) |>
-    dplyr::rename(
-      County = dplyr::any_of(c("County", "Area Name")),
-      FIPS   = dplyr::any_of(c("FIPS", "Area Code"))
+  read_tdc_update_csv(files[[1L]], col_types = col_types) |> 
+    dplyr::rename(ret_df, 
+      county = dplyr::all_of(make_clean_names(county_name )),
+      fips   = dplyr::all_of(make_clean_names(fips_name))
     ) |> 
     data.table::setDT()
   }
@@ -214,7 +217,9 @@ if (!file.exists(tdc_estimates_file)) {
   ))
 }
 
-debug(add_population_data)
+debug(read_tdc_estimate_year)
+debug(transform_tdc_estimate_year)
+#undebug(add_population_data)
 tarr.pop::add_population_data(
   cube = tdc_estimates_file,
   reader = read_tdc_estimate_year,
