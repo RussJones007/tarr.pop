@@ -17,13 +17,7 @@ if (
 # Change this value when a new annual estimate file is downloaded.
 update_year <- 2024L
 
-input_dir <- file.path(
-  paths$population,
-  "Estimates",
-  "Texas Demographic Center",
-  "asre"
-)
-
+input_dir <- file.path(paths$population,"Estimates","Texas Demographic Center", "asre")
 update_pattern <- sprintf("^%d_ASRE_Estimate_alldata\\.csv$", update_year)
 
 
@@ -47,18 +41,32 @@ ordered_tdc_update_ages <- function(x) {
 ## The read fiunction for tdc csv file ----
 ### Reads the csv, formts names to snake case, adds the year of the estimate
 ### and for later files subs in "white" for waht used to be "anglo" 
-read_tdc_update_csv <- function(file, col_types) {
-  readr::read_csv(
+read_tdc_update_csv <- function(file) {
+  
+  # handle different column names, like what happened in the 2024 data
+  header <- readr::read_csv(file = file, n_max = 0) |> names()
+  county_name <- if("Area Name" %in% header) "Area Name" else "County"
+  fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
+  
+  col_types <- readr::cols(
+    !!county_name := readr::col_factor(),
+    !! fips_name  := readr::col_factor(),
+    Age            = readr::col_factor(ordered = TRUE),
+    .default = readr::col_character()
+  )
+  
+  
+  df <- readr::read_csv(
     file = file,
     col_types = col_types,
     id = "file_name",
     progress = TRUE
   ) |>
     janitor::clean_names() |>
-    dplyr::mutate(
-      year = basename(file_name) |>
-        stringr::str_extract("^20[1-2][0-9]") |>
-        as.integer()
+    dplyr::mutate( year = basename(file_name) |>
+                     stringr::str_extract("^20[1-2][0-9]") |>
+                     as.integer(),
+                   across( where(is.character), ~ str_remove(.x, ",") |> as,integer())
     ) |>
     dplyr::select(-file_name) |>
     dplyr::rename_with(\(col) {
@@ -66,6 +74,13 @@ read_tdc_update_csv <- function(file, col_types) {
         stringr::str_replace("anglo", "white") |>
         stringr::str_remove("^nh_")
     })
+  
+  dt <- dplyr::rename(df, county = dplyr::all_of(make_clean_names(county_name )),
+                      fips   = dplyr::all_of(make_clean_names(fips_name))
+  ) |> 
+    data.table::setDT()
+  
+  return(dt)
 }
 
 
@@ -85,25 +100,9 @@ read_tdc_estimate_year <- function(...) {
     ))
   }
 
-  # handle different column names, like what happened in the 2024 data
-  header <- readr::read_csv(file = files[[1L]], n_max = 0) |> names()
-  county_name <- if("Area Name" %in% header) "Area Name" else "County"
-  fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
-
-  col_types <- readr::cols(
-    !!county_name := readr::col_factor(),
-    !! fips_name  := readr::col_factor(),
-    Age = readr::col_factor(ordered = TRUE),
-    .default = readr::col_integer()
-  )
-  
-  read_tdc_update_csv(files[[1L]], col_types = col_types) |> 
-    dplyr::rename(ret_df, 
-      county = dplyr::all_of(make_clean_names(county_name )),
-      fips   = dplyr::all_of(make_clean_names(fips_name))
-    ) |> 
-    data.table::setDT()
-  }
+  dt <- read_tdc_update_csv(file = files[[1]])
+  return(dt)
+}
 
 ## Data transformation function ----
 transform_tdc_estimate_year <- function(
@@ -124,6 +123,15 @@ transform_tdc_estimate_year <- function(
     df[, fips := NULL]
   }
 
+  # Remove the "All" columns
+  df[, grep("^All", names(df)) := NULL]
+  # Remove the race alone columns
+  df[, names(df)[(str_count(names(df), "\\.") == 1)] := NULL]
+  
+  cols <- grep("\\.population$", names(df), value = TRUE)
+  setnames(df, cols, sub("\\.population$", "", cols) )
+  
+  
   long <- data.table::melt(
     data = df,
     id.vars = c("year", "county", "age"),
@@ -132,43 +140,24 @@ transform_tdc_estimate_year <- function(
     value.name = "population",
     verbose = FALSE
   )
-
-  long[
-    ,
-    c("race.eth", "sex") := data.table::tstrsplit(
+  
+  long[, c("race.eth", "sex") := data.table::tstrsplit(
       race.sex,
       split = ".",
       fixed = TRUE,
       fill = NA
+    )][ , county := forcats::fct_relabel(
+            county,
+            \(x) county_names(gsub(" COUNTY", "", x, ignore.case = TRUE))
     )
-  ][
-    ,
-    county := forcats::fct_relabel(
-      county,
-      \(x) county_names(gsub(" COUNTY", "", x, ignore.case = TRUE))
-    )
-  ][
-    ,
-    county := forcats::fct_recode(county, "Texas" = "State Of Texas")
-  ][
-    ,
-    age := forcats::fct_relabel(
-      age,
-      \(x) process_tdc_update_age(x) |> rage::as.age_group() |> as.character()
-    )
-  ][
-    ,
-    age := ordered(age, levels = ordered_tdc_update_ages(age))
-  ][
-    ,
-    sex := forcats::fct_na_value_to_level(sex, level = "All")
-  ][
-    ,
-    race.eth := factor(race.eth)
-  ][
-    ,
-    race.sex := NULL
-  ]
+    ][, county := forcats::fct_recode(county, "Texas" = "State Of Texas")
+    ][, age := forcats::fct_relabel(
+          age,
+          \(x) process_tdc_update_age(x) |> rage::as.age_group() |> as.character())
+    ][, age := ordered(age, levels = ordered_tdc_update_ages(age))
+  ][, sex := forcats::fct_na_value_to_level(sex, level = "All")
+  ][, race.eth := factor(race.eth)
+  ][, race.sex := NULL  ]
 
   data.table::setnames(long, c("age", "county"), c("age.char", "area.name"))
 
@@ -179,14 +168,12 @@ transform_tdc_estimate_year <- function(
     long <- long[area.name != "Texas"]
   }
 
-  long <- long[!is.na(population)]
+  #long <- long[!is.na(population)] # This step is dangerous and can remove catgories unexpectantly
 
   dim_cols <- c("area.name", "sex", "age.char", "race.eth")
-  keep <- long[
-    ,
-    !Reduce(`|`, lapply(.SD, \(x) as.character(x) == "All")),
-    .SDcols = dim_cols
-  ]
+  keep <- long[ , !Reduce(`|`, lapply(.SD, \(x) as.character(x) == "All")),
+    .SDcols = dim_cols]
+  
   long <- long[keep]
 
   factor_cols <- names(long)[vapply(long, is.factor, logical(1))]
@@ -217,7 +204,8 @@ if (!file.exists(tdc_estimates_file)) {
   ))
 }
 
-debug(read_tdc_estimate_year)
+debug(read_tdc_update_csv)
+undebug(read_tdc_estimate_year)
 debug(transform_tdc_estimate_year)
 #undebug(add_population_data)
 tarr.pop::add_population_data(
