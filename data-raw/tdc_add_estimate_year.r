@@ -38,12 +38,14 @@ ordered_tdc_update_ages <- function(x) {
   c(sort(as.character(rage::as.age_group(age_levels))), "All")
 }
 
-## The read fiunction for tdc csv file ----
+# 2. Functions to read the raw CSV file and transform the data. -----------------------------------------------------------------------
+
+## The read function for tdc csv file ----
 ### Reads the csv, formts names to snake case, adds the year of the estimate
-### and for later files subs in "white" for waht used to be "anglo" 
+
 read_tdc_update_csv <- function(file) {
   
-  # handle different column names, like what happened in the 2024 data
+  # handle differing column names in later file compared to files from 2023 and earlier.
   header <- readr::read_csv(file = file, n_max = 0) |> names()
   county_name <- if("Area Name" %in% header) "Area Name" else "County"
   fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
@@ -52,31 +54,40 @@ read_tdc_update_csv <- function(file) {
     !!county_name := readr::col_factor(),
     !! fips_name  := readr::col_factor(),
     Age            = readr::col_factor(ordered = TRUE),
-    .default = readr::col_character()
+    .default       = readr::col_character()
   )
   
-  
-  df <- readr::read_csv(
-    file = file,
-    col_types = col_types,
-    id = "file_name",
-    progress = TRUE
-  ) |>
+  df <- readr::read_csv(file      = file,
+                        col_types = col_types,
+                        id        = "file_name",
+                        progress  = TRUE ) |>
     janitor::clean_names() |>
-    dplyr::mutate( year = basename(file_name) |>
-                     stringr::str_extract("^20[1-2][0-9]") |>
-                     as.integer(),
-                   across( where(is.character), ~ str_remove(.x, ",") |> as,integer())
+    # NOTE:  the 2024 file already has "year" as a field, files from previous years do not.
+    dplyr::mutate( 
+      year = basename(file_name) |> stringr::str_extract("^20[1-2][0-9]") |> as.integer(),
+      # The population data will often be formatted with a comma, remove them to convert to integer
+      across( where(is.character), ~ str_remove(.x, ",") |> as.integer())
     ) |>
     dplyr::select(-file_name) |>
     dplyr::rename_with(\(col) {
       col |>
+        #  Change "anglo" to "white" in older files.
         stringr::str_replace("anglo", "white") |>
         stringr::str_remove("^nh_")
     })
   
-  dt <- dplyr::rename(df, county = dplyr::all_of(make_clean_names(county_name )),
-                      fips   = dplyr::all_of(make_clean_names(fips_name))
+  #Check that all population figures are present, no NA and throw an error if NA is present
+  pop_cols <- grep("population$", names(df), value = TRUE)
+  na_present <- map_lgl(df[pop_cols], \(col) any(is.na(col)) )
+  if(any(na_present)){
+    msg <- paste0("Columns ", pop_cols[na_present], " has one or more NA values", collapse = ", ")
+    stop(msg)
+  }
+  
+  # rename the area name/county and area code/fips fields to a common field name
+  dt <- dplyr::rename(df, 
+                      county = dplyr::all_of(make_clean_names(county_name )),
+                      fips   = dplyr::all_of(make_clean_names(fips_name)) 
   ) |> 
     data.table::setDT()
   
@@ -84,7 +95,6 @@ read_tdc_update_csv <- function(file) {
 }
 
 
-# 2. Functions to read the raw CSV file and transform the data. -----------------------------------------------------------------------
 ## Reader function for the CSV ----
 read_tdc_estimate_year <- function(...) {
   files <- list.files(
@@ -204,10 +214,10 @@ if (!file.exists(tdc_estimates_file)) {
   ))
 }
 
-debug(read_tdc_update_csv)
-undebug(read_tdc_estimate_year)
+#undebug(read_tdc_update_csv)
+#undebug(read_tdc_estimate_year)
 debug(transform_tdc_estimate_year)
-#undebug(add_population_data)
+debug(add_population_data)
 tarr.pop::add_population_data(
   cube = tdc_estimates_file,
   reader = read_tdc_estimate_year,

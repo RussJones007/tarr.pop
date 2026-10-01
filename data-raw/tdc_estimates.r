@@ -1,10 +1,25 @@
 # -------------------------------------------------------------------------------------->
 # Script: tdc_estimates.r
-# Description: An example scrit for building a population cube. Build the Texas Demographic Center county estimates cube
+# Description: An example script for building a population cube. Build the Texas Demographic Center county estimates cube
 # through the package-native ingestion pipeline. This script expects the package to be loaded from
 # data-raw/control_def.r so that package functions and source-data paths are available.
+# 
+#   Reads the Texas Data Center annual Estimates csv files.  These files usuall become available in early November 
+#   the year after the estimate date.  For example estimates for July 1, 2024 were released in November 2025.
+#   Each file contains age, sex, race, ethnicity or "asre".  The state data center does not split race and ethnicity.
+#   Instead Hispanic is treated as a separate "race" and is mutually exclusive to the  categories. 
+#   From 2011 through 2016, the Asian category was included in "other".  Since 2017, Asian is now its own category.
+#   Ages are represented as single years with two capped categories at 85 + and 95 +.  The 85 + group overlaps 
+#   the 86,87,88,89,90,91,92,93,94 and 95 + categories.  So one set of the overlap should be filtered out before 
+#   removed if attempting to aggregate population figures.
+#   
+#  Note: The TDC Estimates are stable and generally do not change with updates, though TDC did revise 2021-2024 estimates
+#  to align with significant Census Bureau Updates. The link to the download tool for estimates is
+#  https://www.demographics.texas.gov/Estimates/Download and select the "Age, Sex, and Race/Ethnicity" categories.
+ 
 # -------------------------------------------------------------------------------------->
-# Created May 14, 20026
+# Created May 14, 2026 - R. Jones
+# Revised October 2026 - R. Jones
 
 # 1. Define functions used inside other functions ---------------------------
 ## Modifies Age column names, only used in the transform function below
@@ -25,31 +40,47 @@ ordered_age_levels <- function(x) {
 
 
 ## CSV reader function used in the master reader function below
-read_est_csv <- function(file, col_types){
+read_est_csv <- function(file){
+  
+  header <- readr::read_csv(file = file, n_max = 0) |> names()
+  county_name <- if("Area Name" %in% header) "Area Name" else "County"
+  fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
+  
+  col_types <- readr::cols(
+    !!county_name := readr::col_factor(),
+    !! fips_name  := readr::col_factor(),
+    Age            = readr::col_factor(ordered = TRUE),
+    .default       = readr::col_character()
+  )
+  browser()
+  file_year <- basename(file) |>
+    stringr::str_extract("^20[1-2][0-9]") |>
+    as.integer()
+  
   readr::read_csv(file = file,
                   col_types = col_types,
                   id = "file_name",
                   progress = TRUE
   ) |>
     janitor::clean_names() |>
-    dplyr::mutate(year = basename(file_name) |>
-                    stringr::str_extract("^20[1-2][0-9]") |>
-                    as.integer()
-    ) |>
+    # if year is not present use the year in the file name.  
+    #(\(df)  if(! year  %in% names(df)) dplyr::mutate(df, year = file_year) else df)() |> 
     dplyr::select(-file_name) |>
     dplyr::rename_with( \(col) {
       col |>
         stringr::str_replace("anglo", "white") |>
         stringr::str_remove("^nh_")
-    }
-    )
+    }) |> 
+       dplyr::rename(county = dplyr::all_of(make_clean_names(county_name )),
+                     fips   = dplyr::all_of(make_clean_names(fips_name)))
+      #               
 }
 
 
 # 2. Define reading and transformation functions -------------------------
 
 read_tdc_estimates_raw <- function(
-    pattern = "20[1-2][0-9]_ASRE_Estimate_alldata\\.csv",
+    pattern = "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv",
     input_dir = file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre"),
     ...
 ) {
@@ -58,17 +89,12 @@ read_tdc_estimates_raw <- function(
   if (!length(files)) {
     cli::cli_abort("No TDC estimate files matched {.val {pattern}} in {.file {input_dir}}.")
   }
-
-  col_types <- readr::cols(
-    County   = readr::col_factor(),
-    FIPS     = readr::col_factor(),
-    Age      = readr::col_factor(ordered = TRUE),
-    .default = readr::col_integer()
-  )
-
-  purrr::map(files, read_est_csv, col_types = col_types) |>
-    dplyr::bind_rows() |>
+  browser()
+  dfs <- purrr::map(files, read_est_csv) 
+  df <- dplyr::bind_rows(dfs, ) |>
+    mutate( across(where(is.character), ~ str_remove(.x, ",") |> as.integer())) |> 
     data.table::setDT()
+return(df)
 }
 
 transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = FALSE) {
@@ -213,9 +239,11 @@ cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
-# undebug(transform_tdc_estimates)
-#undebug(ingest_population)
+debug(transform_tdc_estimates)
+#undebug(read_est_csv)
+debug(ingest_population)
 #undebug(validate_population_df)
+#undebug(read_tdc_estimates_raw)
 #debug(df_2_array)
 
 tarr.pop::ingest_population(

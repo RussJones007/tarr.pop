@@ -32,7 +32,7 @@ setClass(
 #' manipulating the dimensions/metadata before realizing (loading) the selected array/cube in memory.  Typical work flow is
 #' to open the cube via the [open_poparray()] function, filtering the dimension levels that are needed through the `[`
 #' index operator or filter() function.  Dimension levels can also be collapsed using [collapse_dim()].  The cube can
-#' then be relaized [as.array()], [as.data.frame()], or [tibble::as_tibble()].
+#' then be realized [as.array()], [as.data.frame()], or [tibble::as_tibble()].
 #'
 #' @slot time_role Name of the time dimension.
 #' @slot area_role Name of the area dimension.
@@ -1005,7 +1005,7 @@ as.double.poparray <- function(x, ...) {
 #' S3 method to coerce a poparray to a data frame. This method **realizes** the delayed backend (for the current
 #' poparray slice) and converts it to a long data.frame via `as.table()` semantics (one row per cell).
 #'
-#' For large cubes, subset first (e.g., restrict years/areas) to avoid materializing an unmanageably large array.
+#' For large cubes, subset first (e.g., restrict years/areas) to avoid materializing an unmanageable large array.
 #'
 #' @param x A poparray.
 #' @param stringsAsFactors Passed to `as.data.frame.table()`.
