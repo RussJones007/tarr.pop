@@ -4,7 +4,7 @@
 # through the package-native ingestion pipeline. This script expects the package to be loaded from
 # data-raw/control_def.r so that package functions and source-data paths are available.
 # 
-#   Reads the Texas Data Center annual Estimates csv files.  These files usuall become available in early November 
+#   Reads the Texas Data Center annual Estimates csv files.  These files usually become available in early November 
 #   the year after the estimate date.  For example estimates for July 1, 2024 were released in November 2025.
 #   Each file contains age, sex, race, ethnicity or "asre".  The state data center does not split race and ethnicity.
 #   Instead Hispanic is treated as a separate "race" and is mutually exclusive to the  categories. 
@@ -39,46 +39,50 @@ ordered_age_levels <- function(x) {
 }
 
 
-## CSV reader function used in the master reader function below
+
+# 2. Define reading and transformation functions -------------------------
+## CSV reader function called for each file used in the master reader function below ----
 read_est_csv <- function(file){
   
   header <- readr::read_csv(file = file, n_max = 0) |> names()
-  county_name <- if("Area Name" %in% header) "Area Name" else "County"
-  fips_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
+  area_name <- if("Area Name" %in% header) "Area Name" else "County"
+  code_name   <- if("FIPS" %in% header) "FIPS" else "Area Code"
   
   col_types <- readr::cols(
-    !!county_name := readr::col_factor(),
-    !! fips_name  := readr::col_factor(),
-    Age            = readr::col_factor(ordered = TRUE),
-    .default       = readr::col_character()
+    !!area_name  := readr::col_factor(),
+    !!code_name  := readr::col_factor(),
+    Age           = readr::col_factor(ordered = TRUE),
+    .default      = readr::col_character()
   )
-  browser()
+
   file_year <- basename(file) |>
     stringr::str_extract("^20[1-2][0-9]") |>
     as.integer()
   
-  readr::read_csv(file = file,
-                  col_types = col_types,
-                  id = "file_name",
-                  progress = TRUE
-  ) |>
+  readr::read_csv(file = file, col_types = col_types, id = "file_name",
+                  progress = TRUE, show_col_types = FALSE)|>
     janitor::clean_names() |>
     # if year is not present use the year in the file name.  
-    #(\(df)  if(! year  %in% names(df)) dplyr::mutate(df, year = file_year) else df)() |> 
     dplyr::select(-file_name) |>
     dplyr::rename_with( \(col) {
       col |>
         stringr::str_replace("anglo", "white") |>
-        stringr::str_remove("^nh_")
-    }) |> 
-       dplyr::rename(county = dplyr::all_of(make_clean_names(county_name )),
-                     fips   = dplyr::all_of(make_clean_names(fips_name)))
-      #               
+        stringr::str_remove("^nh_") |> 
+        stringr::str_remove("_population$")}) |> 
+    dplyr::rename(county = dplyr::all_of(make_clean_names(area_name )),
+                  fips   = dplyr::all_of(make_clean_names(code_name))) |> 
+    # ensure the year column is present
+    (\(df)  if(! "year"  %in% names(df)){
+      dplyr::mutate(df, year = file_year) 
+      } else {
+      dplyr::mutate(df, year = as.integer(year))
+      })() |> 
+    # remove any columns with "total"  involved
+    select(- contains("total"))
+  
 }
 
-
-# 2. Define reading and transformation functions -------------------------
-
+## Reader function that iterates over each csv file ----
 read_tdc_estimates_raw <- function(
     pattern = "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv",
     input_dir = file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre"),
@@ -89,7 +93,7 @@ read_tdc_estimates_raw <- function(
   if (!length(files)) {
     cli::cli_abort("No TDC estimate files matched {.val {pattern}} in {.file {input_dir}}.")
   }
-  browser()
+
   dfs <- purrr::map(files, read_est_csv) 
   df <- dplyr::bind_rows(dfs, ) |>
     mutate( across(where(is.character), ~ str_remove(.x, ",") |> as.integer())) |> 
@@ -134,8 +138,6 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
 
   if (!isTRUE(include_texas_total)) long <- long[area.name != "Texas"]
   
-  long <- long[!is.na(population)]   # The asian population figures before 2017 are unknown
-
   # remove "all" from any row.
   dim_cols <- c("area.name", "sex", "age.char", "race.eth")
   keep <- long[
@@ -225,7 +227,7 @@ age_levels <- c("< 1", "1", "10", "11", "12", "13", "14", "15", "16", "17",
   rage::as.age_group() |> 
   ordered()
 
-support_table <- expand_grid(year             = 2011:2013,
+support_table <- expand_grid(year             = 2011:2016,
                              area.name        = sort_values(default_counties) |> factor(),
                              sex              = c("male", "female") |> sort() |> factor(),
                              age.char         = age_levels,
@@ -239,11 +241,13 @@ cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
 # 3. Ingest -------------------------------------------------------------------------------------------------------
-debug(transform_tdc_estimates)
-#undebug(read_est_csv)
-debug(ingest_population)
+# undebug(read_tdc_estimates_raw)
+# undebug(read_est_csv)
+# undebug(transform_tdc_estimates)
+undebug(ingest_population)
+undebug(build_poparray_from_df)
+debug(df_2_array)
 #undebug(validate_population_df)
-#undebug(read_tdc_estimates_raw)
 #debug(df_2_array)
 
 tarr.pop::ingest_population(

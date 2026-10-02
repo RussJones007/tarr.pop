@@ -36,23 +36,46 @@
 #' dim(arr)
 #' dimnames(arr)
 #'
-df_2_array <- function(df, data_col = "value"){
-  assertthat::assert_that(is.scalar(data_col))
-  assertthat::assert_that(df %has_name% data_col)
-
-  fields <- names(df)[names(df) != data_col]
-  #df <- tidyr::complete(df, !!!rlang::syms(fields))  # ensure every level is available
-  df <- arrange(df, pick(fields))               # arrange the data frame starting with the right most non-data column
-
-  dim_lens <- map(fields, \(col) length(unique(df[[col]]))) |> unlist(use.names = FALSE)
-  dim_nms <- map(fields, \(col) df[[col]] |>  as.character() |> unique()) |>
-    set_names(fields)
-
-  ret <- array(data = df[[data_col]], dim = dim_lens, dimnames = dim_nms)
+df_2_array <- function(df, data_col = "value") {
+  
+  fields <- setdiff(names(df), data_col)
+  
+  # Preserve factor levels where they carry ordering.
+  dim_nms <- lapply(df[fields], function(x) {
+    if (is.factor(x)) levels(droplevels(x)) else unique(as.character(x))
+  })
+  
+  dim_lens <- lengths(dim_nms)
+  
+  # Create empty array.
+  ret <- array(
+    data = NA_real_,
+    dim = dim_lens,
+    dimnames = dim_nms
+  )
+  
+  # Locate every observation explicitly in every dimension.
+  idx <- lapply(fields, function(nm) {
+    match(as.character(df[[nm]]), dim_nms[[nm]])
+  })
+  
+  idx <- do.call(cbind, idx)
+  
+  if (anyNA(idx)) {
+    stop("Unable to match one or more dimension values to array dimnames.")
+  }
+  
+  if (anyDuplicated(data.frame(idx))) {
+    stop("Duplicate dimension combinations found.")
+  }
+  
+  # Assign each value to its explicit coordinate.
+  ret[idx] <- df[[data_col]]
+  
   attr(ret, "data_col") <- data_col
-  return(ret)
+  
+  ret
 }
-
 
 #' Array to a Data Frame
 #'

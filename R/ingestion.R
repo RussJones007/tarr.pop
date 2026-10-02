@@ -485,7 +485,7 @@ ingest_population <- function(reader,
     source = source_meta$source %||% "",
     updated = as.character(Sys.Date())
   )
-
+  
   build_poparray_from_df(
     df = df,
     dims = dims,
