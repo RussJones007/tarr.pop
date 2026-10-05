@@ -99,7 +99,9 @@ df_2_array <- function(df, data_col = "value") {
 #'
 #' @param arr an array object
 #' @param data_col a character string naming the column that will contain the data in the resulting data frame.
-#' By default the data column will named from the attribute "data_col" if it is present, or "value" if it is not.
+#' An explicit value overrides stored metadata. When omitted, the stored data-column
+#' name is used when it is a single, non-missing, non-empty character string;
+#' otherwise "value" is used.
 #'
 #' @return a data frame with the number of columns equal to the array dimensions + 1
 #' @keywords internal
@@ -121,10 +123,20 @@ array_2_df <- function(
     arr,
     ...,
     stringAsFactors = FALSE,
-    data_col = c(data_col(arr), "value") ) {
+    data_col = NULL) {
+
+  if (is.null(data_col)) {
+    stored_data_col <- tarr.pop::data_col(arr)
+    if (is.character(stored_data_col) && length(stored_data_col) == 1L &&
+        !is.na(stored_data_col) && nzchar(stored_data_col)) {
+      data_col <- stored_data_col
+    } else {
+      data_col <- "value"
+    }
+  }
+  checkmate::assert_string(data_col, min.chars = 1L)
 
   # Convert array to data frame
-  data_col = match.arg(data_col)
   df <- as.data.frame.table(arr, ..., stringAsFactors  = stringAsFactors, responseName = data_col)
   df <- df[complete.cases(df), ]
 

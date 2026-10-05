@@ -4,18 +4,15 @@
 \alias{array_2_df}
 \title{Array to a Data Frame}
 \usage{
-array_2_df(
-  arr,
-  ...,
-  stringAsFactors = FALSE,
-  data_col = c(data_col(arr), "value")
-)
+array_2_df(arr, ..., stringAsFactors = FALSE, data_col = NULL)
 }
 \arguments{
 \item{arr}{an array object}
 
 \item{data_col}{a character string naming the column that will contain the data in the resulting data frame.
-By default the data column will named from the attribute "data_col" if it is present, or "value" if it is not.}
+An explicit value overrides stored metadata. When omitted, the stored data-column
+name is used when it is a single, non-missing, non-empty character string;
+otherwise "value" is used.}
 }
 \value{
 a data frame with the number of columns equal to the array dimensions + 1
