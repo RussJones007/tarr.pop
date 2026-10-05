@@ -1,0 +1,610 @@
+---
+title: "Creating and Verifying a Population Cube"
+subtitle: "A complete guide using Texas Demographic Center county estimates"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+execute:
+  cache: false
+  eval: false
+vignette: >
+  %\VignetteIndexEntry{Creating and Verifying a Population Cube}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+editor:
+  markdown:
+    wrap: 100
+---
+
+# Purpose and scope
+
+A population cube stores a count at each combination of demographic coordinates. For the Texas
+Demographic Center (TDC) county estimates, those coordinates are estimate year, county, sex, age
+interval, and combined race/ethnicity. The finished object is a `poparray` whose values reside in an
+HDF5 file and whose labels, dimension roles, semantics, and provenance are stored with those values.
+
+Creating a trustworthy cube requires more than a successful file write. Source identities must
+survive transformation, every observed value must keep its coordinate, and missing values must be
+classified correctly. This guide follows the current repository workflow, builds to an isolated
+location first, verifies the result, and only then describes replacing a production cube.
+
+The examples require a source checkout of `tarr.pop` and local annual CSV files. Execution is disabled
+throughout the document so rendering it cannot launch an ingestion job or overwrite a cube. Run the
+chunks deliberately, in order, in a fresh R session from the repository root. The original
+`population_cube_creation.qmd` remains unchanged.
+
+# Understand the data model first
+
+## Dimensions and roles
+
+The canonical table has exactly these columns, in this order:
+
+| Column | Meaning | Expected representation |
+|---|---|---|
+| `year` | Annual population snapshot | Integer year |
+| `area.name` | Canonical Texas county name | Factor |
+| `sex` | Female or male | Factor |
+| `age.char` | Age interval label | Ordered factor |
+| `race.eth` | Combined race/ethnicity category | Factor |
+| `population` | Population count | Numeric or integer, possibly `NA` |
+
+The dimension order is `year`, `area.name`, `sex`, `age.char`, `race.eth`. The time role points to
+`year`; the area role points to `area.name`. Roles identify the relevant dimensions without relying
+on their positions. Dimension semantics describe which operations are valid, including whether the
+labels form a disjoint partition or a potentially overlapping set.
+
+A year is a snapshot, not an additive component of one population. Summing all years is useful as an
+**ingestion conservation checksum**, but it is not the population of Texas at any one date.
+
+## TDC age and race/ethnicity support
+
+The support table defines valid source combinations. It is more specific than the rectangular shape
+of the physical array.
+
+| Source era | Valid ages | Ages per county/sex/race | Race/ethnicity levels |
+|---|---|---:|---|
+| Before 2017 | `< 1`, single ages 1–84, `85 +` | 86 | asian, black, hispanic, other, white |
+| 2017 onward | `< 1`, single ages 1–94, `95 +` | 96 | asian, black, hispanic, other, white |
+
+Before 2017, Asian estimates were not separately reported; they were included in the source's other
+category. Asian nevertheless remains valid support and is represented by `NA` for those years. Do
+not impute Asian counts or repartition the historical other counts during ingestion.
+
+Age labels have interval meaning. For example, `86` denotes `[86, 87)` and `85 +` denotes
+`[85, Inf)`. The union of labels across eras includes overlapping intervals, so the global age
+semantics use a set with overlap information. Within a given year's supported rows, the source age
+categories are non-overlapping. Preserve those categories: never manufacture ages 85–94 from an
+early `85 +` count or replace later single ages with an ingested `85 +` aggregate.
+
+## Three different kinds of cells
+
+An observed count, including zero, is a source value. A supported `NA` is a valid combination whose
+count is unavailable. A structural `NA` is an unsupported combination present only because an array
+requires a rectangular grid. These are different cases even though the latter two are stored as `NA`.
+
+For 2016, `85 +` is supported while `86` and `95 +` are structural. For 2017, `86` and `95 +` are
+supported while `85 +` is structural. A structural missing value must not become zero. An observed
+zero must not become missing.
+
+`All` is a virtual aggregate, not a physical base-cube label. County data and a Texas state total also
+must not be stored together under county-partition semantics: the state total overlaps every county.
+The transformer can retain canonical `Texas` rows when explicitly requested, but this county-cube
+workflow excludes them.
+
+# The actual pipeline
+
+```text
+annual CSV files
+  -> read_est_csv() for each file
+  -> read_tdc_estimates_raw()
+  -> transform_tdc_estimates()
+  -> prepare_population_df()
+  -> apply_completion_policy()
+  -> validate_population_df()
+  -> rectangularize_population_df()
+  -> df_2_array()
+  -> pa_write_poparray_cube()
+  -> rebuild_poparray_registry()
+  -> open_poparray()
+```
+
+`ingest_population()` orchestrates reading, transformation, preparation, completion, and validation.
+It then calls `build_poparray_from_df()`, which rectangularizes the table, constructs the array, and
+calls the HDF5 writer. The writer uses `HDF5Array::writeHDF5Array()` for the population dataset and
+writes the metadata separately. Registry rebuilding is a subsequent step needed to discover a new
+cube through `open_poparray()`.
+
+The reader and transformer live in `data-raw/tdc_estimates.r`. Age-label and support helpers live in
+`data-raw/tdc_estimates_support.r`. Generic ingestion lives in `R/ingestion.R`; array conversion lives
+in `R/utils.r`; persistence and reopening live in `R/cube_io.R` and `R/open_pop_array.r`.
+
+**EAGER build:** this ingestion path holds tables and a base R array in memory. Multiple intermediate
+objects may coexist, and a rectangular table is usually much larger than the array alone. Budget
+memory for the full build. HDF5 backing makes subsequent access lazy; it does not make this build
+out-of-core. `as.array()`, `array_2_df()`, and full-cube data-frame conversion also realize values.
+
+# Prepare a reproducible session
+
+Record package versions, source file names, checksums, acquisition dates, and any source revisions.
+Keep the raw files immutable. Do not source `data-raw/control_def.r` merely to get helper functions:
+it clears the workspace and invokes other data workflows.
+
+```{r setup}
+# Prevent automatic cube-store initialization while loading the development package.
+Sys.setenv(TARR_POP_SKIP_CUBE_SETUP = "true")
+library(tidyverse)
+library(janitor)
+library(data.table)
+library(rage)
+devtools::load_all()
+
+# Capture the configured production root before selecting an isolated build root.
+production_root <- tarr.pop::cube_path()
+production_file <- file.path(production_root, "base", "tdc_estimates_county.h5")
+production_file
+sessionInfo()
+```
+
+`tarr::paths$population` is the local path convention used by the supplied script. It is not a
+portable requirement: set `input_dir` explicitly for another computer. The local ingestion tooling
+uses packages such as readr, janitor, forcats, and rage in addition to the package itself.
+
+```{r source-manifest}
+input_dir <- file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre")
+pattern <- "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv$"
+files <- sort(list.files(input_dir, pattern = pattern, full.names = TRUE))
+stopifnot(length(files) > 0L)
+manifest <- data.frame(
+  file = basename(files),
+  year = as.integer(substr(basename(files), 1L, 4L)),
+  md5 = unname(tools::md5sum(files))
+)
+stopifnot(!anyNA(manifest$year), !anyDuplicated(manifest$year))
+manifest
+```
+
+The anchored pattern excludes zip archives and names that merely contain the expected suffix. If
+several revisions exist for one year, choose the authoritative revision explicitly rather than
+binding both. Update the filename policy when new years no longer match the current pattern.
+
+## Load definitions without running the production script
+
+Sourcing all of `tdc_estimates.r` executes its build with overwrite enabled. To inspect stages safely,
+load its function definitions only. The following repository-only setup reuses the actual functions
+instead of maintaining a second copy of their implementations in this guide.
+
+```{r load-definitions}
+tdc <- new.env(parent = globalenv())
+sys.source("data-raw/tdc_estimates_support.r", envir = tdc)
+wanted <- c("read_est_csv", "read_tdc_estimates_raw",
+            "transform_tdc_estimates", "tdc_estimate_semantics")
+for (expr in parse("data-raw/tdc_estimates.r")) {
+  if (is.call(expr) && identical(expr[[1L]], as.name("<-")) &&
+      is.symbol(expr[[2L]]) && as.character(expr[[2L]]) %in% wanted) {
+    eval(expr, envir = tdc)
+  }
+}
+stopifnot(all(vapply(wanted, function(nm) is.function(tdc[[nm]]), logical(1))))
+```
+
+Internal helpers referenced with `tarr.pop:::` below are useful for a maintainer's staged audit.
+They are not a stable public API. A routine build should call the exported `ingest_population()`.
+
+# Read and audit the sources
+
+`read_est_csv()` inspects the header before selecting column specifications. It handles `County`
+versus `Area Name`, and `FIPS` versus `Area Code`. It cleans names, maps Anglo to white, removes the
+non-Hispanic prefix and population suffix, and removes source total columns. It uses an existing year
+column when present, otherwise the filename year. Therefore verify both agree rather than assuming
+the filename always wins.
+
+The current reader first reads count fields as character, then `read_tdc_estimates_raw()` removes a
+comma and converts character columns to integer. A successful CSV parse alone cannot prove that
+this conversion succeeded. Inspect the count strings and stop on conversion warnings or unexpected
+missing values. Do not suppress them to finish a build.
+
+```{r audit-files}
+file_checks <- lapply(files, function(file) {
+  header <- names(readr::read_csv(file, n_max = 0L, show_col_types = FALSE))
+  one <- tdc$read_est_csv(file)
+  stopifnot(nrow(readr::problems(one)) == 0L)
+  expected_year <- as.integer(substr(basename(file), 1L, 4L))
+  stopifnot(all(one$year == expected_year), !anyNA(one$year))
+  counts <- one[vapply(one, is.character, logical(1))]
+  stopifnot(all(vapply(counts, function(x) {
+    cleaned <- stringr::str_remove(x, ",")
+    all(is.na(cleaned) | grepl("^[0-9]+$", cleaned))
+  }, logical(1))))
+  data.frame(file = basename(file), year = expected_year, rows = nrow(one),
+             name_header = if ("Area Name" %in% header) "Area Name" else "County",
+             code_header = if ("FIPS" %in% header) "FIPS" else "Area Code")
+})
+do.call(rbind, file_checks)
+raw <- tdc$read_tdc_estimates_raw(input_dir = input_dir, pattern = pattern)
+stopifnot(setequal(unique(raw$year), manifest$year))
+str(raw)
+```
+
+This is an additional **EAGER source audit** and reads the files again. For a large build, run it
+once, retain the results, and release unused objects. Also inspect source headers directly: the
+reader intentionally drops total columns, so unexplained column loss must be investigated before
+relying on the canonical table.
+
+## Establish a non-overlapping reference total
+
+Use county rows at detailed ages and the separate female/male race components. Do not add an
+`All Ages` row to detailed ages, a total column to its component columns, or the state total to
+counties. The reference below is independent of the geography transformation and array mapping.
+
+```{r source-reference}
+count_columns <- grep("^(asian|black|hispanic|other|white)_(female|male)$",
+                      names(raw), value = TRUE)
+stopifnot(length(count_columns) > 0L,
+          all(vapply(raw[, ..count_columns], is.numeric, logical(1))))
+source_detail <- raw[
+  !as.character(fips) %in% c("0", "000", "48", "48000") &
+    !grepl("all", as.character(age), ignore.case = TRUE)
+]
+source_year_totals <- source_detail[
+  , .(population = sum(as.matrix(.SD), na.rm = TRUE)),
+  by = year, .SDcols = count_columns
+][order(year)]
+source_total <- sum(source_year_totals$population)
+source_de_witt <- source_detail[
+  as.character(fips) %in% c("123", "48123"),
+  .(population = sum(as.matrix(.SD), na.rm = TRUE)),
+  by = year, .SDcols = count_columns
+][order(year)]
+source_year_totals
+```
+
+`as.matrix()` here realizes a count-only table already in memory; it is **EAGER**. A tidyverse
+alternative is to pivot only `count_columns` and group by year, but that creates more rows and can
+use considerably more memory. Neither alternative should pivot source totals together with their
+components.
+
+# Transform and confirm geographic identity
+
+```{r transform}
+dims <- c("year", "area.name", "sex", "age.char", "race.eth")
+counties <- setdiff(names(tarr.pop::county_fips), "Texas")
+canonical <- tdc$transform_tdc_estimates(
+  data.table::copy(raw), counties = counties, include_texas_total = FALSE
+)
+stopifnot(identical(names(canonical), c(dims, "population")),
+          !anyDuplicated(canonical[, ..dims]),
+          !any(canonical$population < 0, na.rm = TRUE),
+          !"Texas" %in% as.character(canonical$area.name))
+```
+
+Pass a copy because the transformer changes a data.table by reference. It resolves source FIPS/Area
+Code through the existing one-to-one county reference before discarding that identifier. Short
+county codes are normalized to Texas county FIPS; code 123 resolves to `De Witt` even when the source
+label is `DeWitt`. Unresolved geography identifiers cause an error before the whitelist can silently
+drop them. State identifiers resolve to canonical `Texas`; exclusion is controlled explicitly by
+`include_texas_total`, including when `counties = NULL`.
+
+The wide counts are then melted, race/sex column names are split, age labels are interpreted through
+rage, aggregates are removed, and remaining factor levels are retained in their intended order.
+Do not reorder raw age factor levels alphabetically before this transformation. Check infancy and
+upper-age labels directly after normalization.
+
+# Build complete support and apply completion
+
+```{r support-and-completion}
+support <- tdc$tdc_estimate_support_table(years = manifest$year, counties = counties)
+stopifnot(!anyDuplicated(support[, dims]), !anyNA(support[, dims]))
+semantics <- tdc$tdc_estimate_semantics()
+prepared <- tarr.pop:::prepare_population_df(
+  data.table::copy(canonical), dims, drop_all = TRUE, data_col = "population"
+)
+completed <- tarr.pop:::apply_completion_policy(
+  data.table::copy(prepared), dims, policy = "na", data_col = "population",
+  support = data.table::as.data.table(support)
+)
+tarr.pop:::validate_population_df(completed, dims, allow_na = TRUE, data_col = "population")
+completed[is.na(population), .N, by = .(year, race.eth)][order(year, race.eth)]
+```
+
+Support must list **all** valid source combinations for every input year, county, sex, supported age,
+and race/ethnicity. A table containing only missing Asian rows is not complete support. The completion
+function rejects observed coordinates outside explicit support and duplicate support coordinates.
+With `"na"`, valid but absent cells receive `NA`; unsupported combinations do not enter this table.
+The `"error"` policy rejects incomplete support, while `"zero"` fills missing valid cells with zero.
+Use `"na"` for TDC; missing reporting does not establish a true population of zero.
+
+The supplied semantics use partitions for year, county, sex, and race/ethnicity. Age uses interval
+scale and set semantics with `85 +` recorded as overlapping. Setting `validated = TRUE` is a contract
+claim, not evidence that the CSV was audited; it must be justified by the preceding checks.
+
+# Rectangularize and construct the array
+
+```{r rectangularize}
+rectangular <- tarr.pop:::rectangularize_population_df(
+  data.table::copy(completed), dims, data_col = "population"
+)
+arr <- tarr.pop::df_2_array(as.data.frame(rectangular), data_col = "population")
+stopifnot(nrow(rectangular) == prod(dim(arr)),
+          !anyDuplicated(rectangular[, ..dims]),
+          identical(names(dimnames(arr)), dims))
+```
+
+Rectangularization takes the Cartesian product of dimension extents and left-joins the supported
+observations. The physical array contains the union of age labels from all represented eras, so
+structural `NA` cells are expected. `df_2_array()` requires exactly one row per physical coordinate;
+it maps values to explicit indices instead of relying on row ordering or recycling. Factor levels
+control the intended ordering.
+
+`build_poparray_from_df()` performs these steps internally. They are shown separately here so the
+first stage that changes a total can be located before writing a file.
+
+# Verify every in-memory stage
+
+```{r conservation}
+table_stats <- function(x) {
+  x <- data.table::as.data.table(x)
+  list(total = sum(x$population, na.rm = TRUE),
+       non_na = sum(!is.na(x$population)), na = sum(is.na(x$population)),
+       by_year = x[, .(population = sum(population, na.rm = TRUE)), by = year][order(year)],
+       by_county = x[, .(population = sum(population, na.rm = TRUE)),
+                     by = .(area.name = as.character(area.name))][order(area.name)])
+}
+baseline <- table_stats(canonical)
+for (stage in list(prepared, completed, rectangular)) {
+  stats <- table_stats(stage)
+  stopifnot(stats$total == baseline$total, stats$non_na == baseline$non_na,
+            isTRUE(all.equal(stats$by_year, baseline$by_year, check.attributes = FALSE)),
+            isTRUE(all.equal(stats$by_county, baseline$by_county, check.attributes = FALSE)))
+}
+stopifnot(baseline$total == source_total,
+          identical(as.numeric(baseline$by_year$population),
+                    as.numeric(source_year_totals$population)),
+          sum(arr, na.rm = TRUE) == source_total,
+          sum(!is.na(arr)) == baseline$non_na)
+
+supported_na <- sum(is.na(completed$population))
+structural_na <- nrow(rectangular) - nrow(completed)
+stopifnot(sum(is.na(arr)) == supported_na + structural_na)
+data.frame(stage = c("canonical", "completed", "rectangular", "array"),
+           total = rep(source_total, 4),
+           non_na = rep(baseline$non_na, 4),
+           na = c(sum(is.na(canonical$population)), supported_na,
+                  supported_na + structural_na, sum(is.na(arr))))
+```
+
+Canonical source NAs, if present, are already missing before completion. To count newly introduced
+NAs separately, subtract existing canonical missing coordinates rather than labeling every completed
+NA as new. Inspect missing combinations by year, county, age, and race. A whole missing county is a
+geography or reader problem, not legitimate unreported population.
+
+For the audited 2011–2024 files, the county snapshot checksum was **397,324,736**, with **2,999,232**
+observed non-NA cells, **262,128** supported early Asian NAs, and **187,960** structural NAs. The
+physical dimensions were 14 × 254 × 2 × 97 × 5. These are historical checks for that exact source
+set, not permanent constants: revisions or added years require a new independently verified baseline.
+
+# Write to an isolated cube store
+
+Do not use `overwrite = TRUE` as the first step of an audit. The writer removes an existing file
+before constructing its replacement; it is not a transactional swap.
+
+```{r temporary-build}
+build_root <- tempfile("tdc-cube-build-")
+tarr.pop::set_cube_path(build_root, create = TRUE, persist = FALSE)
+dir.create(file.path(build_root, "base"), showWarnings = FALSE)
+temporary_file <- file.path(build_root, "base", "tdc_estimates_county.h5")
+source_meta <- list(
+  note = "Texas Demographic Center county estimates",
+  population_type = "Estimate",
+  source = "Texas Demographic Center, Estimates program"
+)
+tarr.pop::ingest_population(
+  reader = function(...) data.table::copy(raw),
+  transformer = tdc$transform_tdc_estimates,
+  dims = dims, dim_semantics = semantics,
+  filepath = temporary_file, series_id = "tdc_estimates_county",
+  completion_policy = "na", drop_all = TRUE, source_meta = source_meta,
+  time_dim = "year", area_dim = "area.name", support = support,
+  overwrite = FALSE, data_col = "population",
+  counties = counties, include_texas_total = FALSE
+)
+stopifnot(file.exists(temporary_file), file.info(temporary_file)$size > 0)
+tarr.pop::rebuild_poparray_registry(build_root)
+cube <- tarr.pop::open_poparray("tdc_estimates_county")
+```
+
+The reader closure reuses the already audited raw table. To demonstrate a fresh source read instead,
+pass `reader = tdc$read_tdc_estimates_raw`, `input_dir = input_dir`, and `pattern = pattern`; those
+arguments travel through `...` to the source functions. Both reader and transformer receive `...`,
+so their signatures must accept the arguments used for that build.
+
+The scratch root contains only the candidate cube. `persist = FALSE` changes the session option
+without changing the user's saved path. Avoid calling `init_cubes()` on this scratch root merely to
+make directories: initialization can copy bundled cubes and introduce duplicate series or an
+existing target file. For a new permanent store, `init_cubes()` is the supported initialization tool;
+inspect its resulting contents before selecting an output path.
+
+# Inspect storage and verify the reopened cube
+
+```{r verify-hdf5}
+inventory <- rhdf5::h5ls(temporary_file)
+paths <- paste0(inventory$group, "/", inventory$name)
+stopifnot("/cube/population" %in% paths,
+          all(c("/cube/metadata/roles", "/cube/metadata/source",
+                "/cube/metadata/dimnames", "/cube/metadata/dim_semantics") %in% paths))
+inventory
+```
+
+The population dataset is `cube/population`. Metadata includes dimension order and labels, role
+names, data-column name, source information, series identifier, and fieldwise dimension semantics.
+A successful write return does not prove that values and metadata can be recovered.
+
+```{r verify-reopened}
+verify_cube <- function(x, expected_array) {
+  stopifnot(identical(dim(x), dim(expected_array)),
+            identical(dimnames(x), dimnames(expected_array)),
+            identical(tarr.pop::time_role(x), "year"),
+            identical(tarr.pop::area_role(x), "area.name"),
+            identical(tarr.pop::data_col(x), "population"),
+            identical(lapply(tarr.pop::dim_semantics(x), S7::props),
+                      lapply(semantics, S7::props)))
+  src <- tarr.pop::get_source(x)
+  stopifnot(all(vapply(names(source_meta), function(nm) {
+    identical(src[[nm]], source_meta[[nm]])
+  }, logical(1))), length(src$updated) == 1L, nzchar(src$updated))
+  # EAGER diagnostic: read the entire small-to-moderate candidate cube once.
+  # For larger cubes, compare chunks at matching coordinates instead.
+  values <- as.array(x)
+  stopifnot(identical(as.numeric(values), as.numeric(expected_array)))
+  invisible(values)
+}
+reopened_values <- verify_cube(cube, arr)
+```
+
+The comparison includes every coordinate, zero, and NA, so it is stronger than comparing totals.
+It also implies exact yearly and county conservation when the input array has passed the earlier
+checks. For a large cube, replace the full realization with matching blocks or year/county slices;
+compare all blocks, not merely a random sample. Opening, inspecting dimensions, and selecting labels
+remain lazy; requesting values is where reads occur.
+
+Representative checks should still be printed for review. For example, where both years are present:
+
+```{r representative-coordinates}
+if (all(c("2016", "2017") %in% dimnames(arr)$year)) {
+  data.frame(
+    coordinate = c("2016 / De Witt / female / 85+ / white",
+                   "2016 / De Witt / female / 86 / white",
+                   "2017 / De Witt / female / 85+ / white",
+                   "2017 / De Witt / female / 86 / white",
+                   "2017 / De Witt / female / 95+ / white",
+                   "2016 / De Witt / female / <1 / asian"),
+    value = c(arr["2016", "De Witt", "female", "85 +", "white"],
+              arr["2016", "De Witt", "female", "86", "white"],
+              arr["2017", "De Witt", "female", "85 +", "white"],
+              arr["2017", "De Witt", "female", "86", "white"],
+              arr["2017", "De Witt", "female", "95 +", "white"],
+              arr["2016", "De Witt", "female", "< 1", "asian"])
+  )
+}
+zero_row <- canonical[!is.na(population) & population == 0][1L]
+if (nrow(zero_row) && !is.na(zero_row$population)) {
+  coordinate <- lapply(zero_row[, ..dims], as.character)
+  stopifnot(do.call(`[`, c(list(arr), coordinate, list(drop = TRUE))) == 0)
+}
+```
+
+Also review De Witt totals and its 960 supported cells per later year, along with another county such
+as Tarrant. For the audited 2020–2024 sources, De Witt totals were 19,824; 19,886; 19,660; 19,784;
+and 20,242. Those observations must survive all stages, rather than reappearing as missing cells
+introduced by completion.
+
+## Print yearly and county conservation results
+
+```{r final-conservation}
+final_by_year <- data.frame(
+  year = as.integer(dimnames(reopened_values)$year),
+  population = vapply(dimnames(reopened_values)$year, function(year) {
+    sum(reopened_values[year, , , , ], na.rm = TRUE)
+  }, numeric(1))
+)
+yearly_comparison <- merge(as.data.frame(source_year_totals), final_by_year,
+                           by = "year", suffixes = c(".source", ".cube"))
+yearly_comparison$difference <- with(yearly_comparison, population.cube - population.source)
+stopifnot(nrow(yearly_comparison) == nrow(manifest),
+          all(yearly_comparison$difference == 0))
+yearly_comparison
+
+de_witt <- completed[as.character(area.name) == "De Witt",
+  .(population = sum(population, na.rm = TRUE), cells = .N,
+    supported_na = sum(is.na(population))), by = year][order(year)]
+stopifnot(identical(as.numeric(de_witt$population), as.numeric(source_de_witt$population)),
+          all(de_witt$cells == ifelse(de_witt$year < 2017L, 860L, 960L)))
+de_witt
+baseline$by_county[as.character(area.name) %in% c("De Witt", "Tarrant")]
+```
+
+For a different source or a deliberately restricted county selection, adapt these source-specific
+checks to its declared support. Do not compare filtered observations with an unfiltered reference.
+
+# Replace production only after verification
+
+Print and confirm the actual configured production path; do not copy another computer's absolute
+path from a report. Preserve a verified backup **outside** the registry-scanned `base` directory,
+including its subdirectories. An HDF5 backup inside that tree can be discovered as a duplicate series.
+
+The following is a deliberate publication step, not part of rendering this guide. It uses the normal
+ingestion entry point again and then compares production with the verified candidate. It is safe to
+proceed only after every previous check succeeds and no process is writing the same production file.
+
+```{r production-rebuild}
+production_file
+backup_file <- NULL
+if (file.exists(production_file)) {
+  backup_dir <- file.path(dirname(production_root), "tdc_estimates_backups")
+  dir.create(backup_dir, recursive = TRUE, showWarnings = FALSE)
+  backup_file <- file.path(backup_dir, paste0(
+    "tdc_estimates_county_", format(Sys.time(), "%Y%m%dT%H%M%S"), ".h5"
+  ))
+  stopifnot(!file.exists(backup_file),
+            file.copy(production_file, backup_file, overwrite = FALSE),
+            unname(tools::md5sum(production_file)) == unname(tools::md5sum(backup_file)))
+}
+tarr.pop::set_cube_path(production_root, create = TRUE, persist = FALSE)
+tarr.pop::ingest_population(
+  reader = function(...) data.table::copy(raw), transformer = tdc$transform_tdc_estimates,
+  dims = dims, dim_semantics = semantics,
+  filepath = production_file, series_id = "tdc_estimates_county",
+  completion_policy = "na", drop_all = TRUE, source_meta = source_meta,
+  time_dim = "year", area_dim = "area.name", support = support,
+  overwrite = TRUE, data_col = "population",
+  counties = counties, include_texas_total = FALSE
+)
+tarr.pop::rebuild_poparray_registry(production_root)
+tarr.pop:::reset_poparray_cache()
+production_cube <- tarr.pop::open_poparray("tdc_estimates_county")
+production_values <- verify_cube(production_cube, arr)
+stopifnot(identical(as.numeric(production_values), as.numeric(reopened_values)))
+```
+
+If the rebuild or verification fails, do not report success. Stop other use of the defective candidate,
+retain diagnostics, and restore the verified backup if replacement damaged production. Rebuild the
+registry and reset caches after a restoration as well. Close or discard previously opened objects
+before replacing files they reference; do not assume a live lazy object tracks file replacement safely.
+The metadata update date may change between builds, so compare provenance fields and valid update
+records rather than requiring identical timestamps.
+
+Restore the intended cube path when leaving a scratch-only session. Retain the source manifest,
+yearly and county checksums, missing-cell classification, spot checks, session information, candidate
+path, production path, and backup path as the build record.
+
+# Troubleshooting and maintenance
+
+| Symptom | Likely boundary to inspect | Action |
+|---|---|---|
+| County vanishes or becomes entirely missing | Source identifier mapping and whitelist | Inspect FIPS before filtering; never repair by zero fill |
+| Counts become NA during reading | Character-to-integer conversion | Inspect original strings and conversion warnings |
+| Observations are outside support | Source transformation or age-era support | Compare exact offending coordinates before changing support |
+| Totals increase | Duplicate source revisions or aggregate rows | Remove overlap from the comparison and inspect duplicates |
+| `df_2_array()` rejects row count | Missing rectangularization or incomplete table | Complete valid support, then rectangularize separately |
+| Labels or values shift after conversion | Factor order or coordinate mapping | Compare explicit coordinates and dimnames |
+| Unknown series when opening | Wrong active root or stale registry | Set the correct root and rebuild its registry |
+| Duplicate series when opening | Multiple files with the same series ID | Move backups out of the scanned base tree; rebuild the registry |
+| NA count seems excessive | Supported versus structural missingness | Classify against support, then inspect missing counties/years |
+| Aggregation is refused | Overlapping labels or invalid semantics | Select a valid non-overlapping set; do not bypass guards |
+
+For a new population source, keep the same division of responsibilities. Its reader handles source
+schemas and parsing; its transformer resolves identities and constructs canonical observations; its
+support helper states valid combinations; its semantics define safe operations. The generic pipeline
+then validates, rectangularizes, writes, and reopens. A direct call to `df_2_array()` is suitable only
+for a complete rectangular table already checked at that boundary.
+
+Before releasing an ingestion change, run focused source and support tests, then `devtools::test()`.
+Run `devtools::check(document = FALSE, vignettes = FALSE, error_on = "never")` to distinguish package
+check issues from build accuracy. Existing unrelated example, documentation, or installed-test errors
+must be reported separately; a full test-suite pass alone does not establish real-data conservation.
+When adding fixtures, ensure installed-package tests do not unconditionally source files excluded by
+`.Rbuildignore`.
+
+Normal analysis should keep the verified `poparray` HDF5-backed and lazy, use named dimensions, and
+retain roles and semantics through subsetting and aggregation. Full-cube realization belongs in an
+explicitly budgeted build diagnostic, not in routine population analysis.
