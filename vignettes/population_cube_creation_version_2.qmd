@@ -19,8 +19,8 @@ editor:
 
 # Purpose and scope
 
-A population cube stores a count at each combination of demographic coordinates. For the Texas
-Demographic Center (TDC) county estimates, those coordinates are estimate year, county, sex, age
+A population cube stores a count at each combination of demographic dimensions. For the Texas
+Demographic Center (TDC) county estimates, those dimensions are estimate year, county, sex, age
 interval, and combined race/ethnicity. The finished object is a `poparray` whose values reside in an
 HDF5 file and whose labels, dimension roles, semantics, and provenance are stored with those values.
 
@@ -309,7 +309,7 @@ completed[is.na(population), .N, by = .(year, race.eth)][order(year, race.eth)]
 
 Support must list **all** valid source combinations for every input year, county, sex, supported age,
 and race/ethnicity. A table containing only missing Asian rows is not complete support. The completion
-function rejects observed coordinates outside explicit support and duplicate support coordinates.
+function rejects observed dimensions outside explicit support and duplicate support dimensions.
 With `"na"`, valid but absent cells receive `NA`; unsupported combinations do not enter this table.
 The `"error"` policy rejects incomplete support, while `"zero"` fills missing valid cells with zero.
 Use `"na"` for TDC; missing reporting does not establish a true population of zero.
@@ -374,7 +374,7 @@ data.frame(stage = c("canonical", "completed", "rectangular", "array"),
 ```
 
 Canonical source NAs, if present, are already missing before completion. To count newly introduced
-NAs separately, subtract existing canonical missing coordinates rather than labeling every completed
+NAs separately, subtract existing canonical missing dimensions rather than labeling every completed
 NA as new. Inspect missing combinations by year, county, age, and race. A whole missing county is a
 geography or reader problem, not legitimate unreported population.
 
@@ -453,7 +453,7 @@ verify_cube <- function(x, expected_array) {
     identical(src[[nm]], source_meta[[nm]])
   }, logical(1))), length(src$updated) == 1L, nzchar(src$updated))
   # EAGER diagnostic: read the entire small-to-moderate candidate cube once.
-  # For larger cubes, compare chunks at matching coordinates instead.
+  # For larger cubes, compare chunks at matching dimensions instead.
   values <- as.array(x)
   stopifnot(identical(as.numeric(values), as.numeric(expected_array)))
   invisible(values)
@@ -469,7 +469,7 @@ remain lazy; requesting values is where reads occur.
 
 Representative checks should still be printed for review. For example, where both years are present:
 
-```{r representative-coordinates}
+```{r representative-dimensions}
 if (all(c("2016", "2017") %in% dimnames(arr)$year)) {
   data.frame(
     coordinate = c("2016 / De Witt / female / 85+ / white",
@@ -583,10 +583,10 @@ path, production path, and backup path as the build record.
 |---|---|---|
 | County vanishes or becomes entirely missing | Source identifier mapping and whitelist | Inspect FIPS before filtering; never repair by zero fill |
 | Counts become NA during reading | Character-to-integer conversion | Inspect original strings and conversion warnings |
-| Observations are outside support | Source transformation or age-era support | Compare exact offending coordinates before changing support |
+| Observations are outside support | Source transformation or age-era support | Compare exact offending dimensions before changing support |
 | Totals increase | Duplicate source revisions or aggregate rows | Remove overlap from the comparison and inspect duplicates |
 | `df_2_array()` rejects row count | Missing rectangularization or incomplete table | Complete valid support, then rectangularize separately |
-| Labels or values shift after conversion | Factor order or coordinate mapping | Compare explicit coordinates and dimnames |
+| Labels or values shift after conversion | Factor order or coordinate mapping | Compare explicit dimensions and dimnames |
 | Unknown series when opening | Wrong active root or stale registry | Set the correct root and rebuild its registry |
 | Duplicate series when opening | Multiple files with the same series ID | Move backups out of the scanned base tree; rebuild the registry |
 | NA count seems excessive | Supported versus structural missingness | Classify against support, then inspect missing counties/years |
