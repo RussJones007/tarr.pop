@@ -103,8 +103,45 @@ read_tdc_estimates_raw <- function(
 return(df)
 }
 
+# Transform the read csv files into a canaonocal data frame, removing total, and state of Texas rows.
+# The function returns a long data.table
 transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = FALSE) {
   stopifnot(data.table::is.data.table(df))
+
+  # Resolve source geography by identifier before filtering or discarding FIPS.
+  # The county reference includes the canonical state entry: 48000 -> Texas.
+  if (!"fips" %in% names(df)) {
+    cli::cli_abort("TDC estimates require FIPS/Area Code to resolve source geography.")
+  }
+  reference <- tarr.pop::county_fips
+  reference_codes <- as.character(reference)
+  reference_names <- names(reference)
+  if (anyNA(reference_codes) || anyNA(reference_names) ||
+      anyDuplicated(reference_codes) || anyDuplicated(reference_names)) {
+    cli::cli_abort("The county FIPS reference must map identifiers and names one-to-one.")
+  }
+  
+  source_codes <- trimws(as.character(df$fips))
+  # Newer files use the two-digit state FIPS rather than county code 000.
+  source_codes[source_codes %in% "48"] <- as.character(reference["Texas"])
+  short_codes <- grepl("^[0-9]{1,3}$", source_codes)
+  source_codes[short_codes] <- paste0(
+    "48", sprintf("%03d", as.integer(source_codes[short_codes]))
+  )
+  
+  geography_index <- match(source_codes, reference_codes)
+  if (anyNA(geography_index)) {
+    unresolved <- unique(paste0(
+      as.character(df$county[is.na(geography_index)]),
+      " (FIPS/Area Code ", as.character(df$fips[is.na(geography_index)]), ")"
+    ))
+    cli::cli_abort(
+      "Unresolved TDC geography identifiers: {.val {head(unresolved, 5L)}}."
+    )
+  }
+  
+  canonical_names <- reference_names[geography_index]
+  df[, county := factor(canonical_names, levels = unique(canonical_names))]
 
   wide_names <- names(df) |>
     stringr::str_replace_all("_", ".") |>
@@ -126,8 +163,6 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   )
 
   long[ , c("race.eth", "sex") := data.table::tstrsplit(race.sex, split = ".", fixed = TRUE, fill = NA)
-  ][    , county   := forcats::fct_relabel(county, \(x) county_names(gsub(" COUNTY", "", x, ignore.case = TRUE)))
-  ][    , county   := forcats::fct_recode(county, "Texas" = "State Of Texas")
   ][    , age      := forcats::fct_relabel(age,\(x) process_age_char(x) |> rage::as.age_group() |> as.character())
   ][    , age      := ordered(age, levels = ordered_age_levels(age))
   ][    , sex      := forcats::fct_na_value_to_level(sex, level = "All")
@@ -136,7 +171,9 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
 
   data.table::setnames(long, old = c("age", "county"), new = c("age.char", "area.name"))
 
-  if (!is.null(counties)) long <- long[area.name %chin% counties]
+  if (!is.null(counties)) {
+    long <- long[area.name %chin% counties | (isTRUE(include_texas_total) & area.name == "Texas")]
+  }
 
   if (!isTRUE(include_texas_total)) long <- long[area.name != "Texas"]
   
@@ -245,9 +282,9 @@ tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 # undebug(read_tdc_estimates_raw)
 # undebug(read_est_csv)
 # undebug(transform_tdc_estimates)
-undebug(ingest_population)
-undebug(build_poparray_from_df)
-debug(df_2_array)
+# undebug(ingest_population)
+# undebug(build_poparray_from_df)
+# undebug(df_2_array)
 #undebug(validate_population_df)
 #debug(df_2_array)
 
