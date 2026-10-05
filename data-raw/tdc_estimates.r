@@ -21,6 +21,8 @@
 # Created May 14, 2026 - R. Jones
 # Revised October 2026 - R. Jones
 
+source(file.path("data-raw", "tdc_estimates_support.r"))
+
 # 1. Define functions used inside other functions ---------------------------
 ## Modifies Age column names, only used in the transform function below
 process_age_char <- function(x) {
@@ -214,26 +216,25 @@ if (exists("county_fips", inherits = TRUE)) default_counties <- setdiff(names(co
 dims <- c("year", "area.name", "sex", "age.char", "race.eth")
 
 # Support table ----
-## create a support table for the years the "asian" race.eth did not exist.
-age_levels <- c("< 1", "1", "10", "11", "12", "13", "14", "15", "16", "17", 
-          "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", 
-          "28", "29", "3", "30", "31", "32", "33", "34", "35", "36", "37", 
-          "38", "39", "4", "40", "41", "42", "43", "44", "45", "46", "47", 
-          "48", "49", "5", "50", "51", "52", "53", "54", "55", "56", "57", 
-          "58", "59", "6", "60", "61", "62", "63", "64", "65", "66", "67", 
-          "68", "69", "7", "70", "71", "72", "73", "74", "75", "76", "77", 
-          "78", "79", "8", "80", "81", "82", "83", "84", "85", "85 +", 
-          "86", "87", "88", "89", "9", "90", "91", "92", "93", "94", "95 +") |> 
-  rage::as.age_group() |> 
-  ordered()
+## Support is the complete valid source support, not only missing Asian rows.
+## TDC changed schema in 2017:
+## - 2011-2016: Asian was subsumed under other; ages end at "85 +".
+## - 2017 onward: Asian is directly reported; ages end at "95 +".
+tdc_estimate_input_dir <- file.path(
+  tarr::paths$population,
+  "Estimates",
+  "Texas Demographic Center",
+  "asre"
+)
+tdc_estimate_pattern <- "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv"
+tdc_estimate_years <- tdc_estimate_years_from_files(
+  input_dir = tdc_estimate_input_dir,
+  pattern = tdc_estimate_pattern
+)
 
-support_table <- expand_grid(year             = 2011:2016,
-                             area.name        = sort_values(default_counties) |> factor(),
-                             sex              = c("male", "female") |> sort() |> factor(),
-                             age.char         = age_levels,
-                             race.eth         = "asian"#,
-                             #KEEP.OUT.ATTRS   = FALSE,
-                             #stringsAsFactors = FALSE
+support_table <- tdc_estimate_support_table(
+  years = tdc_estimate_years,
+  counties = default_counties
 )
 
 
