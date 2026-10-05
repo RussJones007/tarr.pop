@@ -32,5 +32,5 @@ S3 method to coerce a poparray to a data frame. This method \strong{realizes} th
 poparray slice) and converts it to a long data.frame via \code{as.table()} semantics (one row per cell).
 }
 \details{
-For large cubes, subset first (e.g., restrict years/areas) to avoid materializing an unmanageably large array.
+For large cubes, subset first (e.g., restrict years/areas) to avoid materializing an unmanageable large array.
 }

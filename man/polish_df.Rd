@@ -6,11 +6,18 @@
 \usage{
 polish_df(df, stringsAsFactors = TRUE, time_dim = "year")
 }
+\arguments{
+\item{df}{the data frame that was coerced from poparray}
+
+\item{stringsAsFactors}{defaults to TRUE}
+
+\item{time_dim}{is the dimension with the time role}
+}
 \value{
 a data frame
 }
 \description{
-Used by as.data.frame() as a suport function
+Used by as.data.frame() as a support function
 }
 \examples{
 #todo

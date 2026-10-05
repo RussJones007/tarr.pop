@@ -8,6 +8,8 @@
 }
 \arguments{
 \item{x}{a poparray_projection object}
+
+\item{...}{forwarded arguments, not currenly used}
 }
 \description{
 Returns a \code{poparray} wrapping the same delayed backend in \code{handle},

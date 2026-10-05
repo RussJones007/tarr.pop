@@ -18,8 +18,9 @@ original name of the column that contained the data.
 }
 \description{
 A data frame can be made into an array with one column serving as the source of data, and the other columns becoming
-dimensions. This function takes a data frame and returns an array with dimnames and values. To ensure the array
-is complete, all combinations of the data frame fields must be present.  This function ensures this is the case.
+dimensions. This function takes a data frame and returns an array with dimnames and values. The input must already
+contain exactly one row for every Cartesian combination of the dimension labels; incomplete or duplicate
+dimensional coordinates are errors.
 Generally, arrays are a more efficient means of storing data compared to data frames. Using the indexing operator to
 return subsets is very fast. This function is used internally, but is exposed for use outside the package.  The
 complimentary array_2_df() is the reverse of this function.

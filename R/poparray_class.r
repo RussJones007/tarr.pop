@@ -323,7 +323,7 @@ setValidity("poparray", function(object) {
 #'  The dimnames() function is time expensive.  This method caches the dimension names
 #'  to prevent pinging the on disk file.  
 #'
-#' @param poparray 
+#' @param poparray the name of th epoparray
 #'
 #' @returns the poparray
 
@@ -1357,11 +1357,11 @@ warn_if_realization_large <- function(x, bytes_threshold = 5e7 * 8) {
 
 #' Polish data frames after coercing
 #'
-#'  Used by as.data.frame() as a suport function
+#'  Used by as.data.frame() as a support function
 #'
-#' @param df 
-#' @param stringsAsFactors 
-#' @param time_dim 
+#' @param df the data frame that was coerced from poparray
+#' @param stringsAsFactors defaults to TRUE
+#' @param time_dim is the dimension with the time role
 #'
 #' @returns a data frame
 #' @keywords internal

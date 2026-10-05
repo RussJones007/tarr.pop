@@ -6,6 +6,9 @@
 \usage{
 \S4method{dimnames}{poparray}(x)
 }
+\arguments{
+\item{poparray}{the name of th epoparray}
+}
 \value{
 the poparray
 }

@@ -882,7 +882,7 @@ setMethod(
 #' preserving time/area roles and retaining the `stat` dimension.
 #'
 #' @param x a poparray_projection object
-#' @param ...
+#' @param ...  forwarded arguments, not currenly used
 #'
 #' @export
 as.poparray.poparray_projection <- function(x, ...) {

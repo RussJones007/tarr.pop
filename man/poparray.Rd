@@ -10,7 +10,7 @@ adds explicit role and metadata slots. Memory is saved and speed increased by op
 manipulating the dimensions/metadata before realizing (loading) the selected array/cube in memory.  Typical work flow is
 to open the cube via the \code{\link[=open_poparray]{open_poparray()}} function, filtering the dimension levels that are needed through the \code{[}
 index operator or filter() function.  Dimension levels can also be collapsed using \code{\link[=collapse_dim]{collapse_dim()}}.  The cube can
-then be relaized \code{\link[=as.array]{as.array()}}, \code{\link[=as.data.frame]{as.data.frame()}}, or \code{\link[tibble:as_tibble]{tibble::as_tibble()}}.
+then be realized \code{\link[=as.array]{as.array()}}, \code{\link[=as.data.frame]{as.data.frame()}}, or \code{\link[tibble:as_tibble]{tibble::as_tibble()}}.
 }
 \section{Slots}{
 
