@@ -175,6 +175,24 @@ apply_completion_policy <- function(df,
       )
     }
     align_completion_dim_types(df, support, dims)
+
+    support_dup <- anyDuplicated(support[, dims, with = FALSE])
+    if (support_dup > 0L) {
+      cli::cli_abort("{.arg support} contains duplicate rows for one or more dimension combinations.")
+    }
+
+    skeleton <- unique(support[, dims, with = FALSE])
+    observed_keys <- unique(df[, dims, with = FALSE])
+    outside_support <- data.table::fsetdiff(observed_keys, skeleton)
+    if (nrow(outside_support) > 0L) {
+      preview <- utils::capture.output(print(utils::head(outside_support, 5L), row.names = FALSE))
+      cli::cli_abort(c(
+        "Observed population rows contain dimension combinations outside {.arg support}.",
+        "x" = "{nrow(outside_support)} observed dimension combinations are not declared valid by support.",
+        "i" = "First unsupported combinations:",
+        paste(preview, collapse = "\n")
+      ))
+    }
   }
   
   observed <- df
@@ -210,18 +228,13 @@ apply_completion_policy <- function(df,
     )
   }
 
-  support_dup <- anyDuplicated(support[, dims, with = FALSE])
-  if (support_dup > 0L) {
-    cli::cli_abort("{.arg support} contains duplicate rows for one or more dimension combinations.")
-  }
-
   skeleton <- support[, dims, with = FALSE]
   
   full <- data.table::merge.data.table(
     skeleton,
     observed,
     by = dims,
-    all = TRUE,
+    all.x = TRUE,
     sort = FALSE
   )
 
@@ -233,6 +246,74 @@ apply_completion_policy <- function(df,
   }
 
   full
+}
+
+#' Rectangularize a population table for array storage
+#'
+#' Expands a validated source-support table to the Cartesian grid required by
+#' base R arrays. This is a mechanical storage step: observed values are left
+#' joined onto the rectangular grid and unsupported physical coordinates remain
+#' `NA`.
+#'
+#' @param df A validated data.frame or data.table.
+#' @param dims Character vector of dimension column names.
+#' @param data_col Name of the value column.
+#'
+#' @return A data.table with exactly one row per physical array coordinate.
+#' @keywords internal
+#' @noRd
+rectangularize_population_df <- function(df, dims, data_col = "population") {
+  checkmate::assert_data_frame(df, min.rows = 1L)
+  checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
+  checkmate::assert_string(data_col, min.chars = 1L)
+
+  fields <- unique(c(dims, data_col))
+  missing <- setdiff(fields, names(df))
+  if (length(missing) > 0L) {
+    cli::cli_abort(
+      "Missing required columns: {.val {paste(missing, collapse = ', ')}}."
+    )
+  }
+
+  if (!data.table::is.data.table(df)) {
+    data.table::setDT(df)
+  }
+
+  dim_levels <- lapply(df[, dims, with = FALSE], function(x) {
+    if (is.factor(x)) {
+      levels(droplevels(x))
+    } else {
+      unique(x)
+    }
+  })
+  names(dim_levels) <- dims
+
+  grid <- do.call(
+    expand.grid,
+    c(dim_levels, list(KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE))
+  )
+  grid <- data.table::as.data.table(grid)
+
+  for (col in dims) {
+    source_col <- df[[col]]
+    if (is.factor(source_col)) {
+      grid[, (col) := factor(
+        .SD[[col]],
+        levels = levels(droplevels(source_col)),
+        ordered = is.ordered(source_col)
+      )]
+    }
+  }
+
+  out <- data.table::merge.data.table(
+    grid,
+    df[, fields, with = FALSE],
+    by = dims,
+    all.x = TRUE,
+    sort = FALSE
+  )
+
+  out[, fields, with = FALSE]
 }
 
 #' Validate a prepared ingestion table
@@ -352,7 +433,8 @@ build_poparray_from_df <- function(df,
     data.table::setDT(df)
   }
 
-  arr_df <- as.data.frame(df[, fields, with = FALSE])
+  rect_df <- rectangularize_population_df(df, dims = dims, data_col = data_col)
+  arr_df <- as.data.frame(rect_df[, fields, with = FALSE])
   arr <- df_2_array(arr_df, data_col = data_col)
   dim_names <- names(dimnames(arr))
 
@@ -874,7 +956,9 @@ add_population_data <- function(cube,
     data_col = data_col
   )
 
-  arr_df <- as.data.frame(df[, unique(c(dims, data_col)), with = FALSE])
+  fields <- unique(c(dims, data_col))
+  rect_df <- rectangularize_population_df(df, dims = dims, data_col = data_col)
+  arr_df <- as.data.frame(rect_df[, fields, with = FALSE])
   new_arr <- df_2_array(arr_df, data_col = data_col)
   new_arr <- pa_align_array_dimnames(new_arr, new_dimnames)
 

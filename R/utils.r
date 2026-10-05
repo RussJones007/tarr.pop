@@ -8,8 +8,9 @@
 #' Data Frame to Array
 #'
 #' A data frame can be made into an array with one column serving as the source of data, and the other columns becoming
-#' dimensions. This function takes a data frame and returns an array with dimnames and values. To ensure the array
-#' is complete, all combinations of the data frame fields must be present.  This function ensures this is the case.
+#' dimensions. This function takes a data frame and returns an array with dimnames and values. The input must already
+#' contain exactly one row for every Cartesian combination of the dimension labels; incomplete or duplicate
+#' dimensional coordinates are errors.
 #' Generally, arrays are a more efficient means of storing data compared to data frames. Using the indexing operator to
 #' return subsets is very fast. This function is used internally, but is exposed for use outside the package.  The
 #' complimentary array_2_df() is the reverse of this function.
@@ -45,7 +46,14 @@ df_2_array <- function(df, data_col = "value") {
     if (is.factor(x)) levels(droplevels(x)) else unique(as.character(x))
   })
   
-  dim_lens <- lengths(dim_nms)
+  dim_lens <- unname(lengths(dim_nms))
+  expected_nrow <- prod(dim_lens)
+
+  if (nrow(df) != expected_nrow) {
+    cli::cli_abort(
+      "{.arg df} must contain exactly one row per array coordinate; expected {expected_nrow} rows but found {nrow(df)}."
+    )
+  }
   
   # Create empty array.
   ret <- array(
@@ -62,11 +70,11 @@ df_2_array <- function(df, data_col = "value") {
   idx <- do.call(cbind, idx)
   
   if (anyNA(idx)) {
-    stop("Unable to match one or more dimension values to array dimnames.")
+    cli::cli_abort("Unable to match one or more dimension values to array dimnames.")
   }
   
   if (anyDuplicated(data.frame(idx))) {
-    stop("Duplicate dimension combinations found.")
+    cli::cli_abort("{.arg df} contains duplicate rows for one or more dimension combinations.")
   }
   
   # Assign each value to its explicit coordinate.

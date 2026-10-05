@@ -157,6 +157,146 @@ test_that("apply_completion_policy errors when support has duplicate cells", {
   )
 })
 
+test_that("apply_completion_policy errors when observations are outside explicit support", {
+  df <- data.frame(
+    year = c("2020", "2020"),
+    area.name = c("A", "B"),
+    population = c(10, 11),
+    stringsAsFactors = FALSE
+  )
+
+  support <- data.frame(
+    year = "2020",
+    area.name = "A",
+    stringsAsFactors = FALSE
+  )
+
+  expect_error(
+    tarr.pop:::apply_completion_policy(
+      df,
+      dims = c("year", "area.name"),
+      policy = "error",
+      support = support
+    ),
+    "outside .*support"
+  )
+})
+
+test_that("rectangularization embeds non-Cartesian age support as NA physical cells", {
+  age_levels <- c("84", "85", "85 +", "86", "95 +")
+  df <- data.frame(
+    year = factor(c("2016", "2016", "2017", "2017", "2017", "2017"), levels = c("2016", "2017")),
+    age.char = factor(c("84", "85 +", "84", "85", "86", "95 +"), levels = age_levels),
+    population = c(10, 20, 11, 5, 6, 10)
+  )
+
+  rect <- tarr.pop:::rectangularize_population_df(
+    df,
+    dims = c("year", "age.char"),
+    data_col = "population"
+  )
+  arr <- df_2_array(as.data.frame(rect), data_col = "population")
+
+  expect_identical(dimnames(arr)$year, c("2016", "2017"))
+  expect_identical(dimnames(arr)$age.char, age_levels)
+  expect_equal(arr["2016", "84"], 10)
+  expect_true(is.na(arr["2016", "85"]))
+  expect_equal(arr["2016", "85 +"], 20)
+  expect_true(is.na(arr["2016", "86"]))
+  expect_true(is.na(arr["2016", "95 +"]))
+  expect_equal(arr["2017", "84"], 11)
+  expect_equal(arr["2017", "85"], 5)
+  expect_true(is.na(arr["2017", "85 +"]))
+  expect_equal(arr["2017", "86"], 6)
+  expect_equal(arr["2017", "95 +"], 10)
+
+  expect_equal(sum(arr, na.rm = TRUE), sum(df$population, na.rm = TRUE))
+  expect_equal(sum(arr["2016", ], na.rm = TRUE), sum(df$population[df$year == "2016"], na.rm = TRUE))
+  expect_equal(sum(arr["2017", ], na.rm = TRUE), sum(df$population[df$year == "2017"], na.rm = TRUE))
+})
+
+test_that("rectangularized arrays are independent of input row order", {
+  age_levels <- c("84", "85", "85 +", "86", "95 +")
+  df <- data.frame(
+    year = factor(c("2016", "2016", "2017", "2017", "2017", "2017"), levels = c("2016", "2017")),
+    age.char = factor(c("84", "85 +", "84", "85", "86", "95 +"), levels = age_levels),
+    population = c(10, 20, 11, 5, 6, 10)
+  )
+
+  rect <- tarr.pop:::rectangularize_population_df(
+    df,
+    dims = c("year", "age.char"),
+    data_col = "population"
+  )
+  rev_rect <- tarr.pop:::rectangularize_population_df(
+    df[rev(seq_len(nrow(df))), ],
+    dims = c("year", "age.char"),
+    data_col = "population"
+  )
+
+  arr <- df_2_array(as.data.frame(rect), data_col = "population")
+  rev_arr <- df_2_array(as.data.frame(rev_rect), data_col = "population")
+
+  expect_identical(arr, rev_arr)
+})
+
+test_that("df_2_array errors on incomplete Cartesian input", {
+  df <- data.frame(
+    year = c("2020", "2020", "2021"),
+    sex = c("Female", "Male", "Female"),
+    population = c(10, 11, 12),
+    stringsAsFactors = FALSE
+  )
+
+  expect_error(
+    df_2_array(df, data_col = "population"),
+    "one row per array coordinate"
+  )
+})
+
+test_that("df_2_array errors on duplicate coordinates", {
+  df <- data.frame(
+    year = c("2020", "2020", "2020", "2021"),
+    sex = c("Female", "Female", "Male", "Female"),
+    population = c(10, 11, 12, 13),
+    stringsAsFactors = FALSE
+  )
+
+  expect_error(
+    df_2_array(df, data_col = "population"),
+    "duplicate rows"
+  )
+})
+
+test_that("df_2_array preserves intentional NA cells", {
+  df <- data.frame(
+    year = c("2020", "2020", "2021", "2021"),
+    sex = c("Female", "Male", "Female", "Male"),
+    population = c(10, NA, 12, 13),
+    stringsAsFactors = FALSE
+  )
+
+  arr <- df_2_array(df, data_col = "population")
+
+  expect_true(is.na(arr["2020", "Male"]))
+  expect_equal(arr["2021", "Male"], 13)
+})
+
+test_that("df_2_array still accepts ordinary rectangular input", {
+  df <- data.frame(
+    year = c("2020", "2020", "2021", "2021"),
+    sex = c("Female", "Male", "Female", "Male"),
+    population = c(10, 11, 12, 13),
+    stringsAsFactors = FALSE
+  )
+
+  arr <- df_2_array(df, data_col = "population")
+
+  expect_identical(dim(arr), c(2L, 2L))
+  expect_equal(arr["2020", "Female"], 10)
+  expect_equal(arr["2021", "Male"], 13)
+})
+
 test_that("prepare_population_df filters aggregate aliases directly", {
   df <- data.frame(
     year = c("2020", "2020", "2020"),
