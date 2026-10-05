@@ -16,33 +16,22 @@
 #  Note: The TDC Estimates are stable and generally do not change with updates, though TDC did revise 2021-2024 estimates
 #  to align with significant Census Bureau Updates. The link to the download tool for estimates is
 #  https://www.demographics.texas.gov/Estimates/Download and select the "Age, Sex, and Race/Ethnicity" categories.
- 
+#  
+#  Steps in creating the TDC cube:
+#  Calls the support function script then
+#  1.  Define the read CSV files function read_tdc_estimates_raw() that calls the reader function read_est_csv()
+#  2.  Define the transformation function transform_tdc_estimates() that takes all the read csv files, formats,
+#      removes totals, optionally removes Texas rows, creates and returns a long data.table
+#  3. The tdc_estimate_semantics() function is used to define the dimension semantics
+#  4.  Create the "support" table
+#  5. Ingest by calling ingest_population()
 # -------------------------------------------------------------------------------------->
 # Created May 14, 2026 - R. Jones
 # Revised October 2026 - R. Jones
 
 source(file.path("data-raw", "tdc_estimates_support.r"))
 
-# 1. Define functions used inside other functions ---------------------------
-## Modifies Age column names, only used in the transform function below
-process_age_char <- function(x) {
-  x |>
-    stringr::str_remove_all(stringr::regex("Ages", ignore_case = TRUE)) |>
-    stringr::str_remove_all(stringr::regex(" (ye?a??rs?|Ages)", ignore_case = TRUE)) |>
-    stringr::str_trim(side = "both") |>
-    stringr::str_replace("5\\+", "5 +")
-}
-
-## Used to sort and define age levels in the transform function
-ordered_age_levels <- function(x) {
-  age_levels <- levels(x)
-  age_levels <- age_levels[age_levels != "All"]
-  c(sort(as.character(rage::as.age_group(age_levels))), "All")
-}
-
-
-
-# 2. Define reading and transformation functions -------------------------
+# 1. Define reading and transformation functions -------------------------
 ## CSV reader function called for each file used in the master reader function below ----
 read_est_csv <- function(file){
   
@@ -103,8 +92,10 @@ read_tdc_estimates_raw <- function(
 return(df)
 }
 
-# Transform the read csv files into a canaonocal data frame, removing total, and state of Texas rows.
-# The function returns a long data.table
+
+# 2.  Define the transformation function transform_tdc_estimates() ---------------------------------------
+## Transform the read csv files into a canaonocal data frame, removing total, and state of Texas rows.
+## The function returns a long data.table
 transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = FALSE) {
   stopifnot(data.table::is.data.table(df))
 
@@ -199,6 +190,7 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   long
 }
 
+# 3. The tdc_estimate_semantics() function is used to define the dimension semantics ------------------------
 tdc_estimate_semantics <- function() {
   list(
     year = tarr.pop:::new_dim_semantics(
@@ -252,17 +244,12 @@ if (exists("county_fips", inherits = TRUE)) default_counties <- setdiff(names(co
 
 dims <- c("year", "area.name", "sex", "age.char", "race.eth")
 
-# Support table ----
+# 4.  Create the "support" table ----------------------------------------------------------------------------------
 ## Support is the complete valid source support, not only missing Asian rows.
 ## TDC changed schema in 2017:
-## - 2011-2016: Asian was subsumed under other; ages end at "85 +".
+## - 2011-2016: Asian was included under other; ages end at "85 +".
 ## - 2017 onward: Asian is directly reported; ages end at "95 +".
-tdc_estimate_input_dir <- file.path(
-  tarr::paths$population,
-  "Estimates",
-  "Texas Demographic Center",
-  "asre"
-)
+tdc_estimate_input_dir <- file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre")
 tdc_estimate_pattern <- "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv"
 tdc_estimate_years <- tdc_estimate_years_from_files(
   input_dir = tdc_estimate_input_dir,
@@ -278,16 +265,7 @@ support_table <- tdc_estimate_support_table(
 cube_root <- tarr.pop::init_cubes()
 tdc_estimates_file <- file.path(cube_root, "base", "tdc_estimates_county.h5")
 
-# 3. Ingest -------------------------------------------------------------------------------------------------------
-# undebug(read_tdc_estimates_raw)
-# undebug(read_est_csv)
-# undebug(transform_tdc_estimates)
-# undebug(ingest_population)
-# undebug(build_poparray_from_df)
-# undebug(df_2_array)
-#undebug(validate_population_df)
-#debug(df_2_array)
-
+# 5. Ingest by calling ingest_population() -------------------------------------------------------------------------
 tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
   transformer = transform_tdc_estimates,
@@ -310,6 +288,3 @@ tarr.pop::ingest_population(
   counties = default_counties,
   include_texas_total = FALSE
 )
-
-
-rm(pa)

@@ -1,5 +1,29 @@
 # Support helpers for Texas Demographic Center county estimates.
 
+
+# 1. Define functions used inside other functions ---------------------------
+  ## Modifies Age column names, only used in the transform function below
+  process_age_char <- function(x) {
+    x |>
+      stringr::str_remove_all(stringr::regex("Ages", ignore_case = TRUE)) |>
+      stringr::str_remove_all(stringr::regex(" (ye?a??rs?|Ages)", ignore_case = TRUE)) |>
+      stringr::str_trim(side = "both") |>
+      stringr::str_replace("5\\+", "5 +")
+  }
+  
+  ## Used to sort and define age levels in the transform function
+  ordered_age_levels <- function(x) {
+    age_levels <- levels(x)
+    age_levels <- age_levels[age_levels != "All"]
+    c(sort(as.character(rage::as.age_group(age_levels))), "All")
+  }
+  
+##------------------------------------------------------------------------->
+
+
+# 2. General support functions ------------------------------------------------------------------------------------
+
+  
 tdc_estimate_years_from_files <- function(
     input_dir,
     pattern = "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv"
