@@ -12,10 +12,9 @@
 
 #' Collapse a dimension of a poparray cube
 #'
-#' Groups labels along one dimension and sums population counts within groups.
-#' The reduction is executed blockwise against the delayed backend and written to
-#' a temporary HDF5-backed result. This avoids realizing the full source cube in
-#' memory and does not persist the result as a saved package cube.
+#' Groups labels along one dimension and sums population counts within groups. The reduction is executed blockwise
+#' against the delayed backend and written to a temporary HDF5-backed result. This avoids realizing the full source cube
+#' in memory and does not persist the result as a saved package cube.
 #'
 #' @param x A poparray object
 #' @param dim Dimension name (character) or index (integer)
@@ -23,10 +22,10 @@
 #'   See Details.
 #' @param keep_empty Logical; keep groups with zero members?
 #' @param name Optional new name for the dimension (defaults to original)
-#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are
-#'   blocked. When `FALSE`, a warning is emitted and the collapse proceeds.
-#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
-#'   collapsing overlapping categories within a group.
+#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are blocked. When `FALSE`, a warning is
+#'   emitted and the collapse proceeds.
+#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow collapsing overlapping categories
+#'   within a group.
 #'
 #' @details
 #' `groups` can be:
@@ -35,6 +34,9 @@
 #' - factor: length == number of old labels; levels are new labels
 #'
 #' Old labels not present in `groups` are dropped.
+#' 
+#' @seealso [group_ages()] for more convenient collapsing of ages
+#' @seealso [collapse_all()] a wrapper to collapse all values in a dimesion to "all"
 #'
 #' @return A new HDF5-backed `poparray` with the chosen dimension collapsed by
 #'   sum.
