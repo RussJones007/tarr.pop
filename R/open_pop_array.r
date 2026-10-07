@@ -338,6 +338,35 @@ get_cube_metadata_cached <- function(path, refresh = FALSE, info = NULL) {
   meta
 }
 
+#' Read optional applicability using the already cached HDF5 inventory
+#' @param meta Cached cube metadata including path and inventory.
+#' @param base Dimension semantic metadata group.
+#' @return Applicability list, or NULL for legacy cubes.
+#' @keywords internal
+#' @noRd
+read_dim_applicability <- function(meta, base) {
+  path <- paste0(base, "/applicability")
+  if (!h5_group_exists(meta$info, path)) return(NULL)
+  by <- h5_read_scalar_chr(meta$path, paste0(path, "/by"))
+  n <- rhdf5::h5read(meta$path, paste0(path, "/n_schemas"))
+  if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 0 || n > .Machine$integer.max || n != as.integer(n)) {
+    cli::cli_abort("Invalid applicability schema count in {.val {path}}.")
+  }
+  schemas <- lapply(seq_len(n), function(i) {
+    schema_path <- paste0(path, "/schemas/", i)
+    read_boundary <- function(field) {
+      value <- as.character(rhdf5::h5read(meta$path, paste0(schema_path, "/", field)))
+      if (!length(value)) NULL else value
+    }
+    list(
+      from = read_boundary("from"),
+      through = read_boundary("through"),
+      levels = as.character(rhdf5::h5read(meta$path, paste0(schema_path, "/levels")))
+    )
+  })
+  list(by = by, schemas = schemas)
+}
+
 read_dim_semantics_entry <- function(meta, base, dim_name_fallback) {
   path <- meta$path
   info <- meta$info
@@ -362,6 +391,7 @@ read_dim_semantics_entry <- function(meta, base, dim_name_fallback) {
     } else {
       character()
     },
+    applicability = read_dim_applicability(meta, base),
     notes = if (h5_dataset_exists(info, paste0(base, "/notes"))) {
       as.character(rhdf5::h5read(path, paste0(base, "/notes")))
     } else {
@@ -396,7 +426,8 @@ parse_dim_semantics_from_meta <- function(meta, dim_order = meta$dim_order, time
         partition_type = entry$partition_type,
         validated = entry$validated,
         overlap_levels = entry$overlap_levels,
-        notes = entry$notes
+        notes = entry$notes,
+        applicability = entry$applicability
       ))
     }
 
@@ -686,6 +717,9 @@ open_tarr_pop <- function(...) {
 #' - dimension roles from `cube/metadata/roles/*`,
 #' - source/provenance fields from `cube/metadata/source/*`.
 #' - per-dimension semantics from `cube/metadata/dim_semantics/*/*`.
+#' Optional applicability is restored from each dimension's nested semantic
+#' metadata. Older cubes without it retain `applicability = NULL` and legacy
+#' overlap behavior. Metadata inspection does not extract population values.
 #'
 #' @returns A poparray.
 #' @export

@@ -39,7 +39,7 @@ side.
 \strong{Categorical dimensions} (e.g. \code{area.name}, \code{sex}, \code{race}, \code{ethnicity})
 support:
 \itemize{
-\item Equality: \code{dim == value}
+\item Equality and exclusion: \code{dim == value}, \code{dim != value}
 \item Membership: \code{dim \%in\% values}
 \item Within-dimension boolean combinations: \code{&} and \code{|} are allowed only when
 both sides constrain the \emph{same} dimension.
@@ -63,6 +63,15 @@ interpreted as half-open intervals, e.g.:
 
 Range predicates (comparisons and \verb{\%between\%}) select age labels whose intervals \strong{overlap} the requested age set.
 Discrete membership with \code{\%in\%} remains \strong{exact label matching} (no interval overlap).
+Equality and exclusion on age labels also use exact label matching.
+
+Overlap safety is evaluated from the dimension levels currently present in
+the \code{poparray}. Removing overlapping levels by subsetting can therefore remove
+overlap risk. Intrinsic semantic metadata, including known overlap-causing
+labels, is preserved.
+When applicability is declared, safety is evaluated among levels applicable
+simultaneously in each schema. Filtering trims applicability ranges and target
+levels without reading population values. No schema harmonization is performed.
 }
 
 \subsection{What is not supported}{

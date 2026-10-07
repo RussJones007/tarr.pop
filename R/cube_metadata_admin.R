@@ -89,7 +89,8 @@ read_cube_dim_semantics_impl <- function(path, validate = TRUE) {
       dim_semantics = out,
       dim_names = meta$dim_order,
       time_dim = cube_roles$time,
-      area_dim = cube_roles$area
+      area_dim = cube_roles$area,
+      dimnames_list = meta$dimnames
     )
   }
 
@@ -125,7 +126,7 @@ read_cube_metadata_admin_impl <- function(path, validate = TRUE) {
   )
 
   if (isTRUE(validate)) {
-    out <- normalize_cube_metadata_bundle(out, meta$dim_order)
+    out <- normalize_cube_metadata_bundle(out, meta$dim_order, meta$dimnames)
   }
 
   out
@@ -149,7 +150,8 @@ write_cube_dim_semantics_impl <- function(path, dim_semantics, validate = TRUE) 
       dim_semantics = dsem,
       dim_names = meta$dim_order,
       time_dim = cube_roles$time,
-      area_dim = cube_roles$area
+      area_dim = cube_roles$area,
+      dimnames_list = meta$dimnames
     )
   }
 
@@ -270,6 +272,10 @@ source_meta <- function(x) {
 #'
 #' Returns the canonical metadata bundle from either an in-memory `poparray` or
 #' an HDF5 cube path.
+#' Optional dimension applicability travels within `dim_semantics`, not source
+#' provenance. Replacement validates schema boundaries, target levels, and
+#' coverage against current labels. Path-based updates write metadata only and
+#' do not rewrite the population dataset. See [dim_semantics()] for inspection.
 #'
 #' @param x A `poparray` or HDF5 cube path.
 #'
@@ -301,7 +307,7 @@ cube_metadata <- function(x) {
     cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
   }
   dn <- names(dimnames(x))
-  bundled <- normalize_cube_metadata_bundle(value, dn)
+  bundled <- normalize_cube_metadata_bundle(value, dn, dimnames(x))
   x <- `roles<-`(x, bundled$roles)
   x@source <- bundled$source
   x@data_col <- bundled$data_col
@@ -310,7 +316,7 @@ cube_metadata <- function(x) {
   x
 }
 
-normalize_cube_metadata_bundle <- function(metadata, dim_order) {
+normalize_cube_metadata_bundle <- function(metadata, dim_order, dimnames_list = NULL) {
   if (!is.list(metadata)) {
     cli::cli_abort("{.arg metadata} must be a named list.")
   }
@@ -337,7 +343,8 @@ normalize_cube_metadata_bundle <- function(metadata, dim_order) {
     dim_semantics = out$dim_semantics,
     dim_names = dim_order,
     time_dim = out$roles$time,
-    area_dim = out$roles$area
+    area_dim = out$roles$area,
+    dimnames_list = dimnames_list
   )
   out
 }
@@ -348,7 +355,7 @@ write_cube_metadata_admin_impl <- function(path, metadata, validate = TRUE) {
   meta <- get_cube_metadata_cached(path)
 
   bundled <- if (isTRUE(validate)) {
-    normalize_cube_metadata_bundle(metadata, meta$dim_order)
+    normalize_cube_metadata_bundle(metadata, meta$dim_order, meta$dimnames)
   } else {
     metadata
   }

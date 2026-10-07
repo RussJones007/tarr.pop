@@ -21,7 +21,8 @@ group_ages(
 \item{dimension_name}{Name of the age dimension. Defaults to \code{"age.char"}.}
 
 \item{keep_empty}{Logical; keep declared \code{age_groups} levels even when no
-source labels map to them?}
+source labels map to them in the legacy global mapping? With applicability,
+requested targets are retained and non-derivable contexts receive \code{NA}.}
 
 \item{strict}{Logical; when \code{TRUE} (default), unsafe grouped reductions are
 blocked. When \code{FALSE}, a warning is emitted and the grouping proceeds.}
@@ -39,9 +40,37 @@ maps existing age labels to \code{age_groups}, then performs the grouped reducti
 with the same semantic safety checks and blockwise backend processing used by
 \code{\link[=collapse_dim]{collapse_dim()}}.
 }
+\details{
+With applicability metadata, each controller schema selects its own source
+intervals. A target must have an exact applicable source interval or complete
+coverage by whole source intervals, without gaps or unsafe overlap. An early
+\verb{85+} cannot be split to derive \verb{90+}. Non-derivable target/schema combinations
+produce \code{NA} with one summarized warning. Inapplicable cells are excluded
+before summation; missing values in applicable contributors propagate normally.
+Result applicability describes the derived groups. Uniform output domains
+simplify to one full-span schema, preserving exact derivability for later
+grouping of the result. Without
+applicability, the existing global mapping and missing-value behavior remain.
+Requested output intervals must not overlap, including when source overlap is
+explicitly allowed.
+}
 \examples{
 # Load a poparray, subset lazily, then group ages.
 # census <- open_poparray(population$census.bureau$census)
 # census <- dplyr::filter(census, year \%in\% c("2010", "2020"))
 # census_age_grouped <- group_ages(census, rage::age_groups$ILI)
+\dontrun{
+values <- array(NA_real_, c(2, 1, 4), dimnames = list(
+  year = c("2000", "2001"), area.name = "A",
+  age.char = c("85+", "85-89", "90-94", "95+")))
+values[1, 1, 1] <- 160
+values[2, 1, 2:4] <- c(100, 40, 20)
+pop <- as.poparray(values, filepath = tempfile(fileext = ".h5"))
+semantics <- dim_semantics(pop)
+semantics$age.char@applicability <- list(by = "year", schemas = list(
+  list(from = NULL, through = "2000", levels = "85+"),
+  list(from = "2001", through = NULL, levels = c("85-89", "90-94", "95+"))))
+dim_semantics(pop) <- semantics
+harmonized <- group_ages(pop, "85+")
+}
 }

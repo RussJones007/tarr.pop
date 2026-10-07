@@ -156,6 +156,33 @@ pa_write_dim_semantics_fieldwise <- function(filepath, dim_semantics, dim_order)
     pa_h5_write_dataset(filepath, paste0(base, "/validated"), as.character(ent@validated))
     pa_h5_write_dataset(filepath, paste0(base, "/overlap_levels"), as.character(ent@overlap_levels))
     pa_h5_write_dataset(filepath, paste0(base, "/notes"), as.character(ent@notes))
+    pa_write_applicability_fieldwise(filepath, base, pa_dim_applicability(ent))
+  }
+  invisible(TRUE)
+}
+
+#' Write optional applicability beneath the existing dimension metadata group
+#' @param filepath HDF5 cube path.
+#' @param base Dimension metadata group path.
+#' @param applicability Optional applicability list.
+#' @return Invisibly TRUE. Only metadata datasets are written.
+#' @keywords internal
+#' @noRd
+pa_write_applicability_fieldwise <- function(filepath, base, applicability) {
+  path <- paste0(base, "/applicability")
+  pa_h5_delete_if_exists(filepath, path)
+  if (is.null(applicability)) return(invisible(TRUE))
+  pa_h5_create_group(filepath, path)
+  pa_h5_write_dataset(filepath, paste0(path, "/by"), applicability$by)
+  pa_h5_write_dataset(filepath, paste0(path, "/n_schemas"), length(applicability$schemas))
+  pa_h5_create_group(filepath, paste0(path, "/schemas"))
+  for (i in seq_along(applicability$schemas)) {
+    schema <- applicability$schemas[[i]]
+    schema_path <- paste0(path, "/schemas/", i)
+    pa_h5_create_group(filepath, schema_path)
+    pa_h5_write_dataset(filepath, paste0(schema_path, "/from"), as.character(schema$from))
+    pa_h5_write_dataset(filepath, paste0(schema_path, "/through"), as.character(schema$through))
+    pa_h5_write_dataset(filepath, paste0(schema_path, "/levels"), schema$levels)
   }
   invisible(TRUE)
 }
@@ -229,7 +256,8 @@ pa_write_poparray_metadata <- function(filepath,
     dim_semantics = dsem,
     dim_names = dim_order,
     time_dim = time_dim,
-    area_dim = area_dim
+    area_dim = area_dim,
+    dimnames_list = dimnames_list
   )
   pa_write_dim_semantics_fieldwise(filepath, dsem, dim_order)
 
@@ -366,6 +394,8 @@ pa_write_poparray_cube <- function(x,
 #' @param target_chunk_bytes Target bytes for auto chunking.
 #'
 #' @return Invisibly returns a list with `filepath`, `dataset`, and `chunkdim`.
+#' @details Optional dimension applicability is saved under the existing
+#'   semantic metadata groups. Population values and NA handling are unchanged.
 #' @export
 save_poparray <- function(x,
                           filepath = NULL,

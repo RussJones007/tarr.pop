@@ -10,7 +10,9 @@ dim_semantics(x)
 dim_semantics(x) <- value
 }
 \arguments{
-\item{x}{A poparray.}
+\item{x}{A poparray or canonical HDF5 cube path.}
+
+\item{value}{Named list of DimSemantics entries for replacement.}
 }
 \value{
 Named list with one \code{DimSemantics} object per dimension.
@@ -18,4 +20,12 @@ Named list with one \code{DimSemantics} object per dimension.
 \description{
 Returns the read-only per-dimension semantic contract used for guarded
 reductions and metadata persistence.
+Inspect applicability with \code{dim_semantics(x)[[dimension]]@applicability}.
+\code{NULL} preserves legacy behavior. Otherwise \code{by} identifies the controlling
+dimension and \code{schemas} lists inclusive \code{from}/\code{through} label ranges and
+canonical \code{levels}; NULL endpoints span the current domain. Dimension labels
+may be the union across schemas, while overlap is checked among simultaneously
+applicable current levels. Applicability is semantic metadata, not provenance.
+Reading or validating it does not read population values. For cube paths,
+replacement writes only metadata and retains existing metadata-role controls.
 }

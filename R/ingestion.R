@@ -442,7 +442,8 @@ build_poparray_from_df <- function(df,
     dim_semantics = dim_semantics,
     dim_names = dim_names,
     time_dim = time_dim,
-    area_dim = area_dim
+    area_dim = area_dim,
+    dimnames_list = dimnames(arr)
   )
 
   pa_write_poparray_cube(

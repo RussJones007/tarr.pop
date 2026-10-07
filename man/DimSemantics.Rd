@@ -23,7 +23,25 @@ the workflow.
 \item \code{validated}: Non-missing logical scalar.
 \item \code{overlap_levels}: Character vector of known overlap-causing levels.
 \item \code{notes}: Free-text character vector.
+\item \code{applicability}: \code{NULL} (legacy behavior), or a list with \code{by} and \code{schemas}.
+Each schema has inclusive \code{from}/\code{through} controlling-dimension labels
+(\code{NULL} means an open end) and a character vector of canonical \code{levels}.
 }
+}
+
+\section{Applicability}{
+
+Dimension labels may contain the union of levels across source schemas.
+Applicability identifies which of those levels apply simultaneously in each
+period of another dimension's ordered labels. Boundaries are matched by label
+position, not numeric year conversion. This is semantic metadata, not source
+provenance. Overlap safety is checked within applicable schemas; objects with
+\code{applicability = NULL} retain their previous behavior. Structural validity is
+checked here; references, period order, and coverage are checked against the
+owning \code{poparray} without reading population values. An overlapping schema
+remains representable but strict reductions reject it, as for legacy overlap.
+An interval dimension declared to be a partition must have no overlap within
+any currently applicable schema; unresolved multi-label intervals are rejected.
 }
 
 \section{Validation Rules}{

@@ -12,9 +12,10 @@
 
 #' Collapse a dimension of a poparray cube
 #'
-#' Groups labels along one dimension and sums population counts within groups. The reduction is executed blockwise
-#' against the delayed backend and written to a temporary HDF5-backed result. This avoids realizing the full source cube
-#' in memory and does not persist the result as a saved package cube.
+#' Groups labels along one dimension and sums population counts within groups.
+#' The reduction is executed blockwise against the delayed backend and written to
+#' a temporary HDF5-backed result. This avoids realizing the full source cube in
+#' memory and does not persist the result as a saved package cube.
 #'
 #' @param x A poparray object
 #' @param dim Dimension name (character) or index (integer)
@@ -22,10 +23,10 @@
 #'   See Details.
 #' @param keep_empty Logical; keep groups with zero members?
 #' @param name Optional new name for the dimension (defaults to original)
-#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are blocked. When `FALSE`, a warning is
-#'   emitted and the collapse proceeds.
-#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow collapsing overlapping categories
-#'   within a group.
+#' @param strict Logical; when `TRUE` (default), unsafe grouped reductions are
+#'   blocked. When `FALSE`, a warning is emitted and the collapse proceeds.
+#' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
+#'   collapsing overlapping categories within a group.
 #'
 #' @details
 #' `groups` can be:
@@ -34,9 +35,15 @@
 #' - factor: length == number of old labels; levels are new labels
 #'
 #' Old labels not present in `groups` are dropped.
-#' 
-#' @seealso [group_ages()] for more convenient collapsing of ages
-#' @seealso [collapse_all()] a wrapper to collapse all values in a dimesion to "all"
+#' With applicability metadata, each schema uses only mapped source labels
+#' applicable in its controller periods. Structurally inapplicable cells are
+#' excluded before summation; missing values in applicable contributors propagate
+#' normally. An output with no applicable contributors is `NA`, with one summary
+#' warning for non-derivable outputs. Result applicability describes derived
+#' groups; source schema history is recorded in the dimension's notes.
+#' Overlap guards apply within each schema. Changing labels of a dimension that
+#' controls another dimension's applicability remains unsupported. Without
+#' applicability metadata, grouping retains its existing behavior.
 #'
 #' @return A new HDF5-backed `poparray` with the chosen dimension collapsed by
 #'   sum.
@@ -73,7 +80,9 @@ collapse_dim_poparray_impl <- function(x,
   # ---- 2) Normalize groups -> mapping old -> new ----
   # normalize_groups() should return a character vector same length as old_labels:
   # each element is the new group name, or NA if unmapped.
-  map_old_to_new <- normalize_groups(groups, old_labels)
+  schema_groups <- attr(groups, "pa_schema_groups", exact = TRUE)
+  map_old_to_new <- if (is.null(schema_groups)) normalize_groups(groups, old_labels) else
+    stats::setNames(rep(schema_groups$new_levels[[1L]], length(old_labels)), old_labels)
   
   unmapped <- is.na(map_old_to_new)
   if (any(unmapped)) {
@@ -91,7 +100,7 @@ collapse_dim_poparray_impl <- function(x,
   }
   
   keep <- !unmapped
-  if (!any(keep)) {
+  if (!any(keep) && is.null(schema_groups)) {
     stop("collapse_dim(): no labels mapped for dim '", dim_nm, "'.")
   }
   
@@ -110,7 +119,14 @@ collapse_dim_poparray_impl <- function(x,
   # group index (1..n_new) for each kept old label
   g <- match(new_for_old_keep, new_levels)
 
-  pa_check_collapse_semantics(
+  if (!is.null(schema_groups)) new_levels <- schema_groups$new_levels
+
+  schema_plan <- pa_collapse_schema_plan(
+    x, dim_nm, old_labels[keep], new_levels, g, schema_groups,
+    strict = strict, allow_overlap = allow_overlap
+  )
+
+  if (is.null(schema_plan)) pa_check_collapse_semantics(
     x = x,
     dim_nm = dim_nm,
     old_labels_keep = old_labels[keep],
@@ -119,7 +135,16 @@ collapse_dim_poparray_impl <- function(x,
     strict = strict,
     allow_overlap = allow_overlap
   )
-  
+
+  dsem <- dim_semantics(x)
+  controls_other <- any(vapply(dsem, function(sem) {
+    applicability <- pa_dim_applicability(sem)
+    !is.null(applicability) && identical(applicability$by, dim_nm)
+  }, logical(1)))
+  if (controls_other && !identical(as.character(old_labels[keep]), as.character(new_levels))) {
+    cli::cli_abort("Changing labels of an applicability controller is not supported by {.fn collapse_dim}.")
+  }
+
   # first cleanup
   rm(dim_names, old_labels, map_old_to_new, unmapped, new_for_old_keep)
   
@@ -154,7 +179,7 @@ collapse_dim_poparray_impl <- function(x,
   type_in <- DelayedArray::type(a_perm)
   bytes_per <- pa_bytes_per_cell(type_in)
   blockdim_perm <- pa_collapse_blockdim(
-    dim = d_perm,
+    dim = if (is.null(schema_plan)) d_perm else c(d_perm[-nd], max(n_old_keep, n_new)),
     bytes_per = bytes_per,
     target_block_bytes = getOption("poparray.collapse_block_bytes", 64e6)
   )
@@ -175,7 +200,8 @@ collapse_dim_poparray_impl <- function(x,
     block_dim <- dim(block_arr)
     n_row <- if (length(block_dim) == 1L) 1L else prod(block_dim[-nd])
     mat_old <- matrix(block_arr, nrow = n_row, ncol = n_old_keep)
-    mat_new <- mat_old %*% M
+    mat_new <- if (is.null(schema_plan)) mat_old %*% M else
+      pa_collapse_schema_block(mat_old, block_dim, block_idx, perm, schema_plan)
     out_block <- array(mat_new, dim = c(block_dim[-nd], n_new))
 
     if (length(block_idx) == 0L) {
@@ -210,19 +236,52 @@ collapse_dim_poparray_impl <- function(x,
     if (identical(area_role(x), dim_nm)) area_dim_out <- name
   }
 
+  dn_kept <- dn
+  dn_kept[[dim_nm]] <- new_levels
   dsem <- dim_semantics(x)
+  if (!is.null(schema_plan)) {
+    dsem[[dim_nm]] <- pa_update_dim_semantics(
+      dsem[[dim_nm]], applicability = schema_plan$result_applicability,
+      notes = c(dsem[[dim_nm]]@notes,
+        paste0("Schema-aware collapse of ", dim_nm, " to: ", paste(new_levels, collapse = ", ")))
+    )
+    # Target applicability already describes new labels; other entries still
+    # require the normal subset handling.
+    others <- setdiff(names(dsem), dim_nm)
+    dsem[others] <- lapply(dsem[others], pa_subset_applicability,
+      before_dimnames = dn, after_dimnames = dn_kept)
+  } else {
+    dsem <- subset_dim_semantics(dsem, dn, dn_kept)
+  }
   if (!is.null(name) && is.character(name) && length(name) == 1L && dim_nm %in% names(dsem)) {
     names(dsem)[names(dsem) == dim_nm] <- name
     dsem[[name]] <- pa_update_dim_semantics(dsem[[name]], dim_name = name)
+    dsem <- lapply(dsem, function(sem) {
+      applicability <- pa_dim_applicability(sem)
+      if (!is.null(applicability) && identical(applicability$by, dim_nm)) {
+        applicability$by <- name
+        sem <- pa_update_dim_semantics(sem, applicability = applicability)
+      }
+      sem
+    })
   }
   dsem <- dsem[names(dn_new)]
+  source_out <- get_source(x)
+  if (!is.null(schema_plan)) {
+    source_out <- pa_normalize_source(source_out)
+    source_out$note <- paste(c(source_out$note[nzchar(source_out$note)], paste0(
+      "Schema-aware collapse of ", dim_nm, " to: ", paste(new_levels, collapse = ", "),
+      "; source schemas ", if (schema_plan$source_schemas_differed) "differed" else "were uniform",
+      "; source schema membership was resolved before reduction."
+    )), collapse = "\n")
+  }
   
   # ---- 10) Wrap into a new poparray ----
   out <- new_poparray(
     x = arr_new,
     dimnames_list = dn_new,
     data_col = data_col(x),
-    source = get_source(x),
+    source = source_out,
     time_dim = time_dim_out,
     area_dim = area_dim_out,
     dim_semantics = dsem
@@ -300,7 +359,7 @@ pa_check_collapse_semantics <- function(x,
 
   unsafe_groups <- vapply(seq_along(new_levels), function(i) {
     labs <- old_labels_keep[group_index == i]
-    length(labs) > 1L && pa_dim_has_overlap_risk(sem, labs)
+    length(labs) > 1L && pa_dim_has_overlap_risk(sem, labs, dimnames(x))
   }, logical(1))
 
   if (!any(unsafe_groups)) {

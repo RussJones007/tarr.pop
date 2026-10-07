@@ -28,7 +28,7 @@
 #'
 #' **Categorical dimensions** (e.g. `area.name`, `sex`, `race`, `ethnicity`)
 #' support:
-#' - Equality: `dim == value`
+#' - Equality and exclusion: `dim == value`, `dim != value`
 #' - Membership: `dim %in% values`
 #' - Within-dimension boolean combinations: `&` and `|` are allowed only when
 #' both sides constrain the *same* dimension.
@@ -45,6 +45,15 @@
 #'
 #' Range predicates (comparisons and `%between%`) select age labels whose intervals **overlap** the requested age set.
 #' Discrete membership with `%in%` remains **exact label matching** (no interval overlap).
+#' Equality and exclusion on age labels also use exact label matching.
+#'
+#' Overlap safety is evaluated from the dimension levels currently present in
+#' the `poparray`. Removing overlapping levels by subsetting can therefore remove
+#' overlap risk. Intrinsic semantic metadata, including known overlap-causing
+#' labels, is preserved.
+#' When applicability is declared, safety is evaluated among levels applicable
+#' simultaneously in each schema. Filtering trims applicability ranges and target
+#' levels without reading population values. No schema harmonization is performed.
 #'
 #' ## What is not supported
 #' - **Named "short form" arguments** such as `filter(x, year = 2020)` are not
@@ -116,9 +125,9 @@ tp_dim_type <- function(parray, dim_name) {
 
 tp_allowed_ops <- function(dim_type) {
   if (identical(dim_type, "ordered")) {
-    c("==", "%in%", "<", "<=", ">", ">=", "%between%")
+    c("==", "!=", "%in%", "<", "<=", ">", ">=", "%between%")
   } else {
-    c("==", "%in%")
+    c("==", "!=", "%in%")
   }
 }
 
@@ -152,7 +161,7 @@ tp_parse_expr <- function(expr, env) {
     return(list(type = "bool", op = op, lhs = lhs, rhs = rhs))
   }
   
-  # Binary ops: ==, %in%, <, <=, >, >=, %between%
+  # Binary ops: ==, !=, %in%, <, <=, >, >=, %between%
   if (!rlang::is_call(expr)) {
     stop(
       "filter.poparray() predicates must be calls like dim == value or dim %in% values.",
@@ -161,10 +170,10 @@ tp_parse_expr <- function(expr, env) {
   }
   
   op <- as.character(expr[[1]])
-  if (!op %in% c("==", "%in%", "<", "<=", ">", ">=", "%between%")) {
+  if (!op %in% c("==", "!=", "%in%", "<", "<=", ">", ">=", "%between%")) {
     stop(
       "Unsupported operator in filter.poparray(): ", op, ". ",
-      "Supported operators include == and %in% (plus comparisons/ranges for ordered dims).",
+      "Supported operators include ==, != and %in% (plus comparisons/ranges for ordered dims).",
       call. = FALSE
     )
   }
@@ -254,10 +263,11 @@ tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
   rhs <- pred$rhs
   
   if (dim_type == "categorical") {
-    if (identical(op, "==") || identical(op, "%in%")) {
+    if (op %in% c("==", "!=", "%in%")) {
       rhs_chr <- as.character(rhs)
       tp_check_known_labels(rhs_chr, labels, dim_name, .strict)
-      return(labels %in% rhs_chr)
+      keep <- labels %in% rhs_chr
+      return(if (identical(op, "!=")) !keep else keep)
     }
   }
   
@@ -274,11 +284,12 @@ tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
   }
   
   if (identical(dim_name, "age.char")) {
-    # Discrete label selection for == / %in%
-    if (identical(op, "==") || identical(op, "%in%")) {
+    # Discrete label selection for == / != / %in%
+    if (op %in% c("==", "!=", "%in%")) {
       rhs_chr <- as.character(rhs)
       tp_check_known_labels(rhs_chr, labels, dim_name, .strict)
-      return(labels %in% rhs_chr)
+      keep <- labels %in% rhs_chr
+      return(if (identical(op, "!=")) !keep else keep)
     }
     
     # Ordered/range semantics via half-open interval overlap.
@@ -296,6 +307,7 @@ tp_eval_ordered_numeric <- function(vec, op, rhs) {
   }
   
   if (identical(op, "==")) return(vec == rhs_num[1])
+  if (identical(op, "!=")) return(vec != rhs_num[1])
   if (identical(op, "%in%")) return(vec %in% rhs_num)
   if (identical(op, ">"))  return(vec >  rhs_num[1])
   if (identical(op, ">=")) return(vec >= rhs_num[1])

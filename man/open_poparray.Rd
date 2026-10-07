@@ -32,5 +32,8 @@ The function reads all semantic metadata from the same HDF5 file:
 \item dimension roles from \verb{cube/metadata/roles/*},
 \item source/provenance fields from \verb{cube/metadata/source/*}.
 \item per-dimension semantics from \verb{cube/metadata/dim_semantics/*/*}.
+Optional applicability is restored from each dimension's nested semantic
+metadata. Older cubes without it retain \code{applicability = NULL} and legacy
+overlap behavior. Metadata inspection does not extract population values.
 }
 }

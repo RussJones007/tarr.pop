@@ -11,6 +11,10 @@ manipulating the dimensions/metadata before realizing (loading) the selected arr
 to open the cube via the \code{\link[=open_poparray]{open_poparray()}} function, filtering the dimension levels that are needed through the \code{[}
 index operator or filter() function.  Dimension levels can also be collapsed using \code{\link[=collapse_dim]{collapse_dim()}}.  The cube can
 then be realized \code{\link[=as.array]{as.array()}}, \code{\link[=as.data.frame]{as.data.frame()}}, or \code{\link[tibble:as_tibble]{tibble::as_tibble()}}.
+With optional dimension applicability, labels may form a union across source
+schemas. Per-period applicable levels live in \code{dim_semantics}, while source
+provenance remains separate. Metadata validation and subsetting stay lazy;
+overlap guards consider simultaneous levels, without numerical harmonization.
 }
 \section{Slots}{
 

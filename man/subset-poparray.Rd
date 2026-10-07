@@ -21,4 +21,7 @@ not silently strip the \code{poparray} class.
 }
 \details{
 Named subscripts are supported and are matched against dimension names.
+Applicability ranges and levels are trimmed using metadata only. If dropping
+a dimension removes an applicability controller, the raw delayed subset is
+returned because the remaining schemas cannot be interpreted as a \code{poparray}.
 }

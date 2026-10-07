@@ -6,6 +6,13 @@ pa_has_interval_overlap <- function(labels) {
   }
 
   bnd <- tryCatch(tp_age_bounds(as.character(labels)), error = function(e) NULL)
+  if (is.null(bnd)) {
+    # Canonical rage labels such as '< 1' also have interval meaning.
+    bnd <- tryCatch({
+      age <- rage::as.age_group(as.character(labels))
+      list(start = ivs::iv_start(age), end = ivs::iv_end(age))
+    }, error = function(e) NULL)
+  }
   if (is.null(bnd) || anyNA(bnd$start) || anyNA(bnd$end)) {
     return(TRUE)
   }
@@ -27,7 +34,35 @@ pa_has_interval_overlap <- function(labels) {
   FALSE
 }
 
-pa_dim_has_overlap_risk <- function(sem, labels) {
+#' Evaluate current overlap within each simultaneous applicability schema
+#' @param sem Dimension semantics.
+#' @param labels Current labels included in the reduction.
+#' @param dimnames_list Current cube labels, required when applicability is declared.
+#' @return Logical scalar indicating overlap risk.
+#' @keywords internal
+#' @noRd
+pa_dim_has_overlap_risk <- function(sem, labels, dimnames_list = NULL) {
+  applicability <- pa_dim_applicability(sem)
+  if (is.null(applicability)) return(pa_labels_have_overlap_risk(sem, labels))
+  if (is.null(dimnames_list)) {
+    cli::cli_abort("Current dimension labels are required to evaluate applicability overlap.")
+  }
+  indices <- pa_applicability_indices(applicability, sem@dim_name, dimnames_list)
+  current_schemas <- applicability$schemas[lengths(indices) > 0L]
+  any(vapply(current_schemas, function(schema) {
+    simultaneous <- intersect(labels, schema$levels)
+    if (pa_is_interval(sem)) pa_has_interval_overlap(simultaneous) else
+      pa_labels_have_overlap_risk(sem, simultaneous)
+  }, logical(1)))
+}
+
+#' Evaluate intrinsic overlap safety for a simultaneous set of labels
+#' @param sem Dimension semantics.
+#' @param labels Simultaneously applicable labels.
+#' @return Logical scalar indicating overlap risk.
+#' @keywords internal
+#' @noRd
+pa_labels_have_overlap_risk <- function(sem, labels) {
   if (pa_is_partition(sem)) {
     return(FALSE)
   }
@@ -53,6 +88,13 @@ pa_dim_has_overlap_risk <- function(sem, labels) {
 #'
 #' Enforces strict epidemiologic safeguards by default: reductions are blocked
 #' when any remaining dimension has derived overlap risk.
+#' Overlap safety is evaluated from the dimension levels currently present in
+#' the `poparray`. Removing overlapping levels by subsetting can therefore remove
+#' overlap risk without changing the dimension's intrinsic semantic metadata.
+#' If applicability is declared, overlapping union labels in different schema
+#' periods do not by themselves create overlap risk. The guard checks each
+#' schema's simultaneous labels. Numerical reduction and missing-value behavior
+#' are unchanged: this does not exclude structural cells or harmonize schemas.
 #'
 #' @param x A poparray.
 #' @param ... Additional arguments. Supports `strict` (default `TRUE`) and
@@ -76,7 +118,7 @@ setMethod(
     dn <- dimnames(x)
     is_unsafe <- vapply(
       names(dsem),
-      function(nm) pa_dim_has_overlap_risk(dsem[[nm]], dn[[nm]]),
+      function(nm) pa_dim_has_overlap_risk(dsem[[nm]], dn[[nm]], dn),
       logical(1)
     )
     unsafe_dims <- names(dsem)[is_unsafe]

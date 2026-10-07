@@ -45,3 +45,7 @@ Invisibly returns a list with \code{filepath}, \code{dataset}, and \code{chunkdi
 \description{
 Save a poparray cube to HDF5 using the canonical schema
 }
+\details{
+Optional dimension applicability is saved under the existing
+semantic metadata groups. Population values and NA handling are unchanged.
+}

@@ -91,3 +91,21 @@ test_that("age.char supports ordered range semantics when present", {
   expect_s4_class(res, "poparray")
   expect_equal(dimnames(res)$age.char, c("5-9", "10-14"))
 })
+
+test_that("exclusion predicates compose with existing filters", {
+  pop <- make_filter_age_fixture()
+  out <- dplyr::filter(pop, age.char != "5-9" & age.char != "10-14", year != 2021)
+  expect_identical(dimnames(out)$age.char, c("0-4", "15-19"))
+  expect_identical(dimnames(out)$year, "2020")
+})
+
+test_that("exclusion preserves strict label validation", {
+  pop <- make_filter_age_fixture()
+  expect_error(dplyr::filter(pop, age.char != "85+"), "Unknown label")
+  expect_error(dplyr::filter(pop, area.name != "Missing"), "Unknown label")
+  expect_warning(
+    out <- dplyr::filter(pop, age.char != "85+", .strict = FALSE),
+    "Unknown label"
+  )
+  expect_identical(dimnames(out), dimnames(pop))
+})

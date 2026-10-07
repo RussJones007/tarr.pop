@@ -19,6 +19,22 @@
 #' - `validated`: Non-missing logical scalar.
 #' - `overlap_levels`: Character vector of known overlap-causing levels.
 #' - `notes`: Free-text character vector.
+#' - `applicability`: `NULL` (legacy behavior), or a list with `by` and `schemas`.
+#'   Each schema has inclusive `from`/`through` controlling-dimension labels
+#'   (`NULL` means an open end) and a character vector of canonical `levels`.
+#'
+#' @section Applicability:
+#' Dimension labels may contain the union of levels across source schemas.
+#' Applicability identifies which of those levels apply simultaneously in each
+#' period of another dimension's ordered labels. Boundaries are matched by label
+#' position, not numeric year conversion. This is semantic metadata, not source
+#' provenance. Overlap safety is checked within applicable schemas; objects with
+#' `applicability = NULL` retain their previous behavior. Structural validity is
+#' checked here; references, period order, and coverage are checked against the
+#' owning `poparray` without reading population values. An overlapping schema
+#' remains representable but strict reductions reject it, as for legacy overlap.
+#' An interval dimension declared to be a partition must have no overlap within
+#' any currently applicable schema; unresolved multi-label intervals are rejected.
 #'
 #' @section Validation Rules:
 #' - `dim_name` must be non-missing, length 1, and non-empty.
@@ -48,7 +64,8 @@ DimSemantics <- S7::new_class(
     partition_type = S7::class_character,
     validated = S7::class_logical,
     overlap_levels = S7::class_character,
-    notes = S7::class_character
+    notes = S7::class_character,
+    applicability = S7::new_property(S7::new_union(NULL, S7::class_list))
   ),
   validator = function(self) {
     probs <- character()
@@ -91,6 +108,8 @@ DimSemantics <- S7::new_class(
       probs <- c(probs, "@overlap_levels must be empty when @partition_type == 'partition'.")
     }
 
+    probs <- c(probs, pa_applicability_structure_problems(self@applicability))
+
     if (length(probs) == 0L) NULL else probs
   }
 )
@@ -106,6 +125,7 @@ DimSemantics <- S7::new_class(
 #'   externally validated.
 #' @param overlap_levels Character vector of known overlap-causing levels.
 #' @param notes Free-text character vector.
+#' @param applicability Optional list with `by` and `schemas`; see [DimSemantics].
 #'
 #' @return A validated `DimSemantics` object.
 #' @keywords internal
@@ -115,7 +135,8 @@ new_dim_semantics <- function(dim_name,
                               partition_type = "unknown",
                               validated = FALSE,
                               overlap_levels = character(),
-                              notes = character()) {
+                              notes = character(),
+                              applicability = NULL) {
   DimSemantics(
     dim_name = dim_name,
     domain = domain,
@@ -123,7 +144,8 @@ new_dim_semantics <- function(dim_name,
     partition_type = partition_type,
     validated = validated,
     overlap_levels = overlap_levels,
-    notes = notes
+    notes = notes,
+    applicability = applicability
   )
 }
 

@@ -24,3 +24,9 @@ Returns the canonical metadata bundle from either an in-memory
 replacement form writes the bundled metadata back to the file in one validated
 operation and requires elevated metadata administration privileges.
 }
+\details{
+Optional dimension applicability travels within \code{dim_semantics}, not source
+provenance. Replacement validates schema boundaries, target levels, and coverage
+against current labels. Path-based updates write metadata only and do not rewrite
+the population dataset. See \code{\link{dim_semantics}} for inspection.
+}

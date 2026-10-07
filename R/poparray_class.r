@@ -33,6 +33,10 @@ setClass(
 #' to open the cube via the [open_poparray()] function, filtering the dimension levels that are needed through the `[`
 #' index operator or filter() function.  Dimension levels can also be collapsed using [collapse_dim()].  The cube can
 #' then be realized [as.array()], [as.data.frame()], or [tibble::as_tibble()].
+#' With optional dimension applicability, labels may form a union across source
+#' schemas. Per-period applicable levels live in `dim_semantics`, while source
+#' provenance remains separate. Metadata validation and subsetting stay lazy;
+#' overlap guards consider simultaneous levels, without numerical harmonization.
 #'
 #' @slot time_role Name of the time dimension.
 #' @slot area_role Name of the area dimension.
@@ -51,10 +55,12 @@ NULL
 #' @param dim_names Character vector of dimension names.
 #' @param time_dim Time dimension name.
 #' @param area_dim Area dimension name.
+#' @param dimnames_list Optional current labels; required for applicability validation.
 #'
 #' @return Invisibly TRUE, otherwise errors.
 #' @keywords internal
-validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim) {
+validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim,
+                                   dimnames_list = NULL) {
   if (is.null(dim_semantics) || !is.list(dim_semantics) || is.null(names(dim_semantics))) {
     cli::cli_abort("{.arg dim_semantics} must be a named list.")
   }
@@ -84,6 +90,14 @@ validate_dim_semantics <- function(dim_semantics, dim_names, time_dim, area_dim)
       )
     }
   }
+
+  has_applicability <- any(vapply(dim_semantics, function(sem) {
+    !is.null(pa_dim_applicability(sem))
+  }, logical(1)))
+  if (has_applicability && is.null(dimnames_list)) {
+    cli::cli_abort("Current dimension labels are required to validate applicability.")
+  }
+  if (has_applicability) pa_validate_applicability(dim_semantics, dimnames_list)
 
   invisible(TRUE)
 }
@@ -130,7 +144,8 @@ pa_as_dim_semantics_entry <- function(entry, dim_name, time_dim, area_dim) {
       partition_type = as.character(entry$partition_type)[[1L]],
       validated = as.logical(entry$validated)[[1L]],
       overlap_levels = as.character(entry$overlap_levels %||% character()),
-      notes = as.character(entry$notes %||% character())
+      notes = as.character(entry$notes %||% character()),
+      applicability = entry$applicability
     ))
   }
 
@@ -197,6 +212,8 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames)
   if (!identical(before_names[before_names %in% after_names], after_names)) {
     names(out) <- after_names
   }
+  out <- lapply(out, pa_subset_applicability,
+                before_dimnames = before_dimnames, after_dimnames = after_dimnames)
   out
 }
 
@@ -301,6 +318,11 @@ setValidity("poparray", function(object) {
       return("each dim_semantics entry must have @dim_name matching its dimension name.")
     }
   }
+  applicability_check <- tryCatch(
+    pa_validate_applicability(object@dim_semantics, dn),
+    error = function(e) conditionMessage(e)
+  )
+  if (!isTRUE(applicability_check)) return(applicability_check)
   d <- lengths(dn)
   if (length(dn) != length(d)) {
     return("dimnames must align with dimensions.")
@@ -405,7 +427,8 @@ setReplaceMethod("dimnames", "poparray",
       dim_semantics = dim_semantics,
       dim_names = nms,
       time_dim = time_dim,
-      area_dim = area_dim
+      area_dim = area_dim,
+      dimnames_list = dimnames_list
     )
   } else {
     dim_semantics <- ensure_dim_semantics(
@@ -635,6 +658,9 @@ summary.poparray <- function(object, ...) {
 #' not silently strip the `poparray` class.
 #'
 #' Named subscripts are supported and are matched against dimension names.
+#' Applicability ranges and levels are trimmed using metadata only. If dropping
+#' a dimension removes an applicability controller, the raw delayed subset is
+#' returned because the remaining schemas cannot be interpreted as a `poparray`.
 #'
 #' @param x A `poparray`.
 #' @param ... Indices, either positional (like base arrays) or named by dimension (for example `x[year = "2020", sex =
@@ -772,6 +798,11 @@ wrap_subset_poparray <- function(x, out, before_dimnames, after_dimnames) {
   if (!x@time_role %in% names(after_dimnames) || !x@area_role %in% names(after_dimnames)) {
     return(out)
   }
+  controllers <- vapply(x@dim_semantics[names(after_dimnames)], function(sem) {
+    applicability <- pa_dim_applicability(sem)
+    if (is.null(applicability)) "" else applicability$by
+  }, character(1))
+  if (any(nzchar(controllers) & !controllers %in% names(after_dimnames))) return(out)
 
   updated_dim_semantics <- subset_dim_semantics(
     dim_semantics = x@dim_semantics,
@@ -1238,8 +1269,17 @@ data_col <- function(x) {
 #'
 #' Returns the read-only per-dimension semantic contract used for guarded
 #' reductions and metadata persistence.
+#' Inspect applicability with `dim_semantics(x)[[dimension]]@applicability`.
+#' `NULL` preserves legacy behavior. Otherwise `by` identifies the controlling
+#' dimension and `schemas` lists inclusive `from`/`through` label ranges and
+#' canonical `levels`; NULL endpoints span the current domain. Dimension labels
+#' may be the union across schemas, while overlap is checked among simultaneously
+#' applicable current levels. Applicability is semantic metadata, not provenance.
+#' Reading or validating it does not read population values. For cube paths,
+#' replacement writes only metadata and retains existing metadata-role controls.
 #'
-#' @param x A poparray.
+#' @param x A poparray or canonical HDF5 cube path.
+#' @param value Named list of DimSemantics entries for replacement.
 #' @return Named list with one `DimSemantics` object per dimension.
 #' @export
 dim_semantics <- function(x) {
@@ -1284,7 +1324,8 @@ dim_semantics <- function(x) {
     dim_semantics = value,
     dim_names = names(dimnames(x)),
     time_dim = time_role(x),
-    area_dim = area_role(x)
+    area_dim = area_role(x),
+    dimnames_list = dimnames(x)
   )
   x@dim_semantics <- value
   x

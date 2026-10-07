@@ -51,4 +51,13 @@ memory and does not persist the result as a saved package cube.
 }
 
 Old labels not present in \code{groups} are dropped.
+With applicability metadata, each schema uses only mapped source labels
+applicable in its controller periods. Structurally inapplicable cells are
+excluded before summation; missing values in applicable contributors propagate
+normally. An output with no applicable contributors is \code{NA}, with one summary
+warning for non-derivable outputs. Result applicability describes derived
+groups; source schema history is recorded in the dimension's notes.
+Overlap guards apply within each schema. Changing labels of a dimension that
+controls another dimension's applicability remains unsupported. Without
+applicability metadata, grouping retains its existing behavior.
 }

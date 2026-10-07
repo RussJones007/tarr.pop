@@ -4,7 +4,13 @@
 \alias{validate_dim_semantics}
 \title{Validate dim semantics contract}
 \usage{
-validate_dim_semantics(dim_semantics, dim_names, time_dim, area_dim)
+validate_dim_semantics(
+  dim_semantics,
+  dim_names,
+  time_dim,
+  area_dim,
+  dimnames_list = NULL
+)
 }
 \arguments{
 \item{dim_semantics}{Named list of per-dimension \code{DimSemantics} objects.}
@@ -14,6 +20,8 @@ validate_dim_semantics(dim_semantics, dim_names, time_dim, area_dim)
 \item{time_dim}{Time dimension name.}
 
 \item{area_dim}{Area dimension name.}
+
+\item{dimnames_list}{Optional current labels; required for applicability validation.}
 }
 \value{
 Invisibly TRUE, otherwise errors.

@@ -191,8 +191,8 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
 }
 
 # 3. The tdc_estimate_semantics() function is used to define the dimension semantics ------------------------
-tdc_estimate_semantics <- function() {
-  list(
+tdc_estimate_semantics <- function(support = NULL) {
+  semantics <- list(
     year = tarr.pop:::new_dim_semantics(
       dim_name = "year",
       domain = "time",
@@ -237,6 +237,34 @@ tdc_estimate_semantics <- function() {
       )
     )
   )
+  if (!is.null(support)) {
+    # Repository source rules above and tdc_estimate_support_table establish
+    # 2017 as the transition. Resolve boundaries from represented year labels.
+    years <- sort(unique(as.integer(support$year)))
+    age_labels <- unique(as.character(support$age.char))
+    race_labels <- unique(as.character(support$race.eth))
+    schemas <- function(early_levels, late_levels) {
+      eras <- list(years[years < 2017L], years[years >= 2017L])
+      levels <- list(early_levels, late_levels)
+      selected <- which(lengths(eras) > 0L)
+      lapply(selected, function(i) list(
+        from = if (min(eras[[i]]) == min(years)) NULL else as.character(min(eras[[i]])),
+        through = if (max(eras[[i]]) == max(years)) NULL else as.character(max(eras[[i]])),
+        levels = levels[[i]]
+      ))
+    }
+    early_age <- as.character(rage::as.age_group(c("< 1", as.character(1:84), "85 +")))
+    late_age <- as.character(rage::as.age_group(c("< 1", as.character(1:94), "95 +")))
+    semantics$age.char <- tarr.pop:::pa_update_dim_semantics(semantics$age.char,
+      applicability = list(by = "year", schemas = schemas(
+        intersect(age_labels, early_age), intersect(age_labels, late_age))))
+    semantics$race.eth <- tarr.pop:::pa_update_dim_semantics(semantics$race.eth,
+      applicability = list(by = "year", schemas = schemas(
+        setdiff(race_labels, "asian"), race_labels)),
+      notes = c(semantics$race.eth@notes,
+        "Before 2017 Asian is included in Other; no numerical decomposition is implied."))
+  }
+  semantics
 }
 
 default_counties <- NULL
@@ -270,7 +298,7 @@ tarr.pop::ingest_population(
   reader = read_tdc_estimates_raw,
   transformer = transform_tdc_estimates,
   dims = dims,
-  dim_semantics = tdc_estimate_semantics(),
+  dim_semantics = tdc_estimate_semantics(support_table),
   filepath = tdc_estimates_file,
   series_id = "tdc_estimates_county",
   completion_policy = "na",

@@ -21,4 +21,11 @@ Numeric scalar.
 \description{
 Enforces strict epidemiologic safeguards by default: reductions are blocked
 when any remaining dimension has derived overlap risk.
+Overlap safety is evaluated from the dimension levels currently present in
+the \code{poparray}. Removing overlapping levels by subsetting can therefore remove
+overlap risk without changing the dimension's intrinsic semantic metadata.
+If applicability is declared, overlapping union labels in different schema
+periods do not by themselves create overlap risk. The guard checks each
+schema's simultaneous labels. Numerical reduction and missing-value behavior
+are unchanged: this does not exclude structural cells or harmonize schemas.
 }

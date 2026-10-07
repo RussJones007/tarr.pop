@@ -11,7 +11,8 @@ new_dim_semantics(
   partition_type = "unknown",
   validated = FALSE,
   overlap_levels = character(),
-  notes = character()
+  notes = character(),
+  applicability = NULL
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ externally validated.}
 \item{overlap_levels}{Character vector of known overlap-causing levels.}
 
 \item{notes}{Free-text character vector.}
+
+\item{applicability}{Optional list with \code{by} and \code{schemas}; see \link{DimSemantics}.}
 }
 \value{
 A validated \code{DimSemantics} object.
