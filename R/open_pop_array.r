@@ -727,6 +727,7 @@ open_poparray <- function(series_id,
                           dataset = "cube/population",
                           data_col = NULL) {
   checkmate::assert_string(series_id, min.chars = 1)
+  checkmate::assert_flag(checkout)
   root <- resolve_cube_dir()
   reg <- tarr_series_registry(root)
   
@@ -743,6 +744,12 @@ open_poparray <- function(series_id,
   }
 
   path <- resolve_registry_filepath(row, root = root)
+  
+  # If the user wants to check out the data cube, this next statement handles that
+  if(checkout) {
+    backing_file <- path
+    path = checkout_poparray(filepath = path, checkout_dir = checkout_dir)
+  }
 
   meta <- get_cube_metadata_cached(path)
   h5    <- HDF5Array::HDF5Array(filepath = path, name = dataset)
@@ -755,13 +762,59 @@ open_poparray <- function(series_id,
   validate_labels_against_cube(h5, dimn, series_id)
   dimnames(h5) <- dimn
 
-  new_poparray(
+  pa <- new_poparray(
     x             = h5,
     dimnames_list = dimn,
     data_col      = dc,
     source        = src,
     time_dim      = roles$time,
     area_dim      = roles$area,
-    dim_semantics = dsem
-  )
+    dim_semantics = dsem)
+  
+  if(checkout) {attr(pa, "backing_file") <- backing_file}
+  pa
+  
+}
+
+# Helper to copy a cube to a local folder when opening a poparray -------------------------------------------------
+#' Copy a poparray HDF5 file to local storage
+#'
+#' Copies an HDF5 backing file to a local directory so subsequent HDF5
+#' access does not incur network filesystem latency.
+#'
+#' This function copies the backing file only. It does not realize the
+#' HDF5Array or DelayedArray into memory.
+#'
+#' @param filepath Character scalar giving the source HDF5 file.
+#' @param checkout_dir Character scalar giving the local destination directory.
+#'
+#' @return The normalized path to the local HDF5 file.
+#'
+#' @keywords internal
+checkout_poparray <- function(filepath, checkout_dir = tempdir()) {
+  checkmate::assert_string(filepath)
+  checkmate::assert_string(checkout_dir)
+  
+  if (!file.exists(filepath)) {
+    cli::cli_abort("Cannot check out {.file {filepath}} because the file does not exist.")
+  }
+  
+  if (!dir.exists(checkout_dir)) {
+    ok <- dir.create(checkout_dir, recursive = TRUE, showWarnings = FALSE)
+    
+    if (!ok && !dir.exists(checkout_dir)) {
+      cli::cli_abort("Could not create checkout directory {.file {checkout_dir}}.")
+    }
+  }
+  
+  checkout_dir <- normalizePath(checkout_dir, mustWork = TRUE)
+  destination <- file.path( checkout_dir,basename(filepath))
+  ok <- file.copy( from = filepath, to = destination, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE)
+  if (!ok) {
+    cli::cli_abort(c("Could not check out the poparray HDF5 file.",
+                     "x" = "Source: {.file {filepath}}",
+                     "x" = "Destination: {.file {destination}}"))
+  }
+  
+  normalizePath(destination, mustWork = TRUE)
 }
