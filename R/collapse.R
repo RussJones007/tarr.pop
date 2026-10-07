@@ -58,6 +58,55 @@ setGeneric("collapse_dim", function(x,
   standardGeneric("collapse_dim")
 })
 
+
+#' Collapse all levels of a dimension
+#'
+#' Convenience wrapper around [collapse_dim()] that collapses all levels of
+#' the selected dimension into a single level.
+#'
+#' @param x A `poparray` object.
+#' @param dim Dimension name (character) or index (integer).
+#' @param label Label for the resulting collapsed level. Defaults to `"all"`.
+#' @param strict Passed to [collapse_dim()].
+#' @param allow_overlap Passed to [collapse_dim()].
+#'
+#' @return A new HDF5-backed `poparray` with all levels of the selected
+#'   dimension collapsed into one level.
+#' @export
+collapse_all <- function(x,
+                         dim,
+                         label = "all",
+                         strict = TRUE,
+                         allow_overlap = FALSE) {
+  
+  dn <- dimnames(x)
+  dim_names <- names(dn)
+  
+  k <- if (is.character(dim)) match(dim, dim_names) else as.integer(dim)
+  
+  if (length(k) != 1L || is.na(k) || k < 1L || k > length(dim_names)) {
+    stop("collapse_all(): unknown dim '", dim, "'.")
+  }
+  
+  old_labels <- dn[[k]]
+  
+  groups <- stats::setNames(
+    rep(label, length(old_labels)),
+    old_labels
+  )
+  
+  collapse_dim(
+    x,
+    dim = dim,
+    groups = groups,
+    strict = strict,
+    allow_overlap = allow_overlap
+  )
+}
+
+
+
+
 collapse_dim_poparray_impl <- function(x,
                                        dim,
                                        groups,
