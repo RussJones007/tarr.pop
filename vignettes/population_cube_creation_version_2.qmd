@@ -1,6 +1,6 @@
 ---
 title: "Creating and Verifying a Population Cube"
-subtitle: "A complete guide using Texas Demographic Center county estimates"
+subtitle: "A guide using Texas Demographic Center county estimates as an example"
 format:
   html:
     toc: true
@@ -19,20 +19,43 @@ editor:
 
 # Purpose and scope
 
-A population cube stores a count at each combination of demographic dimensions. For the Texas
-Demographic Center (TDC) county estimates, those dimensions are estimate year, county, sex, age
-interval, and combined race/ethnicity. The finished object is a `poparray` whose values reside in an
-HDF5 file and whose labels, dimension roles, semantics, and provenance are stored with those values.
+A poparray object created by this package is stored on disk in a population "cube" or array  that has a count at each
+combination of demographic dimensions.  There are two required dimensions that can referred to by their roles: "time" and
+"area".  Any data set that has time and area with population counts can be made into a poparray and saved as a population
+cube. Most population cubes built for this package have year, area.name, age.char, sex, race, and ethnicity dimensions.  
+However a poparray can be built from other data such as fields calleddecade, census_tract, house_age_range, and 
+population values. 
 
-Creating a trustworthy cube requires more than a successful file write. Source identities must
-survive transformation, every observed value must keep its coordinate, and missing values must be
-classified correctly. This guide follows the current repository workflow, builds to an isolated
-location first, verifies the result, and only then describes replacing a production cube.
+For this vignette, the annual Texas Demographic Center (TDC) county estimate files are used as an example of how a
+poparray and population cube are created. The data files are saved in comma separated value (csv) text format with a
+file for each year from 2011 through 2024. The column in the files have county, FIPS/Area Code, Sex, Age, and 
+Race Ethnicity (NH-Asian, NH-Black, NH-White, Hispanic, etc) with population figures for each combination of variables.
+The TDC has changed file schema over the years.  For example, what used to be "Anglo" is now NH-White.  The "Other" race
+category included Asians until 2017 when that became separate category. Later files also include the "year" of the
+estimate in a column wile earlier files do not have that column.  Files before 2017 use "FIPS" for the area code, where
+as later files use the term "Area Code" but contain the same data as the older "FIPS". Finally, the estimates use
+single ages and in files before 2017 that was 0 through 85+.  After 2017 the ages listed were 0 to 95+.
 
-The examples require a source checkout of `tarr.pop` and local annual CSV files. Execution is disabled
-throughout the document so rendering it cannot launch an ingestion job or overwrite a cube. Run the
-chunks deliberately, in order, in a fresh R session from the repository root. The original
-`population_cube_creation.qmd` remains unchanged.
+Because the file columns and their names as well as some category values changed over the years, steps are added in
+constructing the population cube.  In addition to renaming columns to standard names, the lack of an Asian race category
+in files before 2017, means population figures for that category are missing in those earlier years. How this is handled
+and what it means for a person using this poparray are covered later in this vignette.  Finally, the earlier year TDC
+estimates include single ages from 0 (infant) thorough 84 and 85+ as the last group.  Later files included ages 0
+through 94 with 95+ being the last group.
+
+After reading each file, the resulting data frames are standardized to use the same column names then transformed into
+columns that will match the eventual array dimensions. Those dimension names are year (the time role), county (the area
+role), sex, age.char intervals, and combined race/ethnicity. The finished object is a `poparray` whose values reside in
+an HDF5 file and whose labels, dimension roles, semantics, and provenance are stored with those values.
+
+Creating a trustworthy cube requires more than a successful file write. Source identities must survive transformation,
+every observed value must keep its coordinate, and missing values must be classified correctly. This guide follows the
+current repository workflow, builds to an isolated location first, verifies the result, and only then describes
+replacing a production cube.
+
+The examples here require a source checkout of `tarr.pop` and local annual CSV files. Execution is disabled throughout
+the document so rendering it cannot launch an ingestion job or overwrite a cube. Run the chunks deliberately, in order,
+in a fresh R session from the repository root.
 
 # Understand the data model first
 
@@ -43,39 +66,36 @@ The canonical table has exactly these columns, in this order:
 | Column | Meaning | Expected representation |
 |---|---|---|
 | `year` | Annual population snapshot | Integer year |
-| `area.name` | Canonical Texas county name | Factor |
-| `sex` | Female or male | Factor |
+| `area.name` | Texas county name | Factor |
+| `sex` | female or male | Factor |
 | `age.char` | Age interval label | Ordered factor |
 | `race.eth` | Combined race/ethnicity category | Factor |
-| `population` | Population count | Numeric or integer, possibly `NA` |
+| `population` | Population count | Numeric or integer, and  `NA` for missing|
 
-The dimension order is `year`, `area.name`, `sex`, `age.char`, `race.eth`. The time role points to
-`year`; the area role points to `area.name`. Roles identify the relevant dimensions without relying
-on their positions. Dimension semantics describe which operations are valid, including whether the
-labels form a disjoint partition or a potentially overlapping set.
-
-A year is a snapshot, not an additive component of one population. Summing all years is useful as an
-**ingestion conservation checksum**, but it is not the population of Texas at any one date.
+The time role points to `year`; the area role points to `area.name`. Roles identify the relevant dimensions without
+relying on their positions. Dimension semantics describe which operations are valid, including whether the labels form a
+disjoint partition or a potentially overlapping set.
 
 ## TDC age and race/ethnicity support
 
-The support table defines valid source combinations. It is more specific than the rectangular shape
-of the physical array.
+When creating the poparray, all combinations of the dimensions should be represented in a "support table".  With the
+changes that TDC made to the schema in files for 2017 and later, the support table must have the name/category combinations
+for the two eras.  The support table defines valid source combinations. It is more specific than the rectangular shape of the physical array.
 
 | Source era | Valid ages | Ages per county/sex/race | Race/ethnicity levels |
 |---|---|---:|---|
 | Before 2017 | `< 1`, single ages 1–84, `85 +` | 86 | asian, black, hispanic, other, white |
 | 2017 onward | `< 1`, single ages 1–94, `95 +` | 96 | asian, black, hispanic, other, white |
 
-Before 2017, Asian estimates were not separately reported; they were included in the source's other
+Before 2017, Asian estimates were not separately reported; they were included in the source's "Other"
 category. Asian nevertheless remains valid support and is represented by `NA` for those years. Do
 not impute Asian counts or repartition the historical other counts during ingestion.
 
-Age labels have interval meaning. For example, `86` denotes `[86, 87)` and `85 +` denotes
-`[85, Inf)`. The union of labels across eras includes overlapping intervals, so the global age
-semantics use a set with overlap information. Within a given year's supported rows, the source age
-categories are non-overlapping. Preserve those categories: never manufacture ages 85–94 from an
-early `85 +` count or replace later single ages with an ingested `85 +` aggregate.
+Age labels have interval meaning. For example, `86` denotes `[86, 87)` which is shorthand for beginnig at 86 and every
+value up to but not inluding 87 and `85 +` denotes `[85, Inf)`. The union of labels across eras includes overlapping
+intervals, so the global age semantics use a set with overlap information. Within a given year's supported rows, the
+source age categories are non-overlapping. Preserve those categories: never manufacture ages 85–94 from an early `85 +`
+count or replace later single ages with an ingested `85 +` aggregate.
 
 ## Three different kinds of cells
 
@@ -115,20 +135,13 @@ calls the HDF5 writer. The writer uses `HDF5Array::writeHDF5Array()` for the pop
 writes the metadata separately. Registry rebuilding is a subsequent step needed to discover a new
 cube through `open_poparray()`.
 
-The reader and transformer live in `data-raw/tdc_estimates.r`. Age-label and support helpers live in
-`data-raw/tdc_estimates_support.r`. Generic ingestion lives in `R/ingestion.R`; array conversion lives
-in `R/utils.r`; persistence and reopening live in `R/cube_io.R` and `R/open_pop_array.r`.
-
-**EAGER build:** this ingestion path holds tables and a base R array in memory. Multiple intermediate
-objects may coexist, and a rectangular table is usually much larger than the array alone. Budget
-memory for the full build. HDF5 backing makes subsequent access lazy; it does not make this build
-out-of-core. `as.array()`, `array_2_df()`, and full-cube data-frame conversion also realize values.
+The reader and transformer functions are user written and are found in `data-raw/tdc_estimates.r`. Age-label and support
+helpers live in `data-raw/tdc_estimates_support.r`. G
 
 # Prepare a reproducible session
 
 Record package versions, source file names, checksums, acquisition dates, and any source revisions.
-Keep the raw files immutable. Do not source `data-raw/control_def.r` merely to get helper functions:
-it clears the workspace and invokes other data workflows.
+Keep the raw files immutable. 
 
 ```{r setup}
 # Prevent automatic cube-store initialization while loading the development package.
@@ -150,6 +163,8 @@ sessionInfo()
 portable requirement: set `input_dir` explicitly for another computer. The local ingestion tooling
 uses packages such as readr, janitor, forcats, and rage in addition to the package itself.
 
+Find the source data files and place the file names in a list called "files".
+
 ```{r source-manifest}
 input_dir <- file.path(tarr::paths$population, "Estimates", "Texas Demographic Center", "asre")
 pattern <- "^20[1-2][0-9]_ASRE_Estimate_alldata\\.csv$"
@@ -166,7 +181,7 @@ manifest
 
 The anchored pattern excludes zip archives and names that merely contain the expected suffix. If
 several revisions exist for one year, choose the authoritative revision explicitly rather than
-binding both. Update the filename policy when new years no longer match the current pattern.
+binding both. Update the file name policy when new years no longer match the current pattern.
 
 ## Load definitions without running the production script
 
@@ -189,80 +204,20 @@ stopifnot(all(vapply(wanted, function(nm) is.function(tdc[[nm]]), logical(1))))
 ```
 
 Internal helpers referenced with `tarr.pop:::` below are useful for a maintainer's staged audit.
-They are not a stable public API. A routine build should call the exported `ingest_population()`.
+They are not a stable public API. A routine build should call the package exported function
+`ingest_population()`.
 
 # Read and audit the sources
 
 `read_est_csv()` inspects the header before selecting column specifications. It handles `County`
 versus `Area Name`, and `FIPS` versus `Area Code`. It cleans names, maps Anglo to white, removes the
 non-Hispanic prefix and population suffix, and removes source total columns. It uses an existing year
-column when present, otherwise the filename year. Therefore verify both agree rather than assuming
-the filename always wins.
+column when present, otherwise the year in the file name is used. Therefore verify both agree rather than assuming
+the file name always wins.
 
-The current reader first reads count fields as character, then `read_tdc_estimates_raw()` removes a
-comma and converts character columns to integer. A successful CSV parse alone cannot prove that
-this conversion succeeded. Inspect the count strings and stop on conversion warnings or unexpected
-missing values. Do not suppress them to finish a build.
+The current reader first reads the file fields as a character vector, then `read_tdc_estimates_raw()` removes a comma
+and converts character columns to integer. A successful CSV parse alone cannot prove that this conversion succeeded.
 
-```{r audit-files}
-file_checks <- lapply(files, function(file) {
-  header <- names(readr::read_csv(file, n_max = 0L, show_col_types = FALSE))
-  one <- tdc$read_est_csv(file)
-  stopifnot(nrow(readr::problems(one)) == 0L)
-  expected_year <- as.integer(substr(basename(file), 1L, 4L))
-  stopifnot(all(one$year == expected_year), !anyNA(one$year))
-  counts <- one[vapply(one, is.character, logical(1))]
-  stopifnot(all(vapply(counts, function(x) {
-    cleaned <- stringr::str_remove(x, ",")
-    all(is.na(cleaned) | grepl("^[0-9]+$", cleaned))
-  }, logical(1))))
-  data.frame(file = basename(file), year = expected_year, rows = nrow(one),
-             name_header = if ("Area Name" %in% header) "Area Name" else "County",
-             code_header = if ("FIPS" %in% header) "FIPS" else "Area Code")
-})
-do.call(rbind, file_checks)
-raw <- tdc$read_tdc_estimates_raw(input_dir = input_dir, pattern = pattern)
-stopifnot(setequal(unique(raw$year), manifest$year))
-str(raw)
-```
-
-This is an additional **EAGER source audit** and reads the files again. For a large build, run it
-once, retain the results, and release unused objects. Also inspect source headers directly: the
-reader intentionally drops total columns, so unexplained column loss must be investigated before
-relying on the canonical table.
-
-## Establish a non-overlapping reference total
-
-Use county rows at detailed ages and the separate female/male race components. Do not add an
-`All Ages` row to detailed ages, a total column to its component columns, or the state total to
-counties. The reference below is independent of the geography transformation and array mapping.
-
-```{r source-reference}
-count_columns <- grep("^(asian|black|hispanic|other|white)_(female|male)$",
-                      names(raw), value = TRUE)
-stopifnot(length(count_columns) > 0L,
-          all(vapply(raw[, ..count_columns], is.numeric, logical(1))))
-source_detail <- raw[
-  !as.character(fips) %in% c("0", "000", "48", "48000") &
-    !grepl("all", as.character(age), ignore.case = TRUE)
-]
-source_year_totals <- source_detail[
-  , .(population = sum(as.matrix(.SD), na.rm = TRUE)),
-  by = year, .SDcols = count_columns
-][order(year)]
-source_total <- sum(source_year_totals$population)
-source_de_witt <- source_detail[
-  as.character(fips) %in% c("123", "48123"),
-  .(population = sum(as.matrix(.SD), na.rm = TRUE)),
-  by = year, .SDcols = count_columns
-][order(year)]
-source_year_totals
-```
-
-`as.matrix()` here realizes a count-only table already in memory; it is **EAGER**. A tidyverse
-alternative is to pivot only `count_columns` and group by year, but that creates more rows and can
-use considerably more memory. Neither alternative should pivot source totals together with their
-components.
 
 # Transform and confirm geographic identity
 
