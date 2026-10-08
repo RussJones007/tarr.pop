@@ -335,6 +335,7 @@ rm(age_string, rac_eth_string, extract_ethnicity,
 
 rm(list = ls(pattern = "extract_+"), age_string, rac_eth_string, get_census_age_race)
 
+
 # Census Estimates --------------------------------------------------------
 # The tidycensus package was to be used to get estimates, but fails after 2019.
 # Therefore data as csv files have been downloaded from  the Census Bureau.
@@ -392,7 +393,7 @@ race_vec <- set_names(x = names(race_vec), nm = race_vec) # reverse the names an
 ## Read census estimate files --------------------
 # The first file is the latest estimates for the 2010s update. The second file has the latest estimates for the 2020s
 est_fns <- list(
-  est_2010_2019 = "cc-est2020-alldata-48.csv",
+  est_2010_2019 = "cc-est2020int-alldata-48.csv",
   est_2020s     = "cc-est2025-alldata-48.csv"
 )
 
@@ -410,10 +411,9 @@ read_estimate_file <- compose(
 # read the files into a list
 est_list <- map(est_fns, read_estimate_file)
 
-# The 2010 census and base data rows are removed as is the 2020 base estimate leaving just the
-# estimates for each year.
+# The 2010 census and 2020 rows are removed,leaving estimates for the year
 est_list$est_2010_2019 <- est_list$est_2010_2019 |>
-  filter(!year %in%  c(1, 2, 13))
+  filter(!year %in%  c(1, 13))
 
 # Remove the 2020 base data row
 est_list$est_2020s <- est_list$est_2020s |>
@@ -421,7 +421,7 @@ est_list$est_2020s <- est_list$est_2020s |>
 
 # The year column in the 2020s dataframe is increased by 11 so that it can be combined
 # with the previous decade of estimates
-est_list$est_2020s$year <- est_list$est_2020s$year + 11
+est_list$est_2020s$year <- est_list$est_2020s$year + 10
 
 # Vectors for renaming the year variable in each estimate file read The 2010-2019 data frame has 10 entries in the year
 # column an estimate for years 2010 through 2019. The 2020s estimate data frame estimates for each year in the file
@@ -435,6 +435,7 @@ years_name_vec <- c(#"1" = "2010 Census",
                     #"13" = "2020 Base",
                     set_names(x = years_in_2020s, 13:(13 + entries_in_2020s - 1))
 )
+
 
 # create total estimates for Texas for each year
 est_list$texas <- bind_rows(est_list[1:2]) |>
