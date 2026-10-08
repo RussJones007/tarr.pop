@@ -7,6 +7,7 @@
 # - seer_def.r to process National Cancer Institute population data
 #
 # Created Feb 1, 2025
+# Revised October 2026 - Updated creation scripts to use poparay and population cubes
 # R Jones
 # =============================================================================>
 library(magrittr)
@@ -44,25 +45,25 @@ county_names <- function(x) {
 }
 
 # check files are in location expected relative to the package home directory
-fls <- c(
-  "data-raw/pop_def.r",
-  "data-raw/census_data.r",
-  "data-raw/seer_def.r"
-)
-
-if (all(file.exists(fls))) {
-  # call each script
-  purrr::walk(fls, ~ {
-    source(file = .x)
-    print(paste("Finished", .x))
-  })
-} else {
-  stop(paste("one of the defintion files does not exists in the location
-             expected.Current folder is", getwd()))
-}
-
-rm(fls)
-
+# fls <- c(
+#   "data-raw/pop_def.r",
+#   "data-raw/census_data.r",
+#   "data-raw/seer_def.r"
+# )
+# 
+# if (all(file.exists(fls))) {
+#   # call each script
+#   purrr::walk(fls, ~ {
+#     source(file = .x)
+#     print(paste("Finished", .x))
+#   })
+# } else {
+#   stop(paste("one of the defintion files does not exists in the location
+#              expected.Current folder is", getwd()))
+# }
+# 
+# rm(fls)
+# 
 # population
 population <- list(
   "texas.demographic.center" = list(
@@ -81,4 +82,4 @@ population <- list(
 )
 
 usethis::use_data(population, overwrite = TRUE)
-rm(list = ls())
+#rm(list = ls())
