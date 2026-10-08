@@ -116,7 +116,11 @@ tp_projection_hdf5_writer <- function(out_dim,
                                       chunkdim = NULL,
                                       compression_level = 6,
                                       dataset = "data",
-                                      stat_levels = c("projection", "std_error")) {
+                                      stat_levels = c("projection", "std_error"),
+                                      dim_semantics = NULL,
+                                      time_dim = names(out_dimnames)[[year_k]],
+                                      area_dim = NULL,
+                                      data_col = "population") {
   
   checkmate::assert_integerish(out_dim, lower = 1, any.missing = FALSE)
   checkmate::assert_list(out_dimnames, len = length(out_dim))
@@ -197,6 +201,14 @@ tp_projection_hdf5_writer <- function(out_dim,
   }
   
   init_na_blockwise(dataset)
+  if (!is.null(dim_semantics)) {
+    dim_semantics <- pp_prepare_dim_semantics(dim_semantics, out_dimnames, time_dim, area_dim)
+    pa_write_poparray_metadata(path, out_dimnames, time_dim, area_dim,
+                              dim_semantics = dim_semantics, data_col = data_col)
+    # Statistic selection is separate from epidemiologic strata.
+    pa_h5_write_dataset(path, "cube/metadata/roles/strata",
+                        setdiff(names(out_dimnames), c(time_dim, area_dim, "stat")))
+  }
   
   # ---- Write a length-h numeric vector into a dataset slice ----
   # Writes:
@@ -249,10 +261,16 @@ tp_projection_hdf5_writer <- function(out_dim,
   as_handles <- function() {
     h <- HDF5Array::HDF5Array(path, dataset)
     # Preserve semantic dimnames on the delayed handle (including named `stat`).
-    dimnames(h) <- out_dimnames
+    if (!is.null(dim_semantics)) {
+      meta <- pp_read_cube_metadata(path)
+      dimnames(h) <- read_dimnames_from_cube(path, meta = meta)
+    } else {
+      dimnames(h) <- out_dimnames
+    }
     list(
       handle = h,
-      path = path
+      path = path,
+      dim_semantics = if (is.null(dim_semantics)) NULL else meta$dim_semantics
     )
   }
   
@@ -550,6 +568,16 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
   stat_levels <- c("projection", "std_error")
   out_dim_stat <- c(out_dim, length(stat_levels))
   out_dn_stat  <- c(out_dn, list(stat = stat_levels))
+  # Existing open-ended applicability schemas cover the future labels. Closed
+  # schemas must not be silently extended into an uncovered forecast horizon.
+  extended_dn <- dn
+  extended_dn[[time_nm]] <- c(base_years_chr, future_years_chr)
+  input_semantics <- dim_semantics(parray)
+  validate_dim_semantics(input_semantics, names(dn), time_role(parray),
+                         area_role(parray), extended_dn)
+  out_semantics <- subset_dim_semantics(input_semantics, extended_dn, out_dn)
+  out_semantics <- pp_prepare_dim_semantics(out_semantics, out_dn_stat,
+                                            time_role(parray), area_role(parray))
   
   # ---- HDF5-backed output cube (single dataset with stat dim) ----
   # NOTE: tp_projection_hdf5_writer() must be updated to create ONE dataset/handle
@@ -558,7 +586,11 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
     out_dim      = out_dim_stat,
     out_dimnames = out_dn_stat,
     year_k       = year_k,
-    stat_levels  = stat_levels
+    stat_levels  = stat_levels,
+    dim_semantics = out_semantics,
+    time_dim = time_role(parray),
+    area_dim = area_role(parray),
+    data_col = data_col(parray)
   )
   
   handles <- w$as_handles()
@@ -598,7 +630,7 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
     se <- (res$upper - res$lower) / (2 * z)
     
     # NEW: write into stat slices
-    w$write_year_slice("data", fixed_k_list = list(), stat = "projection", values = res$projected)
+    w$write_year_slice("data", fixed_k_list = list(), stat = "projection", values = round(res$projected))
     w$write_year_slice("data", fixed_k_list = list(), stat = "std_error",  values = se)
     
     base_years_used <- as.character(res$base_years)
@@ -621,7 +653,7 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
       
       se <- (res$upper - res$lower) / (2 * z)
       
-      w$write_year_slice("data", fixed_k_list = fixed_k_list, stat = "projection", values = res$projected)
+      w$write_year_slice("data", fixed_k_list = fixed_k_list, stat = "projection", values = round(res$projected))
       w$write_year_slice("data", fixed_k_list = fixed_k_list, stat = "std_error",  values = se)
       
       if (is.null(base_years_used)) base_years_used <- as.character(res$base_years)
@@ -644,7 +676,17 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
     projection_level = as.numeric(level)
   )
   
-  # NEW: projection object stores a single array with a stat dim
+  # Store provenance alongside the explicit semantic metadata for lazy reopening.
+  created <- Sys.time()
+  for (field in c("note", "source", "updated")) {
+    pa_h5_write_dataset(w$path, paste0("cube/metadata/source/", field), source[[field]])
+  }
+  pa_h5_create_group(w$path, "cube/metadata/projection")
+  pa_h5_write_dataset(w$path, "cube/metadata/projection/level", level)
+  pa_h5_write_dataset(w$path, "cube/metadata/projection/method", method)
+  pa_h5_write_dataset(w$path, "cube/metadata/projection/base_years", base_years_used)
+  pa_h5_write_dataset(w$path, "cube/metadata/projection/created", as.numeric(created))
+
   new_poparray_projection(
     handle     = proj_da,
     level      = level,
@@ -656,7 +698,9 @@ project_cube <- function(parray, h, level, method, guard = TRUE, ...) {
       area = area_role(parray),
       strata = setdiff(names(dimnames(parray)), c(time_role(parray), area_role(parray)))
     ),
-    data_col   = data_col(parray) %||% "population"
+    data_col   = data_col(parray) %||% "population",
+    dim_semantics = handles$dim_semantics,
+    created = created
   )
 }
 
@@ -712,6 +756,16 @@ infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
 #'
 #' The returned `poparray_projection` object contains one delayed cube in
 #' `handle`, with a `stat` dimension containing `projection` and `std_error`.
+#' Final projected population estimates are rounded to whole persons using R's
+#' `round()` (ties to even). Intermediate calculations retain full precision,
+#' and standard errors retain their calculated precision.
+#' Coercion with `as.poparray()` selects the estimate, removes `stat`, and
+#' discards uncertainty.
+#' Explicit dimension semantics are preserved in the projection object and
+#' its HDF5 metadata. Time-dependent applicability uses existing open-ended
+#' schemas for future years; an uncovered horizon is rejected rather than
+#' extending a closed schema. Coercion preserves semantics for all surviving
+#' dimensions and removes only the `stat` contract.
 #'
 #' ## Engine methods
 #'

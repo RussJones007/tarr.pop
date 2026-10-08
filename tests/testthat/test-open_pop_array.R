@@ -400,6 +400,27 @@ test_that("open_poparray keeps population data HDF5 DelayedArray-backed", {
   expect_true(tarr.pop:::is_hdf5_backed_delayed(out))
 })
 
+test_that("checkout opens a local copy and validates its arguments", {
+  root <- tempfile("checkout-registry-")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  write_open_test_cube(root, "checkout_series")
+  rebuild_poparray_registry(root)
+  original <- open_poparray("checkout_series")
+  source <- DelayedArray::seed(original)@filepath
+  destination <- tempfile("checkout-local-")
+  copied <- open_poparray("checkout_series", checkout = TRUE, checkout_dir = destination)
+  expect_identical(DelayedArray::seed(copied)@filepath,
+                   normalizePath(file.path(destination, basename(source))))
+  expect_identical(attr(copied, "backing_file"), source)
+  expect_equal(as.array(copied), as.array(original))
+  expect_identical(dim_semantics(copied), dim_semantics(original))
+  expect_null(attr(original, "backing_file"))
+  default_copy <- open_poparray("checkout_series", checkout = TRUE)
+  expect_identical(dirname(DelayedArray::seed(default_copy)@filepath), normalizePath(tempdir()))
+  expect_error(open_poparray("checkout_series", checkout = NA), "checkout")
+  expect_error(open_poparray("checkout_series", checkout = TRUE, checkout_dir = NA_character_), "checkout_dir")
+})
+
 test_that("cached cube metadata includes dim_semantics for reuse", {
   fp <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
   expect_true(nzchar(fp))

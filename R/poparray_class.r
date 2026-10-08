@@ -220,7 +220,6 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames)
 is_hdf5_backed_delayed <- function(x) {
   if (!is(x, "DelayedArray")) return(FALSE)
   if (is(x, "HDF5Array")) return(TRUE)
-  sd <- tryCatch(DelayedArray::seed(x), error = function(e) NULL)
   seed_has_hdf5 <- function(obj) {
     if (is.null(obj)) return(FALSE)
     if (is(obj, "HDF5ArraySeed") || is(obj, "HDF5Array")) return(TRUE)
@@ -237,7 +236,10 @@ is_hdf5_backed_delayed <- function(x) {
     }
     FALSE
   }
-  seed_has_hdf5(sd)
+  # Binding delayed arrays can produce multiple seeds; seed() rejects those
+  # even when every input remains HDF5-backed. Inspect the seed graph only.
+  tryCatch(any(unlist(DelayedArray::seedApply(x, seed_has_hdf5))),
+           error = function(e) FALSE)
 }
 
 validate_hdf5_metadata_shape <- function(x) {
@@ -1278,7 +1280,7 @@ data_col <- function(x) {
 #' Reading or validating it does not read population values. For cube paths,
 #' replacement writes only metadata and retains existing metadata-role controls.
 #'
-#' @param x A poparray or canonical HDF5 cube path.
+#' @param x A poparray, poparray_projection (for reading), or canonical HDF5 cube path.
 #' @param value Named list of DimSemantics entries for replacement.
 #' @return Named list with one `DimSemantics` object per dimension.
 #' @export
@@ -1286,8 +1288,8 @@ dim_semantics <- function(x) {
   if (is.character(x) && length(x) == 1L && nzchar(x)) {
     return(read_cube_dim_semantics_impl(x))
   }
-  if (!is(x, "poparray")) {
-    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  if (!is(x, "poparray") && !is(x, "poparray_projection")) {
+    cli::cli_abort("{.arg x} must be a {.cls poparray}, {.cls poparray_projection}, or an HDF5 cube path.")
   }
   x@dim_semantics
 }

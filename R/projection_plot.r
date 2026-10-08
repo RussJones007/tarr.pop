@@ -142,7 +142,7 @@ plot.poparray_projection <- function(x,
   }
   
   pa <- as.poparray(x)
-  pa_proj <- pa[stat = "projection", drop = FALSE]
+  pa_proj <- pa
   time_nm <- time_role(pa)
   
   if (identical(type, "ts")) {

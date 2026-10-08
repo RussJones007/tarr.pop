@@ -18,7 +18,9 @@
 #' @description
 #' An S4 class representing a time-based projection. The class extends
 #' `DelayedArray` and stores uncertainty as a named `stat` dimension with levels
-#' `projection` and `std_error`. Objects are typically created by [project()].
+#' `projection` and `std_error`. Objects are typically created by [project()],
+#' which rounds final population estimates to whole persons using `round()`
+#' while standard errors retain their calculated precision.
 #' 
 #' @section Structure:
 #' A `poparray_projection` object is an S4 subclass of `DelayedArray`.
@@ -28,6 +30,7 @@
 #' *   **time_role** time dimension name.
 #' *   **area_role** area dimension name.
 #' *   **strata_roles** non-time/non-area/non-stat dimensions.
+#' *   **dim_semantics** explicit semantics for every dimension, including `stat`.
 #' *   **level** confidence level used by the projection.
 #' *   **method** projection method (ARIMA/ETS/CAGR).
 #' *   **source** provenance metadata list.
@@ -51,6 +54,7 @@ setClass(
     time_role = "character",
     area_role = "character",
     strata_roles = "character",
+    dim_semantics = "list",
     level = "numeric",
     method = "character",
     source = "list",
@@ -90,6 +94,18 @@ setValidity("poparray_projection", function(object) {
   if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
     return("time/area/strata roles cannot contain duplicates.")
   }
+  if (!identical(object@strata_roles,
+                 setdiff(names(dn), c(object@time_role, object@area_role, "stat")))) {
+    return("strata_roles must match the non-time/non-area/non-stat dimensions.")
+  }
+  semantic_error <- tryCatch({
+    validate_dim_semantics(object@dim_semantics, names(dn),
+                           object@time_role, object@area_role, dn)
+    pp_prepare_dim_semantics(object@dim_semantics, dn,
+                              object@time_role, object@area_role)
+    NULL
+  }, error = function(e) conditionMessage(e))
+  if (!is.null(semantic_error)) return(semantic_error)
 
   if (length(object@level) != 1L || is.na(object@level) || object@level < 0.5 || object@level > 0.99) {
     return("slot 'level' must be a single numeric value between 0.5 and 0.99.")
@@ -207,6 +223,38 @@ pp_created <- function(x) {
   attr(x, "created", exact = TRUE)
 }
 
+#' Validate explicit projection semantics and add the statistic contract
+#' @param dim_semantics Explicit semantics for the population dimensions.
+#' @param dn Projection dimension labels, including `stat`.
+#' @param time_dim,area_dim Explicit dimension roles.
+#' @return Semantics aligned with projection dimensions.
+#' @keywords internal
+#' @noRd
+pp_prepare_dim_semantics <- function(dim_semantics, dn, time_dim, area_dim) {
+  if (is.null(dim_semantics)) {
+    cli::cli_abort("{.arg dim_semantics} is required; projection semantics cannot be inferred.")
+  }
+  population_names <- setdiff(names(dn), "stat")
+  if (identical(names(dim_semantics), population_names)) {
+    dim_semantics$stat <- new_dim_semantics(
+      "stat", "statistic", "nominal", "set", validated = TRUE,
+      overlap_levels = c("projection", "std_error"),
+      notes = "Estimates and standard errors are distinct statistics, not additive population groups."
+    )
+    dim_semantics <- dim_semantics[names(dn)]
+  }
+  validate_dim_semantics(dim_semantics, names(dn), time_dim, area_dim, dn)
+  stat <- dim_semantics$stat
+  if (!identical(stat@domain, "statistic") || !identical(stat@scale_type, "nominal") ||
+      !identical(stat@partition_type, "set") ||
+      !isTRUE(stat@validated) ||
+      !identical(stat@overlap_levels, c("projection", "std_error")) ||
+      !is.null(pa_dim_applicability(stat))) {
+    cli::cli_abort("The stat dimension must describe non-additive projection and standard-error statistics.")
+  }
+  dim_semantics
+}
+
 tp_dimnames <- function(parray) dimnames(parray)
 tp_dim <- function(parray) dim(parray)
 
@@ -266,6 +314,48 @@ check_projection_scale <- function(parray,
 
 # ---- constructor + validator -------------------------------------------------
 
+#' Read only explicit fieldwise projection metadata
+#' @param filepath Projection HDF5 file.
+#' @return Fresh cube metadata, with no legacy semantic inference.
+#' @keywords internal
+#' @noRd
+pp_read_cube_metadata <- function(filepath) {
+  info <- h5_inventory(filepath)
+  order <- as.character(rhdf5::h5read(filepath, "cube/metadata/dim_order"))
+  fields <- c("dim_name", "domain", "scale_type", "partition_type", "validated", "overlap_levels", "notes")
+  for (nm in order) {
+    paths <- paste0("cube/metadata/dim_semantics/", nm, "/", fields)
+    if (!all(vapply(paths, function(path) h5_dataset_exists(info, path), logical(1)))) {
+      cli::cli_abort("Projection HDF5 metadata must include explicit dim_semantics for {.val {nm}}.")
+    }
+  }
+  get_cube_metadata(filepath, info = info)
+}
+
+#' Read a projection cube without reading population values
+#' @param filepath Projection HDF5 file written by `project()`.
+#' @param dataset Numeric dataset path.
+#' @return An HDF5-backed projection with explicit roles and semantics.
+#' @keywords internal
+#' @noRd
+read_poparray_projection <- function(filepath, dataset = "data") {
+  # Use fresh metadata: the writer adds provenance after creating its handle.
+  meta <- pp_read_cube_metadata(filepath)
+  read_field <- function(field) rhdf5::h5read(filepath, paste0("cube/metadata/projection/", field))
+  source <- as.list(meta$source)
+  source$projection_method <- as.character(read_field("method"))
+  source$projection_level <- as.numeric(read_field("level"))
+  h <- HDF5Array::HDF5Array(filepath, dataset)
+  dimnames(h) <- meta$dimnames
+  new_poparray_projection(
+    h, level = source$projection_level, method = source$projection_method,
+    source = source, base_years = as.character(read_field("base_years")),
+    dimroles = meta$roles, data_col = meta$data_col,
+    created = as.POSIXct(as.numeric(read_field("created")), origin = "1970-01-01", tz = "UTC"),
+    dim_semantics = meta$dim_semantics
+  )
+}
+
 infer_projection_roles <- function(dn_names, dimroles = NULL) {
   if (is.null(dimroles)) {
     non_stat <- setdiff(dn_names, "stat")
@@ -305,7 +395,8 @@ new_poparray_projection_s4 <- function(
     time_dim,
     area_dim,
     data_col = "population",
-    created = Sys.time()
+    created = Sys.time(),
+    dim_semantics = NULL
 ) {
   checkmate::assert_class(x, "DelayedArray")
 
@@ -341,6 +432,7 @@ new_poparray_projection_s4 <- function(
   if (identical(time_dim, area_dim)) {
     cli::cli_abort("{.arg time_dim} and {.arg area_dim} must be different.")
   }
+  dim_semantics <- pp_prepare_dim_semantics(dim_semantics, dn, time_dim, area_dim)
 
   new(
     "poparray_projection",
@@ -348,6 +440,7 @@ new_poparray_projection_s4 <- function(
     time_role = as.character(time_dim),
     area_role = as.character(area_dim),
     strata_roles = setdiff(nms, c(time_dim, area_dim, "stat")),
+    dim_semantics = dim_semantics,
     level = as.numeric(lvl),
     method = as.character(mth),
     source = src,
@@ -527,8 +620,22 @@ new_poparray_projection <- function(
     base_years,
     dimroles = NULL,
     data_col = "population",
-    created = Sys.time()
+    created = Sys.time(),
+    dim_semantics = NULL
 ) {
+  if (is.null(dim_semantics)) {
+    if (!is(handle, "HDF5Array")) {
+      cli::cli_abort("{.arg dim_semantics} is required for a delayed projection view.")
+    }
+    meta <- pp_read_cube_metadata(DelayedArray::seed(handle)@filepath)
+    if (is.null(meta$dim_order) || is.null(meta$dim_semantics)) {
+      cli::cli_abort("Projection HDF5 metadata must include explicit dim_semantics.")
+    }
+    dimnames(handle) <- read_dimnames_from_cube(meta$path, meta = meta)
+    stored_roles <- read_roles_from_cube(meta$path, meta = meta)
+    if (is.null(dimroles)) dimroles <- stored_roles
+    dim_semantics <- meta$dim_semantics
+  }
   dn <- dimnames(handle)
   if (is.null(dn) || is.null(names(dn))) {
     cli::cli_abort("Projection array must have named dimnames.")
@@ -544,7 +651,8 @@ new_poparray_projection <- function(
     time_dim = roles$time,
     area_dim = roles$area,
     data_col = data_col,
-    created = created
+    created = created,
+    dim_semantics = dim_semantics
   )
 }
 
@@ -557,6 +665,11 @@ new_poparray_projection <- function(
 #' @param source Poparray-style source metadata (named list or named atomic vector coercible
 #'   to list). Expected fields include `note`, `source`, and `updated`.
 #' @param base_years Numeric vector of base years used in projection
+#' @param dimroles Explicit time, area, and optional strata roles.
+#' @param data_col Name of the population value column.
+#' @param dim_semantics Explicit named `DimSemantics` list for population
+#'   dimensions. Required unless `projection` is a `poparray`, whose semantics
+#'   are preserved. No semantics are inferred from names or labels.
 #'
 #' @return A poparray_projection object
 #' @export
@@ -568,11 +681,16 @@ poparray_projection <- function(
     source,
     base_years,
     dimroles = NULL,
-    data_col = "population"
+    data_col = "population",
+    dim_semantics = NULL
 ) {
   
   checkmate::assert_class(projection, "DelayedArray")
   checkmate::assert_class(std_error, "DelayedArray")
+  if (is(projection, "poparray")) {
+    if (is.null(dim_semantics)) dim_semantics <- projection@dim_semantics
+    if (is.null(dimroles)) dimroles <- list(time = projection@time_role, area = projection@area_role)
+  }
   
   if (!identical(dim(projection), dim(std_error))) {
     cli::cli_abort("projection and std_error must have identical dimensions.")
@@ -582,16 +700,15 @@ poparray_projection <- function(
     cli::cli_abort("projection and std_error must have identical dimnames.")
   }
   
-  # Ensure DelayedArray::abind exists
-  if (!exists("abind", where = asNamespace("DelayedArray"))) {
-    cli::cli_abort("DelayedArray::abind() is not available in this version.")
-  }
-  
-  combined <- DelayedArray::abind(
-    projection,
-    std_error,
-    along = length(dim(projection)) + 1
-  )
+  # Add a singleton statistic axis, bind lazily along the first axis, then
+  # move that axis to the end. arbind() supports delayed arrays of any rank.
+  p <- methods::as(projection, "DelayedArray")
+  se <- methods::as(std_error, "DelayedArray")
+  nd <- length(dim(p))
+  dim(p) <- c(1L, dim(p))
+  dim(se) <- c(1L, dim(se))
+  combined <- DelayedArray::arbind(p, se)
+  combined <- DelayedArray::aperm(combined, c(seq_len(nd) + 1L, 1L))
   
   dimnames(combined) <- c(
     dimnames(projection),
@@ -608,7 +725,8 @@ poparray_projection <- function(
     base_years = base_years,
     time_dim = roles$time,
     area_dim = roles$area,
-    data_col = data_col
+    data_col = data_col,
+    dim_semantics = dim_semantics
   )
 }
 
@@ -630,10 +748,10 @@ projection <- function(x) {
   h <- pp_handle(x)
   dn <- dimnames(h)
   if (is.null(dn) || is.null(names(dn)) || !"stat" %in% names(dn)) {
-    cli::abort("Projection data must contain a named 'stat' dimension.")
+    cli::cli_abort("Projection data must contain a named 'stat' dimension.")
   }
   if (!"projection" %in% dn[["stat"]]) {
-    cli::abort("Projection data does not contain the 'projection' level in the 'stat' dimension.")
+    cli::cli_abort("Projection data does not contain the 'projection' level in the 'stat' dimension.")
   }
   
   stat_k <- match("stat", names(dn))
@@ -783,7 +901,8 @@ setMethod(
           time_dim = x@time_role,
           area_dim = x@area_role,
           data_col = x@data_col,
-          created = x@created
+          created = x@created,
+          dim_semantics = subset_dim_semantics(x@dim_semantics, dn0, dn)
         )
       )
     }
@@ -800,7 +919,7 @@ setMethod(
       source = x@source,
       time_dim = x@time_role,
       area_dim = x@area_role,
-      dim_semantics = default_dim_semantics(names(dn), x@time_role, x@area_role)
+      dim_semantics = subset_dim_semantics(x@dim_semantics, dn0, dn)
     )
   }
 )
@@ -852,7 +971,8 @@ setMethod(
         source     = pp_source(x),
         base_years = pp_base_years(x),
         dimroles   = pp_roles(x),
-        data_col   = pp_data_col(x)
+        data_col   = pp_data_col(x),
+        dim_semantics = subset_dim_semantics(attr(x, "dim_semantics", exact = TRUE), dn0, dn)
       )
     )
   }
@@ -870,7 +990,7 @@ setMethod(
     source = pp_source(x),
     time_dim = roles$time,
     area_dim = roles$area,
-    dim_semantics = default_dim_semantics(names(dn), roles$time, roles$area)
+    dim_semantics = subset_dim_semantics(attr(x, "dim_semantics", exact = TRUE), dn0, dn)
   )
 }
 
@@ -878,8 +998,14 @@ setMethod(
 
 #' Coerce a poparray_projection to a poparray
 #'
-#' Returns a `poparray` wrapping the same delayed backend in `handle`,
-#' preserving time/area roles and retaining the `stat` dimension.
+#' Returns a `poparray` backed by the existing delayed data,
+#' selecting the projected population estimate and removing the `stat` dimension
+#' lazily. The uncertainty statistic is discarded; time/area roles and all
+#' remaining dimensions (including singleton dimensions) are preserved.
+#' Explicit dimension semantics and applicability are retained; only the
+#' statistic dimension's metadata is removed.
+#'
+#' @return A valid `poparray` containing only the projected population estimate.
 #'
 #' @param x a poparray_projection object
 #' @param ...  forwarded arguments, not currenly used
@@ -888,8 +1014,13 @@ setMethod(
 as.poparray.poparray_projection <- function(x, ...) {
   validate_poparray_projection(x)
   roles <- pp_roles(x)
-  h <- pp_handle(x)
+  h <- projection(x)
   dn <- dimnames(h)
+  keep <- which(names(dn) != "stat")
+  # DelayedArray permits omission of singleton dimensions in aperm().
+  h <- DelayedArray::aperm(h, keep)
+  dn <- dn[keep]
+  dimnames(h) <- dn
   res <- new_poparray(
     x = h,
     dimnames_list = dn,
@@ -897,7 +1028,7 @@ as.poparray.poparray_projection <- function(x, ...) {
     source = pp_source(x),
     time_dim = roles$time,
     area_dim = roles$area,
-    dim_semantics = default_dim_semantics(names(dn), roles$time, roles$area)
+    dim_semantics = subset_dim_semantics(dim_semantics(x), dimnames(x), dn)
   )
   
   attr(res, "projection_level") <- pp_level(x)

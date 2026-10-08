@@ -709,6 +709,8 @@ open_tarr_pop <- function(...) {
 #' @param dataset HDF5 dataset path for numeric cube data.
 #'   Defaults to `"cube/population"` for the migrated cube schema.
 #' @param data_col Name of the value column when coercing to a data frame.
+#' @param checkout Logical; copy the HDF5 file locally before opening it.
+#' @param checkout_dir Local destination directory, used when `checkout = TRUE`.
 #'
 #' @details
 #' The function reads all semantic metadata from the same HDF5 file:
@@ -725,11 +727,14 @@ open_tarr_pop <- function(...) {
 #' @export
 open_poparray <- function(series_id,
                           dataset = "cube/population",
-                          data_col = NULL) {
+                          data_col = NULL,
+                          checkout = FALSE,
+                          checkout_dir = tempdir()) {
   checkmate::assert_string(series_id, min.chars = 1)
   checkmate::assert_flag(checkout)
+  if (checkout) checkmate::assert_string(checkout_dir, min.chars = 1)
   root <- resolve_cube_dir()
-  reg <- tarr_series_registry(root)
+  reg  <- tarr_series_registry(root)
   
   # change to test through network simulated mounted folder
   # reg <- reg |> 

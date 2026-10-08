@@ -57,6 +57,16 @@ engine based on the number of base years available in the input cube.
 
 The returned \code{poparray_projection} object contains one delayed cube in
 \code{handle}, with a \code{stat} dimension containing \code{projection} and \code{std_error}.
+Final projected population estimates are rounded to whole persons using R's
+\code{round()} (ties to even). Intermediate calculations retain full precision,
+and standard errors retain their calculated precision.
+Coercion with \code{as.poparray()} selects the estimate, removes \code{stat}, and
+discards uncertainty.
+Explicit dimension semantics are preserved in the projection object and
+its HDF5 metadata. Time-dependent applicability uses existing open-ended
+schemas for future years; an uncovered horizon is rejected rather than
+extending a closed schema. Coercion preserves semantics for all surviving
+dimensions and removes only the \code{stat} contract.
 \subsection{Engine methods}{
 \itemize{
 \item \strong{ETS} — \emph{Exponential Smoothing State-Space models} (Error–Trend–Seasonal).

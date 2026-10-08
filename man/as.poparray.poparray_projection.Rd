@@ -11,7 +11,14 @@
 
 \item{...}{forwarded arguments, not currenly used}
 }
+\value{
+A valid \code{poparray} containing only the projected population estimate.
+}
 \description{
-Returns a \code{poparray} wrapping the same delayed backend in \code{handle},
-preserving time/area roles and retaining the \code{stat} dimension.
+Returns a \code{poparray} backed by the existing delayed data,
+selecting the projected population estimate and removing the \code{stat} dimension
+lazily. The uncertainty statistic is discarded; time/area roles and all
+remaining dimensions (including singleton dimensions) are preserved.
+Explicit dimension semantics and applicability are retained; only the
+statistic dimension's metadata is removed.
 }

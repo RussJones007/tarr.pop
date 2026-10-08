@@ -13,7 +13,8 @@ poparray_projection(
   source,
   base_years,
   dimroles = NULL,
-  data_col = "population"
+  data_col = "population",
+  dim_semantics = NULL
 )
 }
 \arguments{
@@ -29,6 +30,14 @@ poparray_projection(
 to list). Expected fields include \code{note}, \code{source}, and \code{updated}.}
 
 \item{base_years}{Numeric vector of base years used in projection}
+
+\item{dimroles}{Explicit time, area, and optional strata roles.}
+
+\item{data_col}{Name of the population value column.}
+
+\item{dim_semantics}{Explicit named \code{DimSemantics} list for population
+dimensions. Required unless \code{projection} is a \code{poparray}, whose semantics
+are preserved. No semantics are inferred from names or labels.}
 }
 \value{
 A poparray_projection object
@@ -36,7 +45,9 @@ A poparray_projection object
 \description{
 An S4 class representing a time-based projection. The class extends
 \code{DelayedArray} and stores uncertainty as a named \code{stat} dimension with levels
-\code{projection} and \code{std_error}. Objects are typically created by \code{\link[=project]{project()}}.
+\code{projection} and \code{std_error}. Objects are typically created by \code{\link[=project]{project()}},
+which rounds final population estimates to whole persons using \code{round()}
+while standard errors retain their calculated precision.
 }
 \section{Structure}{
 
@@ -48,6 +59,7 @@ Slots included:
 \item \strong{time_role} time dimension name.
 \item \strong{area_role} area dimension name.
 \item \strong{strata_roles} non-time/non-area/non-stat dimensions.
+\item \strong{dim_semantics} explicit semantics for every dimension, including \code{stat}.
 \item \strong{level} confidence level used by the projection.
 \item \strong{method} projection method (ARIMA/ETS/CAGR).
 \item \strong{source} provenance metadata list.

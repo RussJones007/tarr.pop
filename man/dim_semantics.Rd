@@ -10,7 +10,7 @@ dim_semantics(x)
 dim_semantics(x) <- value
 }
 \arguments{
-\item{x}{A poparray or canonical HDF5 cube path.}
+\item{x}{A poparray, poparray_projection (for reading), or canonical HDF5 cube path.}
 
 \item{value}{Named list of DimSemantics entries for replacement.}
 }

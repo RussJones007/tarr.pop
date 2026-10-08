@@ -150,3 +150,44 @@ test_that("project enforces numeric-like time labels for horizon generation", {
     "coercible to integer"
   )
 })
+
+
+test_that("final estimates are rounded without changing uncertainty or NA", {
+  estimates <- c(12345.49, 12345.51, 2.5, 3.5, NA_real_)
+  errors <- c(127.438, 0.123, 1.234, 2.345, NA_real_)
+  testthat::local_mocked_bindings(
+    run_projection_engine = function(method, y, years, h, level, ...) {
+      z <- stats::qnorm(1 - (1 - level) / 2)
+      list(projected = estimates, lower = estimates - z * errors,
+           upper = estimates + z * errors, base_years = years, method = method)
+    },
+    .package = "tarr.pop"
+  )
+  pr <- project(make_poparray_fixture(), h = 5, method = "CAGR", guard = FALSE)
+  values <- as.numeric(ns_fun("projection")(pr)[, 1, 1, 1])
+  se <- as.numeric(ns_fun("std_error")(pr)[, 1, 1, 1])
+  expect_equal(values, c(12345, 12346, 2, 4, NA_real_))
+  expect_equal(values, round(estimates))
+  expect_equal(values, round(values))
+  expect_type(values, "double")
+  expect_true(is.na(values[5]))
+  expect_equal(se, errors)
+  expect_true(any(se != round(se), na.rm = TRUE))
+})
+
+test_that("all projection engines store rounded estimates and precise errors", {
+  dn <- list(area.name = "A", year = as.character(2011:2022))
+  y <- c(100.2, 103.8, 109.1, 110.6, 118.4, 120.3,
+         125.9, 129.2, 135.6, 139.1, 145.8, 150.4)
+  pa <- as.poparray(array(y, dim = c(1L, length(y)), dimnames = dn),
+                   filepath = tempfile(fileext = ".h5"))
+  for (method in c("ARIMA", "ETS", "CAGR")) {
+    raw <- ns_fun("run_projection_engine")(method, y, dn$year, 3, 0.95)
+    pr <- project(pa, h = 3, method = method, guard = FALSE)
+    expect_equal(as.numeric(ns_fun("projection")(pr)), round(raw$projected))
+    expect_equal(as.numeric(ns_fun("std_error")(pr)),
+                 (raw$upper - raw$lower) / (2 * stats::qnorm(0.975)))
+    expect_true(any(raw$projected != round(raw$projected)))
+    expect_type(as.numeric(ns_fun("projection")(pr)), "double")
+  }
+})

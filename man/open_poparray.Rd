@@ -7,7 +7,13 @@
 \usage{
 open_tarr_pop(...)
 
-open_poparray(series_id, dataset = "cube/population", data_col = NULL)
+open_poparray(
+  series_id,
+  dataset = "cube/population",
+  data_col = NULL,
+  checkout = FALSE,
+  checkout_dir = tempdir()
+)
 }
 \arguments{
 \item{series_id}{Name of the population series.}
@@ -16,6 +22,10 @@ open_poparray(series_id, dataset = "cube/population", data_col = NULL)
 Defaults to \code{"cube/population"} for the migrated cube schema.}
 
 \item{data_col}{Name of the value column when coercing to a data frame.}
+
+\item{checkout}{Logical; copy the HDF5 file locally before opening it.}
+
+\item{checkout_dir}{Local destination directory, used when \code{checkout = TRUE}.}
 }
 \value{
 A poparray.
