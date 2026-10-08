@@ -3,6 +3,15 @@
 #  Query the Census Bureau APIs for data
 # use after pop_def.r
 # get decennial data and add to the pop data frame
+# 
+# Revised October 2026 - the pop data frame is no longer used.  Population data cubes stored as HDF5 
+#                        files on disk are used for storage. The data is read into a poparray object.
+#                        This file is not used to create data frames for the census, estimates, and
+#                         zip codes.   The data frames are then used to create poparrays and save 
+#                         to population cubes.
+#                        
+# 
+
 ## Local functions to gather census bureau data ------------------------------------------------
 
 # Query and save decennial data, variable components to the block level
@@ -186,6 +195,15 @@ extract_label <- . %>%
 
 # get County level decennial population for the selected counties from pop.def
 print("Retrieving decennial population for 2000 through 2020")
+
+fn <- file.path(paths$population, "Census/Census_2000_thru_2020.parquet")
+if(file.exists(fn)){
+  #write_parquet(x = census, file = fn)
+  census <- read_parquet(fn)
+  rm(fn)
+} else {
+
+
 years <- c(2000, 2010, 2020)
 
 #cnts_to_get <- counties %>% .[!str_detect(., "Texas")]
@@ -294,10 +312,12 @@ census <- bind_rows(census_list) |>
   )
 
 paths$population
-"//ITPNAS1.tarrantcounty.com/PublicHealth/Shared/EPI/Data/Population"
 fn <- file.path(paths$population, "Census/Census_2000_thru_2020.parquet")
-write_parquet(x = census, file = fn)
+#write_parquet(x = census, file = fn)
+census <- read_parquet(fn)
 rm(fn)
+
+
 
 census <- as.tarr_pop(census)
 census <- set_source_url(
@@ -309,8 +329,11 @@ census <- set_source_url(
 usethis::use_data(census, internal = FALSE, compress = "xz", overwrite = TRUE)
 
 rm(age_string, rac_eth_string, extract_ethnicity,
-   get_census_age_race, counties_pop, fips_codes, years)
-rm(list = ls(pattern = "extract_+"), census_list, texas_pop, cnts_to_get, census)
+   get_census_age_race, counties_pop, fips_codes, years,
+   census_list, texas_pop, cnts_to_get)
+}
+
+rm(list = ls(pattern = "extract_+"), age_string, rac_eth_string, get_census_age_race)
 
 # Census Estimates --------------------------------------------------------
 # The tidycensus package was to be used to get estimates, but fails after 2019.
@@ -370,7 +393,7 @@ race_vec <- set_names(x = names(race_vec), nm = race_vec) # reverse the names an
 # The first file is the latest estimates for the 2010s update. The second file has the latest estimates for the 2020s
 est_fns <- list(
   est_2010_2019 = "cc-est2020-alldata-48.csv",
-  est_2020s     = "cc-est2024-alldata-48.csv"
+  est_2020s     = "cc-est2025-alldata-48.csv"
 )
 
 # Function to read an all estimates county data file, clean the names and set to appropriate types
