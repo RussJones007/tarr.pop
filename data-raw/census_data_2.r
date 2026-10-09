@@ -1,16 +1,12 @@
-# Census Bureau population cube builds. Run after data-raw/control_def.r.
-# Source tables are EAGER; ingest_population writes HDF5-backed poparrays.
-# Set options(tarr.pop.census_build = FALSE) to load helpers without building.
-# Original census_data.r is retained for reference.
-# Usage: source("data-raw/control_def.r"); source("data-raw/census_data_2.r")
-# County census uses the original parquet when present; pass cache_file = NULL
-# to build_census_decennial() to force a fresh API read. Estimate CSVs default
-# to <cube_root>/source-data/census; input_dir may instead point to the original
-# <population>/Estimates/Census directory. Missing CSVs are downloaded there.
-# Full source tables AND ingestion's dense array construction are EAGER.
-# HDF5-backed access after ingestion is lazy. ACS MOEs must not be summed.
-# Potential shared utilities: census_county_names(), census_age_factor(),
-# census_support_table(), census_dimension_semantics(), ingest_census_table().
+# Census Bureau population cube builds. Run after data-raw/control_def.r. Source tables are EAGER; ingest_population
+# writes HDF5-backed poparrays. Set options(tarr.pop.census_build = FALSE) to load helpers without building. Original
+# census_data.r is retained for reference. Usage: source("data-raw/control_def.r"); source("data-raw/census_data_2.r")
+# County census uses the original parquet when present; pass cache_file = NULL to build_census_decennial() to force a
+# fresh API read. Estimate CSVs default to <cube_root>/source-data/census; input_dir may instead point to the original
+# <population>/Estimates/Census directory. Missing CSVs are downloaded there. Full source tables AND ingestion's dense
+# array construction are EAGER. HDF5-backed access after ingestion is lazy. ACS MOEs must not be summed. Potential
+# shared utilities: census_county_names(), census_age_factor(), census_support_table(), census_dimension_semantics(),
+# ingest_census_table().
 
 #' Resolve Texas county identifiers using the package reference
 #' @param codes Five-character county FIPS identifiers.
@@ -464,8 +460,9 @@ build_census_zcta <- function(cube_root, years = NULL, zctas = NULL) {
 
 # Recreate all four cubes when sourced after control_def.r.
 if (isTRUE(getOption("tarr.pop.census_build", TRUE))) {
+  
   census_cube_root <- tarr.pop::init_cubes()
-  build_census_decennial(census_cube_root)
+  build_census_decennial(census_cube_root, cache_file = NULL)
   build_census_estimates(census_cube_root)
   build_census_zcta(census_cube_root)
   tarr.pop::rebuild_poparray_registry(census_cube_root)
