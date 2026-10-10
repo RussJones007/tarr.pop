@@ -52,6 +52,13 @@ The current class requires time and area roles to be partitions, so its overlap 
 Do not sum across ACS period end years or add MOE values; uncertainty aggregation requires a separate statistical method.
 ZCTA boundaries may change between releases, and the areas are Census ZCTAs rather than USPS delivery ZIP codes.
 
+All dimension entries have `validated = TRUE`: their definitions follow canonical Census
+source schemas and the documented mappings, including derived Hispanic counts.
+This flag does not certify individual values, completeness, or safe aggregation.
+For ZCTAs it describes Census geography and ACS periods, not independent validation
+of the locally assembled Tarrant-area selection. Missing observations can remain `NA`.
+Applicability updates and HDF5 persistence preserve the flag; overlap guards remain active.
+
 Source reads, transformations, and ingestion's dense array construction are **EAGER**.
 Stored cubes reopen lazily with HDF5-backed data.
 

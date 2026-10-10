@@ -191,6 +191,13 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
 }
 
 # 3. The tdc_estimate_semantics() function is used to define the dimension semantics ------------------------
+#' Define canonical TDC estimate dimension semantics
+#' @param support Optional valid source support for time-varying schemas.
+#' @return Named list of validated DimSemantics objects.
+#' @details Every dimension is validated from TDC source definitions and the
+#'   documented county, age, sex, and combined race/ethnicity mappings. This
+#'   declaration does not certify individual values or unconditional additivity.
+#'   Applicability changes preserve the flag; aggregation guards remain active.
 tdc_estimate_semantics <- function(support = NULL) {
   semantics <- list(
     year = tarr.pop:::new_dim_semantics(

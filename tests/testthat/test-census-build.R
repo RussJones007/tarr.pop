@@ -31,6 +31,7 @@ test_that("estimates retain race combination categories and separate ethnicity",
   expect_false(any(vapply(long, function(x) any(as.character(x) == "All"), logical(1))))
   support <- h$census_support_table(long, "Tarrant")
   sem <- h$census_dimension_semantics(support, "July 1")
+  expect_true(all(vapply(sem, function(entry) isTRUE(entry@validated), logical(1))))
   expect_true(pa_labels_have_overlap_risk(sem$race, levels(long$race)))
   expect_false(pa_labels_have_overlap_risk(sem$race, unname(races[1:6])))
   expect_equal(sem$ethnicity@partition_type, "partition")
@@ -61,6 +62,7 @@ test_that("ACS support retains unavailable ZCTAs and records period limitations"
   support <- h$census_zcta_support(2023:2024, c("76001", "76005"))
   expect_equal(nrow(support), 4L)
   sem <- h$census_zcta_semantics()
+  expect_true(all(vapply(sem, function(entry) isTRUE(entry@validated), logical(1))))
   expect_equal(sem$year@partition_type, "partition")
   expect_match(sem$year@notes, "periods overlap")
   expect_false(pa_labels_have_overlap_risk(sem$zip.code, c("76001", "76005")))
@@ -82,6 +84,27 @@ test_that("census ingestion round trips roles, semantics, and source NA", {
   expect_equal(pop@time_role, "year")
   expect_equal(pop@area_role, "zip.code")
   expect_equal(pop@data_col, "estimate")
+  expect_equal(dim_semantics(pop), h$census_zcta_semantics())
+  expect_true(all(vapply(dim_semantics(pop), function(entry) isTRUE(entry@validated), logical(1))))
   expect_equal(dim_semantics(pop)$year@partition_type, "partition")
   expect_equal(as.numeric(pop), c(20, NA))
+})
+
+
+test_that("annual appends preserve validated source semantics", {
+  h <- load_census_build_helpers()
+  root <- tempfile("census-append-"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  semantics <- h$census_zcta_semantics()
+  df <- data.frame(year = 2023L, zip.code = "76001", estimate = 20)
+  path <- h$ingest_census_table(df, h$census_zcta_support(2023L, "76001"),
+    semantics, "append-fixture", root,
+    list(note = "fixture", population_type = "Estimate", source = "fixture"),
+    data_col = "estimate", area_dim = "zip.code")
+  next_df <- data.frame(year = 2024L, zip.code = "76001", estimate = 21)
+  output <- file.path(root, "appended.h5")
+  add_population_data(cube = path, reader = function(...) next_df,
+    output_filepath = output, completion_policy = "error", data_col = "estimate")
+  expect_equal(dim_semantics(output), semantics)
+  expect_true(all(vapply(dim_semantics(output), function(entry) isTRUE(entry@validated), logical(1))))
 })

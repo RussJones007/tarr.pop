@@ -14,6 +14,7 @@ test_that("TDC ingestion attaches repository-established age and race transition
   for (years in list(2016:2017, 2011:2016, 2017:2020)) {
     support <- env$tdc_estimate_support_table(years, "De Witt")
     sem <- env$tdc_estimate_semantics(support)
+    expect_true(all(vapply(sem, function(entry) isTRUE(entry@validated), logical(1))))
     dn <- lapply(support[c("year", "area.name", "sex", "age.char", "race.eth")], function(x) unique(as.character(x)))
     expect_silent(pa_validate_applicability(sem, dn))
     expect_false(pa_dim_has_overlap_risk(sem$age.char, dn$age.char, dn))

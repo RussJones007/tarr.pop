@@ -65,6 +65,10 @@ census_support_table <- function(df, counties = setdiff(names(tarr.pop::county_f
 }
 
 #' Declare source-specific dimensions and time-varying applicability
+#' @details All dimensions are validated because their definitions follow Census
+#'   source schemas and the documented transformations, including derived Hispanic
+#'   counts. The flag does not certify individual counts or make overlapping race
+#'   categories additive.
 #' @param support Valid source support.
 #' @param time_note Description of the observation date.
 #' @return Named list of DimSemantics objects.
@@ -418,12 +422,15 @@ census_zcta_support <- function(years, zctas) {
 
 #' Define ACS period and ZCTA semantics
 #' @return Named dimension semantics with ACS period notes.
-#' @details Role dimensions must be partitions in the current class contract.
+#' @details Both dimensions are validated against Census ACS definitions. This
+#'   does not certify the locally assembled Tarrant-area selection or imply that
+#'   all requested ZCTAs have observations in every release.
+#'   Role dimensions must be partitions in the current class contract.
 #'   Period overlap is recorded in notes but cannot activate reduction guards.
 census_zcta_semantics <- function() {
-  list(year = tarr.pop:::new_dim_semantics("year", "time", "ordinal", "partition", TRUE,
+  list(year = tarr.pop:::new_dim_semantics("year", "time", "ordinal", "partition", validated = TRUE,
       notes = "Label is the end year of a five-year ACS period. Adjacent periods overlap; do not sum across years."),
-    zip.code = tarr.pop:::new_dim_semantics("zip.code", "area", "nominal", "partition", TRUE,
+    zip.code = tarr.pop:::new_dim_semantics("zip.code", "area", "nominal", "partition", validated = TRUE,
       notes = "Census ZCTAs, not USPS ZIP delivery areas; boundaries may change between releases."))
 }
 

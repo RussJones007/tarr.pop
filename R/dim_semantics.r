@@ -16,7 +16,8 @@
 #' - `domain`: Character scalar semantic key (e.g., `"age"`, `"race"`).
 #' - `scale_type`: Character scalar in `c("nominal", "ordinal", "interval")`.
 #' - `partition_type`: Character scalar in `c("partition", "set", "unknown")`.
-#' - `validated`: Non-missing logical scalar.
+#' - `validated`: Non-missing logical scalar declaring that the dimension
+#'   semantics are established from a canonical source or externally reviewed.
 #' - `overlap_levels`: Character vector of known overlap-causing levels.
 #' - `notes`: Free-text character vector.
 #' - `applicability`: `NULL` (legacy behavior), or a list with `by` and `schemas`.
@@ -35,6 +36,16 @@
 #' remains representable but strict reductions reject it, as for legacy overlap.
 #' An interval dimension declared to be a partition must have no overlap within
 #' any currently applicable schema; unresolved multi-label intervals are rejected.
+#'
+#' @section Source validation:
+#' Cube builders set `validated = TRUE` for dimensions constructed from
+#' canonical Texas Demographic Center, Census Bureau, or SEER source definitions
+#' using the builder's documented mappings. This is a declaration about the
+#' semantic contract, not certification of every population value, completeness,
+#' accuracy, or safe aggregation. Overlapping categories can be validated.
+#' Structural validation checks the object independently of this flag and does
+#' not set it. Reduction guards use the semantic contract and active labels,
+#' not `validated`. The flag does not record a reviewer, date, or procedure.
 #'
 #' @section Validation Rules:
 #' - `dim_name` must be non-missing, length 1, and non-empty.
@@ -121,8 +132,10 @@ DimSemantics <- S7::new_class(
 #' @param scale_type Character scalar in `c("nominal", "ordinal", "interval")`.
 #' @param partition_type Character scalar in
 #'   `c("partition", "set", "unknown")`.
-#' @param validated Logical scalar indicating whether semantics have been
-#'   externally validated.
+#' @param validated Logical scalar declaring whether semantics are established
+#'   from a canonical source or externally reviewed. Defaults to `FALSE`; see
+#'   the source-validation section in [DimSemantics]. This flag is independent
+#'   of structural validity and aggregation safety.
 #' @param overlap_levels Character vector of known overlap-causing levels.
 #' @param notes Free-text character vector.
 #' @param applicability Optional list with `by` and `schemas`; see [DimSemantics].

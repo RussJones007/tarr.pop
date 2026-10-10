@@ -20,7 +20,8 @@ the workflow.
 \item \code{domain}: Character scalar semantic key (e.g., \code{"age"}, \code{"race"}).
 \item \code{scale_type}: Character scalar in \code{c("nominal", "ordinal", "interval")}.
 \item \code{partition_type}: Character scalar in \code{c("partition", "set", "unknown")}.
-\item \code{validated}: Non-missing logical scalar.
+\item \code{validated}: Non-missing logical scalar declaring that the dimension
+semantics are established from a canonical source or externally reviewed.
 \item \code{overlap_levels}: Character vector of known overlap-causing levels.
 \item \code{notes}: Free-text character vector.
 \item \code{applicability}: \code{NULL} (legacy behavior), or a list with \code{by} and \code{schemas}.
@@ -42,6 +43,18 @@ owning \code{poparray} without reading population values. An overlapping schema
 remains representable but strict reductions reject it, as for legacy overlap.
 An interval dimension declared to be a partition must have no overlap within
 any currently applicable schema; unresolved multi-label intervals are rejected.
+}
+
+\section{Source validation}{
+
+Cube builders set \code{validated = TRUE} for dimensions constructed from
+canonical Texas Demographic Center, Census Bureau, or SEER source definitions
+using the builder's documented mappings. This is a declaration about the
+semantic contract, not certification of every population value, completeness,
+accuracy, or safe aggregation. Overlapping categories can be validated.
+Structural validation checks the object independently of this flag and does
+not set it. Reduction guards use the semantic contract and active labels,
+not \code{validated}. The flag does not record a reviewer, date, or procedure.
 }
 
 \section{Validation Rules}{

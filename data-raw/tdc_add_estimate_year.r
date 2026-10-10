@@ -218,6 +218,9 @@ if (!file.exists(tdc_estimates_file)) {
 #undebug(read_tdc_estimate_year)
 debug(transform_tdc_estimate_year)
 debug(add_population_data)
+# Canonical TDC annual files extend the existing source schema.
+# add_population_data preserves existing dimension semantics, including validated.
+# An older unvalidated contract needs review; appending does not certify it.
 tarr.pop::add_population_data(
   cube = tdc_estimates_file,
   reader = read_tdc_estimate_year,

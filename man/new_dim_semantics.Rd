@@ -25,8 +25,10 @@ new_dim_semantics(
 \item{partition_type}{Character scalar in
 \code{c("partition", "set", "unknown")}.}
 
-\item{validated}{Logical scalar indicating whether semantics have been
-externally validated.}
+\item{validated}{Logical scalar declaring whether semantics are established
+from a canonical source or externally reviewed. Defaults to \code{FALSE}; see
+the source-validation section in \link{DimSemantics}. This flag is independent
+of structural validity and aggregation safety.}
 
 \item{overlap_levels}{Character vector of known overlap-causing levels.}
 
