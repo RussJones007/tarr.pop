@@ -181,7 +181,8 @@ group_array_by_levels <- function(arr,
     if (identical(keep_unmapped, "error")) {
       cli::cli_abort(c(
         "Unmapped levels remain in {.val {dim_name}}.",
-        "i" = "Examples: {.val {paste(utils::head(old_levels[unmapped], 10L), collapse = ', ')}}."
+        "i" = "Examples: {.val {paste(utils::head(old_levels[unmapped], 10L), collapse = ', ')}}.",
+        "i" = "Add these levels to {.arg groups}, or choose {.code keep_unmapped = \"keep\"}, {.code keep_unmapped = \"other\"}, or {.code keep_unmapped = \"drop\"} to handle them explicitly."
       ))
     }
     if (identical(keep_unmapped, "keep")) {

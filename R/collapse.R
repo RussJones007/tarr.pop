@@ -153,7 +153,10 @@ collapse_dim_poparray_impl <- function(x,
   
   keep <- !unmapped
   if (!any(keep) && is.null(schema_groups)) {
-    stop("collapse_dim(): no labels mapped for dim '", dim_nm, "'.")
+    cli::cli_abort(c(
+      "collapse_dim(): no labels mapped for dim {.val {dim_nm}}.",
+      "i" = "Inspect {.code dimnames(x)[[{encodeString(dim_nm, quote = '\"')}]]} and ensure the source labels in {.arg groups} match the current dimension labels."
+    ))
   }
   
   
@@ -422,6 +425,8 @@ pa_check_collapse_semantics <- function(x,
     "Unsafe collapse blocked for {.cls poparray}.",
     "i" = "Dimension {.val {dim_nm}} is not known to be a safe partition for grouped reduction.",
     "i" = "Unsafe output group(s): {.val {paste(new_levels[unsafe_groups], collapse = ', ')}}.",
+    "i" = "Use {.code overlaps(x)} to inspect overlap risk and declared overlap levels.",
+    "i" = "Use {.code drop_overlap_levels(x, dim = {encodeString(dim_nm, quote = '\"')})} to remove declared overlap levels, or filter to non-overlapping levels, then retry {.fn collapse_dim}.",
     "i" = "Set {.arg allow_overlap = TRUE} to bypass, or {.arg strict = FALSE} to warn and continue."
   )
   if (isTRUE(strict)) {

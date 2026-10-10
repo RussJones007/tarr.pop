@@ -127,6 +127,8 @@ setMethod(
       msg <- c(
         "Unsafe reduction blocked for {.cls poparray}.",
         "i" = "Unsafe dimensions: {.val {paste(unsafe_dims, collapse = ', ')}}.",
+        "i" = "Use {.code overlaps(x)} to inspect overlap risk and declared overlap levels.",
+        "i" = "Use {.code drop_overlap_levels(x, dim = c({paste(encodeString(unsafe_dims, quote = '\"'), collapse = ', ')}))} to remove declared overlap levels, or filter to non-overlapping levels, then retry {.fn sum}.",
         "i" = "Set {.arg allow_overlap = TRUE} to bypass, or {.arg strict = FALSE} to warn and continue."
       )
       if (isTRUE(strict)) {

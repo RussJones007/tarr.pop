@@ -36,7 +36,13 @@ pa_collapse_schema_plan <- function(x, dim_nm, old_labels, new_levels,
     }, logical(1)))
   }, logical(1))
   if (any(unsafe) && !isTRUE(allow_overlap)) {
-    msg <- "Unsafe collapse blocked: overlapping contributors within an applicability schema. Set allow_overlap = TRUE to bypass, or strict = FALSE to warn and continue."
+    msg <- c(
+      "Unsafe collapse blocked: overlapping contributors within an applicability schema.",
+      "i" = "Dimension: {.val {dim_nm}}.",
+      "i" = "Use {.code overlaps(x)} to inspect overlap risk and declared overlap levels.",
+      "i" = "Use {.code drop_overlap_levels(x, dim = {encodeString(dim_nm, quote = '\"')})} to remove declared overlap levels, or filter to non-overlapping levels, then retry {.fn collapse_dim}.",
+      "i" = "Set {.arg allow_overlap = TRUE} to bypass, or {.arg strict = FALSE} to warn and continue."
+    )
     if (isTRUE(strict)) cli::cli_abort(msg) else cli::cli_warn(msg)
   }
   output_levels <- lapply(contributors, function(groups) new_levels[lengths(groups) > 0L])
