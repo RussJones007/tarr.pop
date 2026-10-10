@@ -1,3 +1,6 @@
+# -------------------------------------------------------------------------------------->
+# Script: census_data_2.r
+# Description:
 # Census Bureau population cube builds. Run after data-raw/control_def.r. Source tables are EAGER; ingest_population
 # writes HDF5-backed poparrays. Set options(tarr.pop.census_build = FALSE) to load helpers without building. Original
 # census_data.r is retained for reference. Usage: source("data-raw/control_def.r"); source("data-raw/census_data_2.r")
@@ -7,6 +10,25 @@
 # array construction are EAGER. HDF5-backed access after ingestion is lazy. ACS MOEs must not be summed. Potential
 # shared utilities: census_county_names(), census_age_factor(), census_support_table(), census_dimension_semantics(),
 # ingest_census_table().
+#
+#
+# Steps:
+# Each cube build follows the same pattern. 
+#  - Read the data, either from csv files or using tidycensus queries.
+#  - Transform the data including setting up factors, intervals for ages, creating column names and making the data 
+#    into long format.
+#  - Create Dim_semantics for each field
+#  - Create a "support" table 
+#  - Call the package's ingest_population()  function to use all the steps noted, create and save the population cube.
+#  
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: October 8, 2026
+# Revised:
+# -------------------------------------------------------------------------------------->
+
+
 
 #' Resolve Texas county identifiers using the package reference
 #' @param codes Five-character county FIPS identifiers.
