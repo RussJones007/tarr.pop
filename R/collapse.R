@@ -59,53 +59,56 @@ setGeneric("collapse_dim", function(x,
 })
 
 
-#' Collapse all levels of a dimension
+#' Collapse all levels of one or more dimensions
 #'
 #' Convenience wrapper around [collapse_dim()] that collapses all levels of
-#' the selected dimension into a single level.
+#' each selected dimension into a single level. Dimensions are collapsed
+#' sequentially in the supplied order using blockwise, HDF5-backed reductions.
 #'
 #' @param x A `poparray` object.
-#' @param dim Dimension name (character) or index (integer).
+#' @param dim Non-empty character vector of dimension names or numeric vector
+#'   of whole-number indices into the original dimensions. Duplicates, missing
+#'   values and unknown dimensions are rejected.
 #' @param label Label for the resulting collapsed level. Defaults to `"all"`.
 #' @param strict Passed to [collapse_dim()].
 #' @param allow_overlap Passed to [collapse_dim()].
 #'
 #' @return A new HDF5-backed `poparray` with all levels of the selected
-#'   dimension collapsed into one level.
+#'   dimensions collapsed into one level each. Dimensions and their roles are
+#'   retained; overlap and applicability guards from [collapse_dim()] apply
+#'   to every reduction. The full source cube is not realized in memory.
+#' @examples
+#' \dontrun{
+#' collapse_all(x, dim = c("sex", "race"))
+#' collapse_all(x, dim = c(3L, 5L), label = "Total")
+#' }
 #' @export
-collapse_all <- function(x,
-                         dim,
-                         label = "all",
-                         strict = TRUE,
-                         allow_overlap = FALSE) {
-  
-  dn <- dimnames(x)
-  dim_names <- names(dn)
-  
-  k <- if (is.character(dim)) match(dim, dim_names) else as.integer(dim)
-  
-  if (length(k) != 1L || is.na(k) || k < 1L || k > length(dim_names)) {
-    stop("collapse_all(): unknown dim '", dim, "'.")
+collapse_all <- function(x, dim, label = "all", strict = TRUE, allow_overlap = FALSE) {
+  dim_names <- names(dimnames(x))
+  checkmate::assert_string(label, min.chars = 1L)
+  if (is.character(dim)) {
+    checkmate::assert_character(dim, min.len = 1L, any.missing = FALSE)
+    k <- match(dim, dim_names)
+    if (anyNA(k)) {
+      cli::cli_abort("collapse_all(): unknown dim {.val {dim[is.na(k)]}}.")
+    }
+  } else if (is.numeric(dim)) {
+    checkmate::assert_integerish(dim, lower = 1L, upper = length(dim_names),
+      min.len = 1L, any.missing = FALSE)
+    k <- as.integer(dim)
+  } else {
+    cli::cli_abort("{.arg dim} must be a character or numeric vector.")
   }
-  
-  old_labels <- dn[[k]]
-  
-  groups <- stats::setNames(
-    rep(label, length(old_labels)),
-    old_labels
-  )
-  
-  collapse_dim(
-    x,
-    dim = dim,
-    groups = groups,
-    strict = strict,
-    allow_overlap = allow_overlap
-  )
+  if (anyDuplicated(k)) cli::cli_abort("{.arg dim} must not contain duplicate dimensions.")
+
+  collapse_one <- function(current, dim_name) {
+    old_labels <- dimnames(current)[[dim_name]]
+    groups <- stats::setNames(rep(label, length(old_labels)), old_labels)
+    collapse_dim(current, dim = dim_name, groups = groups,
+      strict = strict, allow_overlap = allow_overlap)
+  }
+  purrr::reduce(dim_names[k], collapse_one, .init = x)
 }
-
-
-
 
 collapse_dim_poparray_impl <- function(x,
                                        dim,

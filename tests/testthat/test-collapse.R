@@ -54,6 +54,43 @@ test_that("collapse_dim generic works with positional args", {
   expect_equal(dimnames(out)$age.char, "0-9")
 })
 
+test_that("collapse_all sequentially collapses named and indexed dimensions", {
+  pa <- make_collapse_time_role_fixture()
+  out <- collapse_all(pa, c("age.char", "area.name"), label = "Total")
+  indexed <- collapse_all(pa, c(3, 2), label = "Total")
+  expect_equal(dim(out), c(2L, 1L, 1L))
+  expect_equal(as.numeric(out), c(4, 6))
+  expect_equal(as.array(indexed), as.array(out))
+  expect_equal(dimnames(out)$age.char, "Total")
+  expect_equal(dimnames(out)$area.name, "Total")
+  expect_equal(time_role(out), "time")
+  expect_equal(area_role(out), "area.name")
+  expect_named(dim_semantics(out), names(dimnames(pa)))
+  expect_equal(get_source(out), get_source(pa))
+  expect_true(is_hdf5_backed_delayed(out))
+  expect_equal(dimnames(pa)$age.char, c("0-4", "5-9"))
+  expect_equal(as.numeric(collapse_all(pa, "age.char")), c(4, 6))
+})
+
+test_that("collapse_all validates every dimension before reducing", {
+  pa <- make_collapse_fixture()
+  testthat::local_mocked_bindings(
+    collapse_dim = function(...) stop("Reduction must not run"),
+    .package = "tarr.pop"
+  )
+  expect_error(collapse_all(pa, c("age.char", "missing")), "unknown dim")
+  expect_error(collapse_all(pa, c(3, 4)), "dim")
+  expect_error(collapse_all(pa, c(1, 1.5)), "dim")
+  expect_error(collapse_all(pa, c(0, 3)), "dim")
+  expect_error(collapse_all(pa, c(1, NA)), "dim")
+  expect_error(collapse_all(pa, c("year", NA_character_)), "dim")
+  expect_error(collapse_all(pa, character()), "dim")
+  expect_error(collapse_all(pa, integer()), "dim")
+  expect_error(collapse_all(pa, TRUE), "character or numeric")
+  expect_error(collapse_all(pa, c("age.char", "age.char")), "duplicate")
+  expect_error(collapse_all(pa, c(3, 3)), "duplicate")
+})
+
 test_that("collapse_dim preserves non-default time role metadata", {
   pa <- make_collapse_time_role_fixture()
   groups <- c("0-4" = "0-9", "5-9" = "0-9")
@@ -151,6 +188,9 @@ test_that("collapse_dim blocks unsafe grouped reductions by default", {
   expect_silent(
     collapse_dim(pa, "age.char", c("0-9" = "child", "5-14" = "child"), allow_overlap = TRUE)
   )
+  expect_error(collapse_all(pa, c("area.name", "age.char")), "Unsafe collapse blocked")
+  expect_warning(collapse_all(pa, c("area.name", "age.char"), strict = FALSE), "Unsafe collapse blocked")
+  expect_silent(collapse_all(pa, c(2L, 3L), allow_overlap = TRUE))
 })
 
 test_that("collapse_dim stays HDF5-backed without writeHDF5Array persistence", {

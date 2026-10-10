@@ -2,14 +2,16 @@
 % Please edit documentation in R/collapse.R
 \name{collapse_all}
 \alias{collapse_all}
-\title{Collapse all levels of a dimension}
+\title{Collapse all levels of one or more dimensions}
 \usage{
 collapse_all(x, dim, label = "all", strict = TRUE, allow_overlap = FALSE)
 }
 \arguments{
 \item{x}{A \code{poparray} object.}
 
-\item{dim}{Dimension name (character) or index (integer).}
+\item{dim}{Non-empty character vector of dimension names or numeric vector
+of whole-number indices into the original dimensions. Duplicates, missing
+values and unknown dimensions are rejected.}
 
 \item{label}{Label for the resulting collapsed level. Defaults to \code{"all"}.}
 
@@ -19,9 +21,18 @@ collapse_all(x, dim, label = "all", strict = TRUE, allow_overlap = FALSE)
 }
 \value{
 A new HDF5-backed \code{poparray} with all levels of the selected
-dimension collapsed into one level.
+dimensions collapsed into one level each. Dimensions and their roles are
+retained; overlap and applicability guards from \code{\link[=collapse_dim]{collapse_dim()}} apply
+to every reduction. The full source cube is not realized in memory.
 }
 \description{
 Convenience wrapper around \code{\link[=collapse_dim]{collapse_dim()}} that collapses all levels of
-the selected dimension into a single level.
+each selected dimension into a single level. Dimensions are collapsed
+sequentially in the supplied order using blockwise, HDF5-backed reductions.
+}
+\examples{
+\dontrun{
+collapse_all(x, dim = c("sex", "race"))
+collapse_all(x, dim = c(3L, 5L), label = "Total")
+}
 }
