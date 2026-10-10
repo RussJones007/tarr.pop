@@ -58,6 +58,9 @@ This flag does not certify individual values, completeness, or safe aggregation.
 For ZCTAs it describes Census geography and ACS periods, not independent validation
 of the locally assembled Tarrant-area selection. Missing observations can remain `NA`.
 Applicability updates and HDF5 persistence preserve the flag; overlap guards remain active.
+Consecutive years with identical applicable category sets are stored as inclusive
+`from`/`through` ranges. Category changes retain separate ranges, and compression
+preserves explicit endpoints without extending source coverage.
 
 Source reads, transformations, and ingestion's dense array construction are **EAGER**.
 Stored cubes reopen lazily with HDF5-backed data.

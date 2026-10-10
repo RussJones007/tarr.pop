@@ -8,6 +8,39 @@ pa_dim_applicability <- function(sem) {
   sem@applicability
 }
 
+#' Compress consecutive identical applicability schemas
+#' @param sem A DimSemantics object.
+#' @param dimnames_list Current named dimension labels, in controlling order.
+#' @return A semantic object with adjacent equal level sets merged. The first
+#'   from and last through endpoints are preserved, including NULL endpoints.
+#'   Other properties and NULL applicability are unchanged. No values are read.
+#' @keywords internal
+#' @noRd
+pa_compress_applicability <- function(sem, dimnames_list) {
+  app <- pa_dim_applicability(sem)
+  if (is.null(app)) return(sem)
+  indices <- pa_applicability_indices(app, sem@dim_name, dimnames_list)
+  if (length(app$schemas) <= 1L) return(sem)
+  schema_order <- order(vapply(indices, function(i) if (length(i)) i[[1L]] else Inf, numeric(1)))
+  schemas <- app$schemas[schema_order]
+  indices <- indices[schema_order]
+  merged <- purrr::reduce(seq_along(schemas), function(out, i) {
+    current <- schemas[[i]]
+    if (!length(out)) return(list(current))
+    last <- length(out)
+    adjacent <- length(indices[[i - 1L]]) && length(indices[[i]]) &&
+      tail(indices[[i - 1L]], 1L) + 1L == indices[[i]][[1L]]
+    if (adjacent && setequal(out[[last]]$levels, current$levels)) {
+      out[[last]]["through"] <- list(current$through)
+    } else {
+      out[[last + 1L]] <- current
+    }
+    out
+  }, .init = list())
+  app$schemas <- merged
+  pa_update_dim_semantics(sem, applicability = app)
+}
+
 #' Validate the small applicability list independently of a population cube
 #' @param applicability Optional applicability list.
 #' @return Character vector of structural problems (empty when valid).

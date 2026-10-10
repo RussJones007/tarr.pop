@@ -32,6 +32,7 @@ test_that("estimates retain race combination categories and separate ethnicity",
   support <- h$census_support_table(long, "Tarrant")
   sem <- h$census_dimension_semantics(support, "July 1")
   expect_true(all(vapply(sem, function(entry) isTRUE(entry@validated), logical(1))))
+  expect_length(sem$race@applicability$schemas, 1L)
   expect_true(pa_labels_have_overlap_risk(sem$race, levels(long$race)))
   expect_false(pa_labels_have_overlap_risk(sem$race, unname(races[1:6])))
   expect_equal(sem$ethnicity@partition_type, "partition")
@@ -39,6 +40,12 @@ test_that("estimates retain race combination categories and separate ethnicity",
   official <- h$census_estimate_support(2020L)
   expect_equal(nrow(official), 254L * 2L * 18L * 11L * 2L)
   expect_false(anyNA(official))
+  multi <- h$census_estimate_support(2010:2012)
+  compressed <- h$census_dimension_semantics(multi, "July 1")
+  expect_length(compressed$race@applicability$schemas, 1L)
+  expect_length(compressed$age.char@applicability$schemas, 1L)
+  expect_equal(compressed$race@applicability$schemas[[1]]$from, "2010")
+  expect_equal(compressed$race@applicability$schemas[[1]]$through, "2012")
 })
 
 test_that("decennial decoding subtracts ethnicity and rejects incomplete pairs", {

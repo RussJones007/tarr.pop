@@ -90,7 +90,9 @@ census_dimension_semantics <- function(support, time_note) {
       levels = unique(as.character(support[[dim]][support$year == yr]))))
     result[[dim]] <- tarr.pop:::pa_update_dim_semantics(result[[dim]], applicability = list(by = "year", schemas = schemas))
   }
-  result
+  dimnames_list <- lapply(support, function(x) unique(as.character(x)))
+  dimnames_list$year <- as.character(years)
+  lapply(result, tarr.pop:::pa_compress_applicability, dimnames_list = dimnames_list)
 }
 
 #' Ingest a prepared table through the standard population contract
