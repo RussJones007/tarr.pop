@@ -4,6 +4,9 @@ Changes since development version 0.0.0.9220.
 
 ## New features
 
+* `rename()` now renames poparray dimensions lazily using dplyr syntax. Roles,
+  semantic names, and applicability references follow the rename; age range
+  filtering retains its interval meaning after an age dimension is renamed.
 * `filter()` now supports unary `!` and text predicates `str_detect()`,
   `startsWith()`, and `endsWith()` on dimension labels, including qualified
   calls and caller-supplied patterns. Negated age ranges complement whole

@@ -130,8 +130,20 @@ filter.poparray <- function(.data, ..., .strict = TRUE) {
 # Internal helpers -----------------------------------------------------------------------------
 
 tp_dim_type <- function(parray, dim_name) {
-  ordered_dims <- c(time_role(parray), "age.char")
-  if (dim_name %in% ordered_dims) "ordered" else "categorical"
+  if (identical(dim_name, time_role(parray)) || tp_is_age_dimension(parray, dim_name)) {
+    "ordered"
+  } else "categorical"
+}
+
+#' Identify age dimensions from semantic metadata
+#' @param x A poparray.
+#' @param dim_name A dimension name.
+#' @return Logical scalar indicating age interval semantics.
+#' @keywords internal
+tp_is_age_dimension <- function(x, dim_name) {
+  if (identical(dim_name, time_role(x))) return(FALSE)
+  sem <- dim_semantics(x)[[dim_name]]
+  sem@domain %in% c("age", "age.char", "age interval")
 }
 
 tp_allowed_ops <- function(dim_type) {
@@ -344,7 +356,7 @@ tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
   }
   
   # Ordered time-role dimensions (e.g., year or custom time dim).
-  if (dim_type == "ordered" && !identical(dim_name, "age.char")) {
+  if (dim_type == "ordered" && !tp_is_age_dimension(x, dim_name)) {
     y <- suppressWarnings(as.integer(labels))
     if (anyNA(y)) {
       stop(
@@ -355,7 +367,7 @@ tp_eval_single_pred <- function(x, dim_name, labels, pred, dim_type, .strict) {
     return(tp_eval_ordered_numeric(y, op, rhs))
   }
   
-  if (identical(dim_name, "age.char")) {
+  if (tp_is_age_dimension(x, dim_name)) {
     # Discrete label selection for == / != / %in%
     if (op %in% c("==", "!=", "%in%")) {
       rhs_chr <- as.character(rhs)

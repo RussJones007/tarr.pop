@@ -20,6 +20,7 @@ Imports:
     DelayedArray,
     HDF5Array,
     dplyr,
+    tidyselect,
     tidyr,
     tibble,
     vctrs,
