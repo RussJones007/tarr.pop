@@ -32,15 +32,22 @@ labels (e.g., years, counties, ages). The returned object remains delayed; reali
 \code{as.data.frame()}, \code{as_tibble()}, or similar.
 }
 
-\subsection{Supported predicate forms Each filter expression must reference \strong{exactly one} dimension name on the left-hand}{
+\subsection{Supported predicate forms Each filter expression must reference **exactly}{
 
-side.
+one** dimension, using its bare name on the left-hand side of a comparison
+or as the dimension argument of a supported text helper.
 
 \strong{Categorical dimensions} (e.g. \code{area.name}, \code{sex}, \code{race}, \code{ethnicity})
 support:
 \itemize{
 \item Equality and exclusion: \code{dim == value}, \code{dim != value}
 \item Membership: \code{dim \%in\% values}
+\item Negation: \code{!(dim \%in\% values)} or \code{!} around any supported predicate.
+\item Text matching: \code{str_detect(dim, pattern)}, \code{startsWith(dim, prefix)},
+and \code{endsWith(dim, suffix)}. Qualified forms such as
+\code{stringr::str_detect()} and \code{base::startsWith()} are also accepted.
+Patterns must be single non-missing strings; \code{str_detect()} supports
+stringr pattern modifiers and its logical \code{negate} argument.
 \item Within-dimension boolean combinations: \code{&} and \code{|} are allowed only when
 both sides constrain the \emph{same} dimension.
 }
@@ -64,6 +71,9 @@ interpreted as half-open intervals, e.g.:
 Range predicates (comparisons and \verb{\%between\%}) select age labels whose intervals \strong{overlap} the requested age set.
 Discrete membership with \code{\%in\%} remains \strong{exact label matching} (no interval overlap).
 Equality and exclusion on age labels also use exact label matching.
+Text predicates match the stored age labels, without interpreting intervals.
+Negating an age range selects the complement of its whole-category selection;
+it does not split intervals at the requested boundary.
 
 Overlap safety is evaluated from the dimension levels currently present in
 the \code{poparray}. Removing overlapping levels by subsetting can therefore remove
@@ -82,6 +92,7 @@ supported and will warn and then error. Use \code{year == 2020} or \code{year \%
 \code{year + 1 == 2021}, \code{paste(area.name) == "Tarrant"}).
 \item Cross-dimension boolean logic within a single expression
 (e.g. \code{year == 2020 | area.name == "Tarrant"}).
+\item Scalar boolean operators \code{&&} and \code{||}, and predicates such as \code{is.na()}.
 }
 }
 

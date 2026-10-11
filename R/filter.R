@@ -23,13 +23,20 @@
 #' labels (e.g., years, counties, ages). The returned object remains delayed; realization happens later via `collect()`,
 #' `as.data.frame()`, `as_tibble()`, or similar.
 #'
-#' ## Supported predicate forms Each filter expression must reference **exactly one** dimension name on the left-hand
-#' side.
+#' ## Supported predicate forms Each filter expression must reference **exactly
+#' one** dimension, using its bare name on the left-hand side of a comparison
+#' or as the dimension argument of a supported text helper.
 #'
 #' **Categorical dimensions** (e.g. `area.name`, `sex`, `race`, `ethnicity`)
 #' support:
 #' - Equality and exclusion: `dim == value`, `dim != value`
 #' - Membership: `dim %in% values`
+#' - Negation: `!(dim %in% values)` or `!` around any supported predicate.
+#' - Text matching: `str_detect(dim, pattern)`, `startsWith(dim, prefix)`,
+#'   and `endsWith(dim, suffix)`. Qualified forms such as
+#'   `stringr::str_detect()` and `base::startsWith()` are also accepted.
+#'   Patterns must be single non-missing strings; `str_detect()` supports
+#'   stringr pattern modifiers and its logical `negate` argument.
 #' - Within-dimension boolean combinations: `&` and `|` are allowed only when
 #' both sides constrain the *same* dimension.
 #'
@@ -46,6 +53,9 @@
 #' Range predicates (comparisons and `%between%`) select age labels whose intervals **overlap** the requested age set.
 #' Discrete membership with `%in%` remains **exact label matching** (no interval overlap).
 #' Equality and exclusion on age labels also use exact label matching.
+#' Text predicates match the stored age labels, without interpreting intervals.
+#' Negating an age range selects the complement of its whole-category selection;
+#' it does not split intervals at the requested boundary.
 #'
 #' Overlap safety is evaluated from the dimension levels currently present in
 #' the `poparray`. Removing overlapping levels by subsetting can therefore remove
@@ -62,6 +72,7 @@
 #' `year + 1 == 2021`, `paste(area.name) == "Tarrant"`).
 #' - Cross-dimension boolean logic within a single expression
 #' (e.g. `year == 2020 | area.name == "Tarrant"`).
+#' - Scalar boolean operators `&&` and `||`, and predicates such as `is.na()`.
 #'
 #' ## Unknown labels and strictness 
 #' By default this method uses **strict** label matching for categorical dimensions. If
@@ -142,6 +153,13 @@ tp_parse_expr <- function(expr, env) {
   if (rlang::is_call(expr, "(")) {
     return(tp_parse_expr(expr[[2]], env = env))
   }
+
+  if (rlang::is_call(expr, "!")) {
+    return(list(type = "not", child = tp_parse_expr(expr[[2]], env = env)))
+  }
+
+  text_predicate <- tp_parse_text_predicate(expr, env)
+  if (!is.null(text_predicate)) return(text_predicate)
   
   # Allow (a & b) / (a | b) within-dimension only.
   if (rlang::is_call(expr, "&") || rlang::is_call(expr, "|")) {
@@ -169,7 +187,7 @@ tp_parse_expr <- function(expr, env) {
     )
   }
   
-  op <- as.character(expr[[1]])
+  op <- rlang::as_label(expr[[1]])
   if (!op %in% c("==", "!=", "%in%", "<", "<=", ">", ">=", "%between%")) {
     stop(
       "Unsupported operator in filter.poparray(): ", op, ". ",
@@ -201,12 +219,55 @@ tp_parse_expr <- function(expr, env) {
   list(type = "atom", dim = dim_name, op = op, rhs = rhs_val, env = env)
 }
 
+#' Parse supported text predicates without evaluating population data
+#' @param expr Captured expression.
+#' @param env Caller environment for pattern evaluation.
+#' @return A text predicate node or NULL for other expressions.
+#' @keywords internal
+#' @noRd
+tp_parse_text_predicate <- function(expr, env) {
+  if (!rlang::is_call(expr)) return(NULL)
+  head <- expr[[1L]]
+  namespaces <- c(str_detect = "stringr", startsWith = "base", endsWith = "base")
+  if (rlang::is_symbol(head)) {
+    fn <- rlang::as_name(head)
+    if (!fn %in% names(namespaces)) return(NULL)
+  } else if (rlang::is_call(head, "::") && length(head) == 3L &&
+             rlang::is_symbol(head[[2L]]) && rlang::is_symbol(head[[3L]])) {
+    fn <- rlang::as_name(head[[3L]])
+    if (!fn %in% names(namespaces) ||
+        rlang::as_name(head[[2L]]) != namespaces[[fn]]) return(NULL)
+  } else return(NULL)
+
+  definition <- switch(fn,
+    str_detect = function(string, pattern, negate = FALSE) NULL,
+    startsWith = function(x, prefix) NULL,
+    endsWith = function(x, suffix) NULL)
+  matched <- as.list(match.call(definition, expr))[-1L]
+  dim_arg <- if (fn == "str_detect") "string" else "x"
+  pattern_arg <- switch(fn, str_detect = "pattern", startsWith = "prefix", endsWith = "suffix")
+  if (!dim_arg %in% names(matched) || !rlang::is_symbol(matched[[dim_arg]])) {
+    stop("Text predicates must use a bare dimension name as their first argument.", call. = FALSE)
+  }
+  if (!pattern_arg %in% names(matched)) {
+    stop("Text predicates require a pattern, prefix, or suffix.", call. = FALSE)
+  }
+  pattern <- rlang::eval_tidy(matched[[pattern_arg]], env = env)
+  checkmate::assert_string(pattern, na.ok = FALSE)
+  negate <- if ("negate" %in% names(matched))
+    rlang::eval_tidy(matched$negate, env = env) else FALSE
+  checkmate::assert_flag(negate)
+  list(type = "text", dim = rlang::as_name(matched[[dim_arg]]),
+    op = fn, pattern = pattern, negate = negate)
+}
+
 tp_pred_dim <- function(pred) {
   if (is.null(pred$type)) {
     stop("Invalid predicate parse node.", call. = FALSE)
   }
   
-  if (identical(pred$type, "atom")) return(pred$dim)
+  if (pred$type %in% c("atom", "text")) return(pred$dim)
+  if (identical(pred$type, "not")) return(tp_pred_dim(pred$child))
   if (identical(pred$type, "bool")) {
     lhs_dim <- tp_pred_dim(pred$lhs)
     rhs_dim <- tp_pred_dim(pred$rhs)
@@ -224,6 +285,9 @@ tp_pred_dim <- function(pred) {
 }
 
 tp_eval_pred_tree <- function(x, pred, .strict = TRUE) {
+  if (identical(pred$type, "not")) {
+    return(!tp_eval_pred_tree(x, pred$child, .strict = .strict))
+  }
   if (identical(pred$type, "bool")) {
     lhs_keep <- tp_eval_pred_tree(x, pred$lhs, .strict = .strict)
     rhs_keep <- tp_eval_pred_tree(x, pred$rhs, .strict = .strict)
@@ -234,7 +298,7 @@ tp_eval_pred_tree <- function(x, pred, .strict = TRUE) {
     stop("Unsupported boolean combiner: ", pred$op, call. = FALSE)
   }
   
-  if (!identical(pred$type, "atom")) {
+  if (!pred$type %in% c("atom", "text")) {
     stop("Unknown predicate node type: ", pred$type, call. = FALSE)
   }
   
@@ -242,6 +306,14 @@ tp_eval_pred_tree <- function(x, pred, .strict = TRUE) {
   dim_name <- pred$dim
   if (!dim_name %in% names(dn)) {
     stop("Unknown dimension: '", dim_name, "'.", call. = FALSE)
+  }
+
+  if (identical(pred$type, "text")) {
+    labels <- as.character(dn[[dim_name]])
+    return(switch(pred$op,
+      str_detect = stringr::str_detect(labels, pred$pattern, negate = pred$negate),
+      startsWith = base::startsWith(labels, pred$pattern),
+      endsWith = base::endsWith(labels, pred$pattern)))
   }
   
   dim_type <- tp_dim_type(x, dim_name)

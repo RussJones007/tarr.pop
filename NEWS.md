@@ -4,6 +4,11 @@ Changes since development version 0.0.0.9220.
 
 ## New features
 
+* `filter()` now supports unary `!` and text predicates `str_detect()`,
+  `startsWith()`, and `endsWith()` on dimension labels, including qualified
+  calls and caller-supplied patterns. Negated age ranges complement whole
+  category selections. Filtering stays lazy and preserves the restriction
+  to one dimension per expression; scalar `&&`/`||` remain unsupported.
 * Added blockwise `mean()`, `var()`, `min()`, `max()`, and `range()` methods for
   population cell counts. Structurally inapplicable cells are excluded;
   applicable missing values follow `na.rm`. Mean and variance guard overlap
