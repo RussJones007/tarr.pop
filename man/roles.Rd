@@ -22,4 +22,6 @@ Returns dimension role metadata from either an in-memory \code{poparray} or an
 HDF5 cube path. When \code{x} is a cube path, the replacement form writes
 updated role metadata back to the file and requires elevated metadata
 administration privileges.
+Path-based edits validate roles together with semantic metadata and create a
+metadata revision. See \code{\link{cube_history}}.
 }

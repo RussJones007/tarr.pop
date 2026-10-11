@@ -112,6 +112,10 @@ test_that("roles accessor can read and edit under admin role", {
   on.exit(options(tarr.pop.metadata_role = old), add = TRUE)
   options(tarr.pop.metadata_role = "admin")
 
+  expect_error(`roles<-`(fp, list(time = "year", area = "sex")), "partition_type")
+  dsem <- dim_semantics(fp)
+  dsem$sex <- pa_update_dim_semantics(dsem$sex, partition_type = "partition", validated = TRUE)
+  dim_semantics(fp) <- dsem
   expect_silent(`roles<-`(fp, list(time = "year", area = "sex")))
   out <- roles(fp)
   expect_identical(out$time, "year")

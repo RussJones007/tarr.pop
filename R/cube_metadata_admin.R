@@ -133,63 +133,27 @@ read_cube_metadata_admin_impl <- function(path, validate = TRUE) {
 }
 
 write_cube_dim_semantics_impl <- function(path, dim_semantics, validate = TRUE) {
-  require_cube_metadata_admin("write dim_semantics metadata")
-  checkmate::assert_string(path, min.chars = 1)
-
-  meta <- get_cube_metadata_cached(path)
-  cube_roles <- read_roles_from_cube(path, meta = meta)
-  dsem <- ensure_dim_semantics(
-    dim_semantics = dim_semantics,
-    dim_names = meta$dim_order,
-    time_dim = cube_roles$time,
-    area_dim = cube_roles$area
-  )
-
-  if (isTRUE(validate)) {
-    validate_dim_semantics(
-      dim_semantics = dsem,
-      dim_names = meta$dim_order,
-      time_dim = cube_roles$time,
-      area_dim = cube_roles$area,
-      dimnames_list = meta$dimnames
-    )
-  }
-
-  try(rhdf5::h5delete(path, "cube/metadata/dim_semantics"), silent = TRUE)
-  pa_write_dim_semantics_fieldwise(
-    filepath = path,
-    dim_semantics = dsem,
-    dim_order = meta$dim_order
-  )
-  reset_poparray_cache()
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  metadata <- read_cube_metadata_admin_impl(path)
+  metadata$dim_semantics <- dim_semantics
+  update_cube_metadata(path, metadata, "Updated dimension semantics")
 }
 
 write_cube_roles_impl <- function(path, roles) {
-  require_cube_metadata_admin("write cube roles metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-  roles <- normalize_cube_roles(roles, meta$dim_order)
-  write_cube_roles_metadata(path, roles)
-  reset_poparray_cache()
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  metadata <- read_cube_metadata_admin_impl(path)
+  metadata$roles <- roles
+  update_cube_metadata(path, metadata, "Updated dimension roles")
 }
 
 write_cube_source_impl <- function(path, source) {
-  require_cube_metadata_admin("write cube source metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  write_cube_source_metadata(path, source)
-  reset_poparray_cache()
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  metadata <- read_cube_metadata_admin_impl(path)
+  metadata$source <- source
+  update_cube_metadata(path, metadata, "Updated source metadata")
 }
 
 write_cube_data_col_impl <- function(path, data_col) {
-  require_cube_metadata_admin("write cube data_col metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  checkmate::assert_string(data_col, min.chars = 1)
-  pa_h5_write_dataset(path, "cube/metadata/data_col", as.character(data_col))
-  reset_poparray_cache()
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  metadata <- read_cube_metadata_admin_impl(path)
+  metadata$data_col <- data_col
+  update_cube_metadata(path, metadata, "Updated value column name")
 }
 
 #' Get cube roles from a poparray or cube file
@@ -350,25 +314,5 @@ normalize_cube_metadata_bundle <- function(metadata, dim_order, dimnames_list = 
 }
 
 write_cube_metadata_admin_impl <- function(path, metadata, validate = TRUE) {
-  require_cube_metadata_admin("write bundled cube metadata")
-  checkmate::assert_string(path, min.chars = 1)
-  meta <- get_cube_metadata_cached(path)
-
-  bundled <- if (isTRUE(validate)) {
-    normalize_cube_metadata_bundle(metadata, meta$dim_order, meta$dimnames)
-  } else {
-    metadata
-  }
-
-  write_cube_roles_metadata(path, bundled$roles)
-  write_cube_source_metadata(path, bundled$source)
-  pa_h5_write_dataset(path, "cube/metadata/data_col", as.character(bundled$data_col))
-  try(rhdf5::h5delete(path, "cube/metadata/dim_semantics"), silent = TRUE)
-  pa_write_dim_semantics_fieldwise(
-    filepath = path,
-    dim_semantics = bundled$dim_semantics,
-    dim_order = meta$dim_order
-  )
-  reset_poparray_cache()
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  update_cube_metadata(path, metadata, "Updated cube metadata")
 }

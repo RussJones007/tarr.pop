@@ -275,24 +275,32 @@ assign_array_levels <- function(arr, dimname, char_vec){
 #'  Retrieves the labels for an array dimension with the option to remove one or more labels.
 #'  These functions are useful when sub-setting arrays, especially when choosing elements from a poparray.
 #'
-#' Simple wrapper functions around dim_label() to retrieve and assign each dimension label values that are included in a
+#' Simple wrapper functions around dim_labels() to retrieve and assign each dimension label values that are included in a
 #' poparray object.
-#' * ages() the age.char dimension, ages(arr) <- values
-#' * sexes() the sex dimension
-#' * races() the race dimension
-#' * ethnicities() the ethnicity dimension
-#' * areas() the areas (counties) dimension
-#' * years() the years dimension. Note that this conflicts with the same function name from the lubridate package.
-#'           The best practice is to use tarr.pop::years()
+#' * `ages()`, `sexes()`, `races()`, and `ethnicities()` find dimensions by
+#'   semantic domain, falling back to conventional names when no domain matches.
+#'   Age domains `age`, `age.char`, and `age interval` are recognized. Combined
+#'   race/ethnicity domains are not treated as separate race or ethnicity domains.
+#' * `areas()` follows the area role, regardless of geographic level.
+#' * `times()` follows the time role, returning stored labels without converting
+#'   them to years, dates, or hours. `years()` is a compatibility alias; use
+#'   `tarr.pop::years()` if another package supplies the same function name.
+#'
+#' These are metadata-only operations and do not read population values. Renamed
+#' dimensions retain their domains and roles. Multiple matching domains are an
+#' error; use `dim_labels()` with an explicit name to resolve ambiguity.
 #'
 #'
 #' @param arr A poparray object.
 #' @param dimname the name of the dimension to get the labels return
 #' @param remove is a character vector which will be removed when returning the labels for a dimension.
 #'   Alternatively this can be a regex expression created by the [stringr::regex()] function
-#' @param ... used by the wrapper functions to pass arguments to the dim_labels() function.
+#' @param missing Handling for absent dimensions: `"error"` (default) or
+#'   `"null"`. The latter returns `NULL`; a present dimension with no selected
+#'   labels instead returns an empty character vector. Ambiguity remains an error.
 #'
-#' @returns a character vector of labels for the chosen dimension#'
+#' @returns A character vector of labels, or `NULL` for an absent dimension
+#'   when `missing = "null"`.
 #' @export
 #' @examples
 #'
@@ -314,13 +322,16 @@ assign_array_levels <- function(arr, dimname, char_vec){
 #' ages(cen)
 #' dim_labels(cen, dimname = "race", remove = stringr::regex(combination))
 #'
-dim_labels <- function(arr, dimname, remove = NULL){
+dim_labels <- function(arr, dimname, remove = NULL, missing = c("error", "null")){
   checkmate::assert_class(x = arr, classes = "poparray")
-  checkmate::assert(
-    check_string(dimname),
-    check_choice(dimname, names(dimnames(arr))),
-    combine = "and"
-  )
+  checkmate::assert_string(dimname)
+  missing <- match.arg(missing)
+  if (!dimname %in% names(dimnames(arr))) {
+    if (missing == "null") return(NULL)
+    cli::cli_abort(c("Dimension {.val {dimname}} is absent.",
+      "i" = "Available dimensions: {paste(names(dimnames(arr)), collapse = ', ')}.",
+      "i" = "Use {.code missing = 'null'} to return NULL when absent."))
+  }
 
   ret <- dimnames(arr)[[dimname]]
   if(! is.null(remove)){
@@ -338,19 +349,37 @@ dim_labels <- function(arr, dimname, remove = NULL){
 ## Functions to retrieve or assign dimension labels -------------------------
 
 #' Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects
-#' @param dimension should be a valid dimension of the array
-label_factory <- function(dimension){
+#' @param dimension Conventional dimension name used as a legacy fallback.
+#' @param domains Semantic domain keys to recognize.
+#' @param role Optional time or area role to follow instead of domains.
+label_factory <- function(dimension, domains = dimension, role = NULL){
   force(dimension)
-  function(arr, ...)
+  force(domains)
+  force(role)
+  function(arr, remove = NULL, missing = c("error", "null"))
   {
-    dim_labels(arr, dimname = dimension, ...)
+    checkmate::assert_class(arr, "poparray")
+    missing <- match.arg(missing)
+    if (!is.null(role)) {
+      selected <- if (role == "time") time_role(arr) else area_role(arr)
+    } else {
+      selected <- dim_semantics(arr) |>
+        purrr::keep(function(sem) sem@domain %in% domains) |>
+        names()
+      if (length(selected) > 1L) {
+        cli::cli_abort(c("Multiple dimensions match the {.val {dimension}} helper: {paste(selected, collapse = ', ')}.",
+          "i" = "Use {.fn dim_labels} with an explicit dimension name."))
+      }
+      if (!length(selected)) selected <- dimension
+    }
+    dim_labels(arr, dimname = selected, remove = remove, missing = missing)
   }
 }
 
 #' Factory function to assign dimension levels(labels) in an array.  Wrapper around assign_array_levels().
 #' The returned function accepts the array and value.
 #'
-#' @param dimension is the name of the dimension
+#' @param dim_name is the name of the dimension
 #' @rdname dim_labels
 #' @returns a function to assign x (an array), levels passed as values, to the specified dimension name
 # @export
@@ -366,7 +395,7 @@ assign_label_factory <- function(dim_name){
 
 #' @rdname dim_labels
 #' @export
-ages <- label_factory("age.char")
+ages <- label_factory("age.char", domains = c("age", "age.char", "age interval"))
 
 # #' @rdname dim_labels
 # #' @export
@@ -399,7 +428,7 @@ sexes <- label_factory("sex")
 
 #' @rdname dim_labels
 #' @export
-areas <- label_factory("area.name")
+areas <- label_factory("area.name", role = "area")
 
 # #' @rdname dim_labels
 # #' @export
@@ -407,7 +436,11 @@ areas <- label_factory("area.name")
 
 #' @rdname dim_labels
 #' @export
-years <- label_factory("year")
+times <- label_factory("year", role = "time")
+
+#' @rdname dim_labels
+#' @export
+years <- times
 
 # #' @rdname dim_labels
 # #' @export

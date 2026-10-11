@@ -20,7 +20,8 @@ build_poparray_from_df(
   geo = NULL,
   extendable_year = NULL,
   registry = NULL,
-  target_chunk_bytes = 1e+06
+  target_chunk_bytes = 1e+06,
+  revision_reason = "Cube created or rebuilt"
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ build_poparray_from_df(
 \item{registry}{Optional registry metadata.}
 
 \item{target_chunk_bytes}{Target bytes for auto chunk sizing.}
+
+\item{revision_reason}{Change description recorded in metadata history.}
 }
 \value{
 Invisibly returns the low-level write result from

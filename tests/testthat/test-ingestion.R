@@ -555,7 +555,8 @@ test_that("add_population_data appends a new year to an existing cube", {
     cube = fp,
     reader = function(...) new_df,
     dims = dims,
-    source_meta = list(note = "updated")
+    source_meta = list(note = "updated"),
+    revision_reason = "Added 2024 estimates; retained 2023"
   )
 
   expect_equal(out, normalizePath(fp, winslash = "/", mustWork = FALSE))
@@ -569,6 +570,8 @@ test_that("add_population_data appends a new year to an existing cube", {
   expect_equal(arr["2023", "A", "Female"], 10)
   expect_equal(arr["2024", "B", "Male"], 23)
   expect_identical(tarr.pop:::read_source_from_cube(fp, meta = meta)[["note"]], "updated")
+  expect_identical(cube_history(fp)$time_through, c("2023", "2024"))
+  expect_identical(tail(cube_history(fp)$reason, 1L), "Added 2024 estimates; retained 2023")
 })
 
 test_that("add_population_data errors on overlapping append labels", {

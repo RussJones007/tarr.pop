@@ -25,6 +25,7 @@ ingest_population(
   target_chunk_bytes = 1e+06,
   data_col = "population",
   support = NULL,
+  revision_reason = "Population table ingested or rebuilt",
   ...
 )
 }
@@ -77,6 +78,9 @@ physical rows for \code{poparray} storage.}
 \item{data_col}{Name of the value column.}
 
 \item{support}{Optional support table listing valid dimension combinations.}
+
+\item{revision_reason}{Description of the vintage/coverage change recorded in
+metadata history when creating or rebuilding a cube.}
 
 \item{...}{Additional arguments forwarded to \code{reader()} and \code{transformer()}.}
 }

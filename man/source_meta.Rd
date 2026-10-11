@@ -21,4 +21,7 @@ Returns source and provenance metadata from either an in-memory
 \code{poparray} or an HDF5 cube path. When \code{x} is a cube path, the
 replacement form writes updated source metadata back to the file and requires
 elevated metadata administration privileges.
+Path-based updates create metadata revisions; use
+\code{\link{update_cube_metadata}} for an explicit reason and
+\code{\link{cube_history}} to inspect previous notes.
 }

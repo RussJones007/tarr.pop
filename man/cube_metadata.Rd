@@ -29,4 +29,9 @@ Optional dimension applicability travels within \code{dim_semantics}, not source
 provenance. Replacement validates schema boundaries, target levels, and coverage
 against current labels. Path-based updates write metadata only and do not rewrite
 the population dataset. See \code{\link{dim_semantics}} for inspection.
+Path-based edits record metadata revisions inside the file. Use
+\code{\link{update_cube_metadata}} to supply a change reason and
+\code{\link{cube_history}} to inspect coverage and provenance history.
+No earlier population values are retained. In-memory edits do not create
+on-disk revisions until persisted.
 }

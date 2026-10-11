@@ -20,6 +20,7 @@ add_population_data(
   target_chunk_bytes = 1e+06,
   data_col = NULL,
   support = NULL,
+  revision_reason = "Added population records",
   ...
 )
 }
@@ -60,6 +61,9 @@ stored data column.}
 
 \item{support}{Optional support table for the new data. Defaults to the
 existing cube support crossed with the new \code{add_dim} labels.}
+
+\item{revision_reason}{Description of the vintage/coverage update recorded
+in metadata history. Previous population values are not retained.}
 
 \item{...}{Additional arguments forwarded to \code{reader()} and \code{transformer()}.}
 }

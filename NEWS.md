@@ -4,6 +4,16 @@ Changes since development version 0.0.0.9220.
 
 ## New features
 
+* Cube schema 1.2.0 adds stable cube IDs and metadata revision history inside
+  HDF5 files. Metadata setters record snapshots automatically; explicit updates
+  accept a reason. Added history, version, snapshot, restoration, and interrupted
+  metadata replacement recovery utilities. Rebuilds and appends preserve history
+  and record time coverage without retaining earlier population datasets.
+* Label helpers now resolve demographic dimensions by semantic domain and
+  area/time dimensions by role, with conventional names as demographic
+  fallbacks. Added `times()` with `years()` retained as an alias. Label helpers
+  and `dim_labels()` accept `missing = "null"` for absent dimensions; errors
+  remain the default, and ambiguous domains require explicit selection.
 * `age_overlaps()` returns a logical index selecting whole age categories
   overlapping inclusive age bounds. It inspects labels only and supports
   ordinary lazy dimension indexing, including negated selections.

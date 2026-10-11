@@ -14,7 +14,8 @@ save_poparray(
   geo = NULL,
   extendable_year = NULL,
   registry = NULL,
-  target_chunk_bytes = 1e+06
+  target_chunk_bytes = 1e+06,
+  revision_reason = "Cube saved or rebuilt"
 )
 }
 \arguments{
@@ -38,6 +39,8 @@ save_poparray(
 \item{registry}{Optional registry metadata list/data.frame (one row).}
 
 \item{target_chunk_bytes}{Target bytes for auto chunking.}
+
+\item{revision_reason}{Description recorded in the metadata history.}
 }
 \value{
 Invisibly returns a list with \code{filepath}, \code{dataset}, and \code{chunkdim}.

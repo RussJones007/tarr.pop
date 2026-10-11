@@ -20,7 +20,8 @@ pa_write_poparray_cube(
   geo = NULL,
   extendable_year = NULL,
   registry = NULL,
-  target_chunk_bytes = 1e+06
+  target_chunk_bytes = 1e+06,
+  revision_reason = "Cube created or rebuilt"
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ pa_write_poparray_cube(
 \item{registry}{Optional registry metadata list/data.frame (one row).}
 
 \item{target_chunk_bytes}{Target bytes for auto chunking.}
+
+\item{revision_reason}{Description recorded in the metadata history.}
 }
 \value{
 List with \code{filepath}, \code{dataset}, and \code{chunkdim}.

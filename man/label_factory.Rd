@@ -4,10 +4,14 @@
 \alias{label_factory}
 \title{Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects}
 \usage{
-label_factory(dimension)
+label_factory(dimension, domains = dimension, role = NULL)
 }
 \arguments{
-\item{dimension}{should be a valid dimension of the array}
+\item{dimension}{Conventional dimension name used as a legacy fallback.}
+
+\item{domains}{Semantic domain keys to recognize.}
+
+\item{role}{Optional time or area role to follow instead of domains.}
 }
 \description{
 Factory function to generate wrapper functions for retrieving specific dimension labels from poparray objects

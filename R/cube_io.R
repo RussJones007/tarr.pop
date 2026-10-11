@@ -198,7 +198,7 @@ pa_write_poparray_metadata <- function(filepath,
                                        geo = NULL,
                                        extendable_year = NULL,
                                        registry = NULL,
-                                       schema_version = "1.1.0") {
+                                       schema_version = "1.2.0") {
   pa_h5_create_group(filepath, "cube")
   pa_h5_create_group(filepath, "cube/metadata")
   pa_h5_create_group(filepath, "cube/metadata/roles")
@@ -284,6 +284,7 @@ pa_write_poparray_metadata <- function(filepath,
 #' @param extendable_year Optional flag stored as `cube/metadata/extendable_year`.
 #' @param registry Optional registry metadata list/data.frame (one row).
 #' @param target_chunk_bytes Target bytes for auto chunking.
+#' @param revision_reason Description recorded in the metadata history.
 #'
 #' @return List with `filepath`, `dataset`, and `chunkdim`.
 #' @keywords internal
@@ -302,21 +303,24 @@ pa_write_poparray_cube <- function(x,
                                    geo = NULL,
                                    extendable_year = NULL,
                                    registry = NULL,
-                                   target_chunk_bytes = 1e6) {
+                                   target_chunk_bytes = 1e6,
+                                   revision_reason = "Cube created or rebuilt") {
   if (is.null(filepath)) {
     filepath <- tempfile("poparray_cube_", fileext = ".h5")
   }
   if (!is.character(filepath) || length(filepath) != 1L || !nzchar(filepath)) {
     cli::cli_abort("{.arg filepath} must be a non-empty file path.")
   }
+  checkmate::assert_string(revision_reason, min.chars = 1L)
+  destination <- filepath
+  previous <- NULL
   out_dir <- dirname(filepath)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   if (file.exists(filepath)) {
-    if (!isTRUE(overwrite)) {
-      cli::cli_abort("File already exists: {.file {filepath}}. Set {.arg overwrite = TRUE} to replace.")
-    }
-    ok <- file.remove(filepath)
-    if (!isTRUE(ok)) cli::cli_abort("Could not remove existing file: {.file {filepath}}.")
+    if (!isTRUE(overwrite)) cli::cli_abort("File already exists: {.file {filepath}}. Set {.arg overwrite = TRUE} to replace.")
+    previous <- pa_capture_cube_history(filepath)
+    filepath <- tempfile("cube_rebuild_", tmpdir = out_dir, fileext = ".h5")
+    on.exit(unlink(filepath), add = TRUE)
   }
 
   rhdf5::h5createFile(filepath)
@@ -372,8 +376,14 @@ pa_write_poparray_cube <- function(x,
     registry = registry
   )
 
+  pa_finish_cube_revision(filepath, previous, reason = revision_reason,
+                          action = if (is.null(previous)) "create" else "rebuild")
+  if (!identical(filepath, destination)) {
+    if (!file.rename(filepath, destination)) cli::cli_abort("Could not replace cube: {.file {destination}}.")
+  }
+  reset_poparray_cache()
   list(
-    filepath = normalizePath(filepath, winslash = "/", mustWork = TRUE),
+    filepath = normalizePath(destination, winslash = "/", mustWork = TRUE),
     dataset = "cube/population",
     chunkdim = as.integer(chunkdim)
   )
@@ -392,6 +402,7 @@ pa_write_poparray_cube <- function(x,
 #' @param extendable_year Optional flag stored as `cube/metadata/extendable_year`.
 #' @param registry Optional registry metadata list/data.frame (one row).
 #' @param target_chunk_bytes Target bytes for auto chunking.
+#' @param revision_reason Description recorded in the metadata history.
 #'
 #' @return Invisibly returns a list with `filepath`, `dataset`, and `chunkdim`.
 #' @details Optional dimension applicability is saved under the existing
@@ -406,7 +417,8 @@ save_poparray <- function(x,
                           geo = NULL,
                           extendable_year = NULL,
                           registry = NULL,
-                          target_chunk_bytes = 1e6) {
+                          target_chunk_bytes = 1e6,
+                          revision_reason = "Cube saved or rebuilt") {
   if (!is(x, "poparray")) {
     cli::cli_abort("{.arg x} must be a {.cls poparray}.")
   }
@@ -447,7 +459,8 @@ save_poparray <- function(x,
     geo = geo,
     extendable_year = extendable_year,
     registry = registry,
-    target_chunk_bytes = target_chunk_bytes
+    target_chunk_bytes = target_chunk_bytes,
+    revision_reason = revision_reason
   )
 
   invisible(out)

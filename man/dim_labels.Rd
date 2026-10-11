@@ -8,24 +8,27 @@
 \alias{ethnicities}
 \alias{sexes}
 \alias{areas}
+\alias{times}
 \alias{years}
 \title{Dimension Labels}
 \usage{
-dim_labels(arr, dimname, remove = NULL)
+dim_labels(arr, dimname, remove = NULL, missing = c("error", "null"))
 
 assign_label_factory(dim_name)
 
-ages(arr, ...)
+ages(arr, remove = NULL, missing = c("error", "null"))
 
-races(arr, ...)
+races(arr, remove = NULL, missing = c("error", "null"))
 
-ethnicities(arr, ...)
+ethnicities(arr, remove = NULL, missing = c("error", "null"))
 
-sexes(arr, ...)
+sexes(arr, remove = NULL, missing = c("error", "null"))
 
-areas(arr, ...)
+areas(arr, remove = NULL, missing = c("error", "null"))
 
-years(arr, ...)
+times(arr, remove = NULL, missing = c("error", "null"))
+
+years(arr, remove = NULL, missing = c("error", "null"))
 }
 \arguments{
 \item{arr}{A poparray object.}
@@ -35,12 +38,15 @@ years(arr, ...)
 \item{remove}{is a character vector which will be removed when returning the labels for a dimension.
 Alternatively this can be a regex expression created by the \code{\link[stringr:regex]{stringr::regex()}} function}
 
-\item{...}{used by the wrapper functions to pass arguments to the dim_labels() function.}
+\item{missing}{Handling for absent dimensions: \code{"error"} (default) or
+\code{"null"}. The latter returns \code{NULL}; a present dimension with no selected
+labels instead returns an empty character vector. Ambiguity remains an error.}
 
-\item{dimension}{is the name of the dimension}
+\item{dim_name}{is the name of the dimension}
 }
 \value{
-a character vector of labels for the chosen dimension#'
+A character vector of labels, or \code{NULL} for an absent dimension
+when \code{missing = "null"}.
 
 a function to assign x (an array), levels passed as values, to the specified dimension name
 }
@@ -49,17 +55,22 @@ Retrieves the labels for an array dimension with the option to remove one or mor
 These functions are useful when sub-setting arrays, especially when choosing elements from a poparray.
 }
 \details{
-Simple wrapper functions around dim_label() to retrieve and assign each dimension label values that are included in a
+Simple wrapper functions around dim_labels() to retrieve and assign each dimension label values that are included in a
 poparray object.
 \itemize{
-\item ages() the age.char dimension, ages(arr) <- values
-\item sexes() the sex dimension
-\item races() the race dimension
-\item ethnicities() the ethnicity dimension
-\item areas() the areas (counties) dimension
-\item years() the years dimension. Note that this conflicts with the same function name from the lubridate package.
-The best practice is to use tarr.pop::years()
+\item \code{ages()}, \code{sexes()}, \code{races()}, and \code{ethnicities()} find dimensions by
+semantic domain, falling back to conventional names when no domain matches.
+Age domains \code{age}, \code{age.char}, and \verb{age interval} are recognized. Combined
+race/ethnicity domains are not treated as separate race or ethnicity domains.
+\item \code{areas()} follows the area role, regardless of geographic level.
+\item \code{times()} follows the time role, returning stored labels without converting
+them to years, dates, or hours. \code{years()} is a compatibility alias; use
+\code{tarr.pop::years()} if another package supplies the same function name.
 }
+
+These are metadata-only operations and do not read population values. Renamed
+dimensions retain their domains and roles. Multiple matching domains are an
+error; use \code{dim_labels()} with an explicit name to resolve ambiguity.
 }
 \examples{
 

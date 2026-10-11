@@ -393,6 +393,7 @@ validate_population_df <- function(df,
 #' @param extendable_year Optional extendable-year flag.
 #' @param registry Optional registry metadata.
 #' @param target_chunk_bytes Target bytes for auto chunk sizing.
+#' @param revision_reason Change description recorded in metadata history.
 #'
 #' @return Invisibly returns the low-level write result from
 #'   `pa_write_poparray_cube()`.
@@ -412,7 +413,8 @@ build_poparray_from_df <- function(df,
                                    geo = NULL,
                                    extendable_year = NULL,
                                    registry = NULL,
-                                   target_chunk_bytes = 1e6) {
+                                   target_chunk_bytes = 1e6,
+                                   revision_reason = "Cube created or rebuilt") {
   checkmate::assert_data_frame(df, min.rows = 1L)
   checkmate::assert_character(dims, min.len = 1L, any.missing = FALSE)
   checkmate::assert_string(filepath, min.chars = 1L)
@@ -462,7 +464,8 @@ build_poparray_from_df <- function(df,
     geo = geo,
     extendable_year = extendable_year,
     registry = registry,
-    target_chunk_bytes = target_chunk_bytes
+    target_chunk_bytes = target_chunk_bytes,
+    revision_reason = revision_reason
   )
 }
 
@@ -506,6 +509,8 @@ build_poparray_from_df <- function(df,
 #' @param extendable_year Optional extendable-year flag.
 #' @param registry Optional registry metadata.
 #' @param target_chunk_bytes Target bytes for auto chunk sizing.
+#' @param revision_reason Description of the vintage/coverage change recorded in
+#'   metadata history when creating or rebuilding a cube.
 #' @param data_col Name of the value column.
 #' @param support Optional support table listing valid dimension combinations.
 #' @param ... Additional arguments forwarded to `reader()` and `transformer()`.
@@ -533,6 +538,7 @@ ingest_population <- function(reader,
                               target_chunk_bytes = 1e6,
                               data_col = "population",
                               support = NULL,
+                              revision_reason = "Population table ingested or rebuilt",
                               ...) {
   checkmate::assert_function(reader)
   checkmate::assert_function(transformer)
@@ -585,7 +591,8 @@ ingest_population <- function(reader,
     geo = geo,
     extendable_year = extendable_year,
     registry = registry,
-    target_chunk_bytes = target_chunk_bytes
+    target_chunk_bytes = target_chunk_bytes,
+    revision_reason = revision_reason
   )
 
   invisible(normalizePath(filepath, winslash = "/", mustWork = FALSE))
@@ -725,7 +732,9 @@ pa_write_poparray_cube_append <- function(old_x,
                                           series_id = NULL,
                                           geo = NULL,
                                           extendable_year = NULL,
-                                          target_chunk_bytes = 1e6) {
+                                          target_chunk_bytes = 1e6,
+                                          history_source = NULL,
+                                          revision_reason = "Added population records") {
   checkmate::assert_string(filepath, min.chars = 1L)
   checkmate::assert_string(add_dim, min.chars = 1L)
 
@@ -752,15 +761,18 @@ pa_write_poparray_cube_append <- function(old_x,
     cli::cli_abort("New data dimensions do not align with the requested append.")
   }
 
+  checkmate::assert_string(revision_reason, min.chars = 1L)
+  previous <- if (!is.null(history_source)) pa_capture_cube_history(history_source) else NULL
+  destination <- filepath
   out_dir <- dirname(filepath)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   if (file.exists(filepath)) {
     if (!isTRUE(overwrite)) {
       cli::cli_abort("File already exists: {.file {filepath}}. Set {.arg overwrite = TRUE} to replace.")
     }
-    if (!file.remove(filepath)) {
-      cli::cli_abort("Could not remove existing file: {.file {filepath}}.")
-    }
+    if (is.null(previous)) previous <- pa_capture_cube_history(filepath)
+    filepath <- tempfile("cube_append_", tmpdir = out_dir, fileext = ".h5")
+    on.exit(unlink(filepath), add = TRUE)
   }
 
   if (is.null(chunkdim) || (is.character(chunkdim) && length(chunkdim) == 1L && identical(chunkdim, "auto"))) {
@@ -818,8 +830,13 @@ pa_write_poparray_cube_append <- function(old_x,
     extendable_year = extendable_year
   )
 
+  pa_finish_cube_revision(filepath, previous, revision_reason, "append")
+  if (!identical(filepath, destination) && !file.rename(filepath, destination)) {
+    cli::cli_abort("Could not replace cube: {.file {destination}}.")
+  }
+  reset_poparray_cache()
   list(
-    filepath = normalizePath(filepath, winslash = "/", mustWork = TRUE),
+    filepath = normalizePath(destination, winslash = "/", mustWork = TRUE),
     dataset = "cube/population",
     chunkdim = as.integer(chunkdim)
   )
@@ -855,6 +872,8 @@ pa_write_poparray_cube_append <- function(old_x,
 #' @param chunkdim Chunk dimensions or `"auto"`.
 #' @param level Compression level passed to HDF5 writer.
 #' @param target_chunk_bytes Target bytes for auto chunk sizing.
+#' @param revision_reason Description of the vintage/coverage update recorded
+#'   in metadata history. Previous population values are not retained.
 #' @param data_col Name of the value column. Defaults to the existing cube's
 #'   stored data column.
 #' @param support Optional support table for the new data. Defaults to the
@@ -878,6 +897,7 @@ add_population_data <- function(cube,
                                 target_chunk_bytes = 1e6,
                                 data_col = NULL,
                                 support = NULL,
+                                revision_reason = "Added population records",
                                 ...) {
   checkmate::assert_function(reader)
   checkmate::assert_function(transformer)
@@ -1021,16 +1041,14 @@ add_population_data <- function(cube,
     series_id = series_id,
     geo = geo,
     extendable_year = extendable_year,
-    target_chunk_bytes = target_chunk_bytes
+    target_chunk_bytes = target_chunk_bytes,
+    history_source = existing_path,
+    revision_reason = revision_reason
   )
 
   if (same_file) {
     rm(existing, old_x, new_x)
     gc()
-    if (!file.remove(output_filepath)) {
-      unlink(write_path)
-      cli::cli_abort("Could not replace existing cube file: {.file {output_filepath}}.")
-    }
     if (!file.rename(write_path, output_filepath)) {
       cli::cli_abort("Could not move updated cube into place: {.file {output_filepath}}.")
     }
