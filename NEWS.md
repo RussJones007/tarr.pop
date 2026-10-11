@@ -4,6 +4,13 @@ Changes since development version 0.0.0.9220.
 
 ## New features
 
+* Added blockwise `mean()`, `var()`, `min()`, `max()`, and `range()` methods for
+  population cell counts. Structurally inapplicable cells are excluded;
+  applicable missing values follow `na.rm`. Mean and variance guard overlap
+  risk, while extrema allow overlapping categories. `range(finite = TRUE)`
+  excludes non-finite values. Trimmed means and covariance are not supported.
+* Standard deviation now shares a stable centered variance accumulator with
+  `var()`, excludes structurally inapplicable cells, and guards overlap risk.
 * `overlaps()` reports declared overlap levels, declared levels still present,
   and current overlap risk for every dimension without reading population
   values. Risk uses the same interval and applicability checks as reductions;

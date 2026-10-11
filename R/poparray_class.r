@@ -1200,54 +1200,6 @@ by.poparray <- function(data, INDICES, FUN, ..., simplify = TRUE, drop = FALSE) 
 
 # Operators -------------------------------------------------------------------------------------------------------
 
-setMethod(
-  "sd",
-  "poparray",
-  function(x, na.rm = FALSE) {
-    validate_poparray(x)
-    warn_if_realization_large_delayed(
-      methods::as(x, "DelayedArray"),
-      bytes_threshold = 40e6,
-      what = "Computing sd(poparray)"
-    )
-
-    state <- DelayedArray:::blockReduce(
-      FUN = function(block, init, na.rm) {
-        vals <- as.numeric(block)
-        if (!isTRUE(na.rm) && anyNA(vals)) {
-          init$has_na <- TRUE
-          return(init)
-        }
-        if (isTRUE(na.rm)) {
-          vals <- vals[!is.na(vals)]
-        }
-        if (!length(vals)) {
-          return(init)
-        }
-        init$n <- init$n + length(vals)
-        init$sum <- init$sum + sum(vals)
-        init$sumsq <- init$sumsq + sum(vals * vals)
-        init
-      },
-      x = methods::as(x, "DelayedArray"),
-      init = list(n = 0, sum = 0, sumsq = 0, has_na = FALSE),
-      na.rm = na.rm,
-      BREAKIF = function(init) isTRUE(init$has_na)
-    )
-
-    if (isTRUE(state$has_na)) {
-      return(NA_real_)
-    }
-    if (state$n <= 1L) {
-      return(stats::sd(numeric(0), na.rm = na.rm))
-    }
-
-    numer <- state$sumsq - (state$sum * state$sum / state$n)
-    numer <- max(numer, 0)
-    sqrt(numer / (state$n - 1L))
-  }
-)
-
 # Accessors / helpers ----------------------------------------------------------
 
 #' Get or set the name of the poparray data column

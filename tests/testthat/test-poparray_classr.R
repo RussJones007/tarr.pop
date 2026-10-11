@@ -112,6 +112,10 @@ test_that("subsetting supports named indices and keeps poparray when roles remai
 
 test_that("sd(poparray) uses S4 dispatch and matches realized result", {
   pa <- make_poparray_fixture()
+  sem <- dim_semantics(pa)
+  sem$sex <- new_dim_semantics("sex", "sex", "nominal",
+    partition_type = "partition", validated = TRUE)
+  dim_semantics(pa) <- sem
 
   expect_equal(sd(pa), stats::sd(as.array(pa)))
 })
