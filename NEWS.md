@@ -4,6 +4,9 @@ Changes since development version 0.0.0.9220.
 
 ## New features
 
+* `age_overlaps()` returns a logical index selecting whole age categories
+  overlapping inclusive age bounds. It inspects labels only and supports
+  ordinary lazy dimension indexing, including negated selections.
 * `rename()` now renames poparray dimensions lazily using dplyr syntax. Roles,
   semantic names, and applicability references follow the rename; age range
   filtering retains its interval meaning after an age dimension is renamed.
