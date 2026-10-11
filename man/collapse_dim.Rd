@@ -11,7 +11,8 @@ collapse_dim(
   keep_empty = FALSE,
   name = NULL,
   strict = TRUE,
-  allow_overlap = FALSE
+  allow_overlap = FALSE,
+  drop = FALSE
 )
 }
 \arguments{
@@ -31,10 +32,14 @@ blocked. When \code{FALSE}, a warning is emitted and the collapse proceeds.}
 
 \item{allow_overlap}{Logical; default \code{FALSE}. Set \code{TRUE} to explicitly allow
 collapsing overlapping categories within a group.}
+
+\item{drop}{Logical; default \code{FALSE}. When \code{TRUE}, remove only the collapsed
+dimension if it has one output level. Required time/area dimensions and
+dimensions controlling another dimension's applicability cannot be dropped.}
 }
 \value{
 A new HDF5-backed \code{poparray} with the chosen dimension collapsed by
-sum.
+sum, optionally removed when it has one output level and \code{drop = TRUE}.
 }
 \description{
 Groups labels along one dimension and sums population counts within groups.
@@ -60,4 +65,10 @@ groups; source schema history is recorded in the dimension's notes.
 Overlap guards apply within each schema. Changing labels of a dimension that
 controls another dimension's applicability remains unsupported. Without
 applicability metadata, grouping retains its existing behavior.
+}
+\examples{
+\dontrun{
+collapse_dim(x, dim = "sex", groups = list(Total = c("female", "male")),
+  drop = TRUE)
+}
 }

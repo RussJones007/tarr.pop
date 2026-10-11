@@ -4,7 +4,14 @@
 \alias{collapse_all}
 \title{Collapse all levels of one or more dimensions}
 \usage{
-collapse_all(x, dim, label = "all", strict = TRUE, allow_overlap = FALSE)
+collapse_all(
+  x,
+  dim,
+  label = "all",
+  strict = TRUE,
+  allow_overlap = FALSE,
+  drop = FALSE
+)
 }
 \arguments{
 \item{x}{A \code{poparray} object.}
@@ -18,11 +25,16 @@ values and unknown dimensions are rejected.}
 \item{strict}{Passed to \code{\link[=collapse_dim]{collapse_dim()}}.}
 
 \item{allow_overlap}{Passed to \code{\link[=collapse_dim]{collapse_dim()}}.}
+
+\item{drop}{Logical; default \code{FALSE}. Passed to \code{\link[=collapse_dim]{collapse_dim()}} for each
+selected dimension. Required time/area dimensions and applicability
+controllers cannot be dropped.}
 }
 \value{
 A new HDF5-backed \code{poparray} with all levels of the selected
 dimensions collapsed into one level each. Dimensions and their roles are
-retained; overlap and applicability guards from \code{\link[=collapse_dim]{collapse_dim()}} apply
+retained by default; with \code{drop = TRUE}, selected dimensions are removed.
+Overlap and applicability guards from \code{\link[=collapse_dim]{collapse_dim()}} apply
 to every reduction. The full source cube is not realized in memory.
 }
 \description{
@@ -34,5 +46,6 @@ sequentially in the supplied order using blockwise, HDF5-backed reductions.
 \dontrun{
 collapse_all(x, dim = c("sex", "race"))
 collapse_all(x, dim = c(3L, 5L), label = "Total")
+collapse_all(x, dim = c("sex", "race"), drop = TRUE)
 }
 }

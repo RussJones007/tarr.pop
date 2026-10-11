@@ -27,6 +27,9 @@
 #'   blocked. When `FALSE`, a warning is emitted and the collapse proceeds.
 #' @param allow_overlap Logical; default `FALSE`. Set `TRUE` to explicitly allow
 #'   collapsing overlapping categories within a group.
+#' @param drop Logical; default `FALSE`. When `TRUE`, remove only the collapsed
+#'   dimension if it has one output level. Required time/area dimensions and
+#'   dimensions controlling another dimension's applicability cannot be dropped.
 #'
 #' @details
 #' `groups` can be:
@@ -46,7 +49,12 @@
 #' applicability metadata, grouping retains its existing behavior.
 #'
 #' @return A new HDF5-backed `poparray` with the chosen dimension collapsed by
-#'   sum.
+#'   sum, optionally removed when it has one output level and `drop = TRUE`.
+#' @examples
+#' \dontrun{
+#' collapse_dim(x, dim = "sex", groups = list(Total = c("female", "male")),
+#'   drop = TRUE)
+#' }
 #' @export
 setGeneric("collapse_dim", function(x,
                                     dim,
@@ -54,7 +62,8 @@ setGeneric("collapse_dim", function(x,
                                     keep_empty = FALSE,
                                     name = NULL,
                                     strict = TRUE,
-                                    allow_overlap = FALSE) {
+                                    allow_overlap = FALSE,
+                                    drop = FALSE) {
   standardGeneric("collapse_dim")
 })
 
@@ -72,18 +81,25 @@ setGeneric("collapse_dim", function(x,
 #' @param label Label for the resulting collapsed level. Defaults to `"all"`.
 #' @param strict Passed to [collapse_dim()].
 #' @param allow_overlap Passed to [collapse_dim()].
+#' @param drop Logical; default `FALSE`. Passed to [collapse_dim()] for each
+#'   selected dimension. Required time/area dimensions and applicability
+#'   controllers cannot be dropped.
 #'
 #' @return A new HDF5-backed `poparray` with all levels of the selected
 #'   dimensions collapsed into one level each. Dimensions and their roles are
-#'   retained; overlap and applicability guards from [collapse_dim()] apply
+#'   retained by default; with `drop = TRUE`, selected dimensions are removed.
+#'   Overlap and applicability guards from [collapse_dim()] apply
 #'   to every reduction. The full source cube is not realized in memory.
 #' @examples
 #' \dontrun{
 #' collapse_all(x, dim = c("sex", "race"))
 #' collapse_all(x, dim = c(3L, 5L), label = "Total")
+#' collapse_all(x, dim = c("sex", "race"), drop = TRUE)
 #' }
 #' @export
-collapse_all <- function(x, dim, label = "all", strict = TRUE, allow_overlap = FALSE) {
+collapse_all <- function(x, dim, label = "all", strict = TRUE,
+                         allow_overlap = FALSE, drop = FALSE) {
+  checkmate::assert_flag(drop)
   dim_names <- names(dimnames(x))
   checkmate::assert_string(label, min.chars = 1L)
   if (is.character(dim)) {
@@ -105,7 +121,7 @@ collapse_all <- function(x, dim, label = "all", strict = TRUE, allow_overlap = F
     old_labels <- dimnames(current)[[dim_name]]
     groups <- stats::setNames(rep(label, length(old_labels)), old_labels)
     collapse_dim(current, dim = dim_name, groups = groups,
-      strict = strict, allow_overlap = allow_overlap)
+      strict = strict, allow_overlap = allow_overlap, drop = drop)
   }
   purrr::reduce(dim_names[k], collapse_one, .init = x)
 }
@@ -116,7 +132,9 @@ collapse_dim_poparray_impl <- function(x,
                                        keep_empty = FALSE,
                                        name = NULL,
                                        strict = TRUE,
-                                       allow_overlap = FALSE) {
+                                       allow_overlap = FALSE,
+                                       drop = FALSE) {
+  checkmate::assert_flag(drop)
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -176,6 +194,29 @@ collapse_dim_poparray_impl <- function(x,
 
   if (!is.null(schema_groups)) new_levels <- schema_groups$new_levels
 
+  dsem <- dim_semantics(x)
+  controls_other <- any(vapply(dsem, function(sem) {
+    applicability <- pa_dim_applicability(sem)
+    !is.null(applicability) && identical(applicability$by, dim_nm)
+  }, logical(1)))
+  drop_target <- drop && length(new_levels) == 1L
+  if (drop_target) {
+    role <- if (identical(dim_nm, time_role(x))) "time" else
+      if (identical(dim_nm, area_role(x))) "area" else NULL
+    if (!is.null(role)) {
+      cli::cli_abort(c(
+        "Cannot drop dimension {.val {dim_nm}} because it has the required {role} role.",
+        "i" = "Use {.arg drop = FALSE} to retain it."
+      ))
+    }
+    if (controls_other) {
+      cli::cli_abort(c(
+        "Cannot drop dimension {.val {dim_nm}} because it controls another dimension's applicability.",
+        "i" = "Use {.arg drop = FALSE} to retain it."
+      ))
+    }
+  }
+
   schema_plan <- pa_collapse_schema_plan(
     x, dim_nm, old_labels[keep], new_levels, g, schema_groups,
     strict = strict, allow_overlap = allow_overlap
@@ -191,11 +232,6 @@ collapse_dim_poparray_impl <- function(x,
     allow_overlap = allow_overlap
   )
 
-  dsem <- dim_semantics(x)
-  controls_other <- any(vapply(dsem, function(sem) {
-    applicability <- pa_dim_applicability(sem)
-    !is.null(applicability) && identical(applicability$by, dim_nm)
-  }, logical(1)))
   if (controls_other && !identical(as.character(old_labels[keep]), as.character(new_levels))) {
     cli::cli_abort("Changing labels of an applicability controller is not supported by {.fn collapse_dim}.")
   }
@@ -332,6 +368,12 @@ collapse_dim_poparray_impl <- function(x,
   }
   
   # ---- 10) Wrap into a new poparray ----
+  if (drop_target) {
+    dn_new <- dn_new[-k]
+    dsem <- dsem[names(dn_new)]
+    # Removing a singleton axis preserves cell order and remains delayed.
+    dim(arr_new) <- unname(lengths(dn_new))
+  }
   out <- new_poparray(
     x = arr_new,
     dimnames_list = dn_new,

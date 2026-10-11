@@ -54,6 +54,67 @@ test_that("collapse_dim generic works with positional args", {
   expect_equal(dimnames(out)$age.char, "0-9")
 })
 
+test_that("collapse_dim drops only its singleton target and preserves metadata", {
+  pa <- make_collapse_time_role_fixture()
+  groups <- list(Total = c("0-4", "5-9"))
+  retained <- collapse_dim(pa, "age.char", groups)
+  out <- collapse_dim(pa, "age.char", groups, name = "age", drop = TRUE)
+  expect_equal(dim(retained), c(2L, 1L, 1L))
+  expect_equal(dim(out), c(2L, 1L))
+  expect_named(dimnames(out), c("time", "area.name"))
+  expect_equal(as.numeric(out), as.numeric(retained))
+  expect_named(dim_semantics(out), c("time", "area.name"))
+  expect_equal(time_role(out), "time")
+  expect_equal(area_role(out), "area.name")
+  expect_equal(get_source(out), get_source(pa))
+  expect_equal(data_col(out), data_col(pa))
+  expect_true(is_hdf5_backed_delayed(out))
+  expect_true(methods::validObject(out))
+  expect_equal(dim(pa), c(2L, 1L, 2L))
+})
+
+test_that("collapse_dim keeps multiple output levels even with drop TRUE", {
+  pa <- make_collapse_fixture()
+  out <- collapse_dim(pa, "age.char", c("0-4" = "young", "5-9" = "older"), drop = TRUE)
+  expect_equal(dim(out), dim(pa))
+  expect_equal(dimnames(out)$age.char, c("young", "older"))
+  expect_error(collapse_dim(pa, "age.char", list(Total = c("0-4", "5-9")), drop = NA), "drop")
+})
+
+test_that("collapse_dim rejects dropping required role dimensions", {
+  pa <- make_collapse_fixture()
+  expect_error(collapse_dim(pa, "year", list(Total = c("2020", "2021")), drop = TRUE), "required time role")
+  expect_error(collapse_dim(pa, "area.name", list(Total = c("A", "B")), drop = TRUE), "required area role")
+})
+
+test_that("collapse_dim rejects dropping an applicability controller", {
+  pa <- make_collapse_time_role_fixture()[, , "0-4", drop = FALSE]
+  sem <- dim_semantics(pa)
+  sem$time <- pa_update_dim_semantics(sem$time, applicability = list(
+    by = "age.char", schemas = list(list(from = NULL, through = NULL,
+      levels = c("2020", "2021")))))
+  dim_semantics(pa) <- sem
+  expect_error(collapse_dim(pa, "age.char", c("0-4" = "0-4"), drop = TRUE), "controls another dimension")
+  expect_s4_class(collapse_dim(pa, "age.char", c("0-4" = "0-4")), "poparray")
+})
+
+test_that("collapse_dim removes the target's own applicability when dropping", {
+  pa <- make_collapse_fixture()
+  sem <- dim_semantics(pa)
+  sem$age.char <- pa_update_dim_semantics(sem$age.char, applicability = list(
+    by = "year", schemas = list(list(from = NULL, through = NULL,
+      levels = c("0-4", "5-9")))))
+  dim_semantics(pa) <- sem
+  groups <- list(Total = c("0-4", "5-9"))
+  retained <- collapse_dim(pa, "age.char", groups)
+  out <- collapse_dim(pa, 3L, groups, drop = TRUE)
+  expect_named(dimnames(out), c("year", "area.name"))
+  expect_named(dim_semantics(out), c("year", "area.name"))
+  expect_equal(as.numeric(out), as.numeric(retained))
+  expect_true(is_hdf5_backed_delayed(out))
+  expect_true(methods::validObject(out))
+})
+
 test_that("collapse_all sequentially collapses named and indexed dimensions", {
   pa <- make_collapse_time_role_fixture()
   out <- collapse_all(pa, c("age.char", "area.name"), label = "Total")
@@ -70,6 +131,33 @@ test_that("collapse_all sequentially collapses named and indexed dimensions", {
   expect_true(is_hdf5_backed_delayed(out))
   expect_equal(dimnames(pa)$age.char, c("0-4", "5-9"))
   expect_equal(as.numeric(collapse_all(pa, "age.char")), c(4, 6))
+})
+
+test_that("collapse_all drops selected dimensions using original names and indices", {
+  dn <- list(year = c("2020", "2021"), area.name = "A",
+    sex = c("female", "male"), age.char = c("0-4", "5-9"))
+  pa <- as.poparray(array(as.numeric(seq_len(prod(lengths(dn)))),
+    dim = unname(lengths(dn)), dimnames = dn),
+    filepath = tempfile(fileext = ".h5"))
+  sem <- dim_semantics(pa)
+  sem$sex <- new_dim_semantics("sex", "sex", "nominal",
+    partition_type = "partition", validated = TRUE)
+  dim_semantics(pa) <- sem
+  named <- collapse_all(pa, c("sex", "age.char"), drop = TRUE)
+  indexed <- collapse_all(pa, c(3L, 4L), drop = TRUE)
+  reverse <- collapse_all(pa, c(4L, 3L), drop = TRUE)
+  expect_equal(dim(named), c(2L, 1L))
+  expect_named(dimnames(named), c("year", "area.name"))
+  expect_equal(as.numeric(named), c(16, 20))
+  expect_equal(as.array(indexed), as.array(named))
+  expect_equal(as.array(reverse), as.array(named))
+  expect_named(dim_semantics(named), c("year", "area.name"))
+  expect_equal(get_source(named), get_source(pa))
+  expect_true(is_hdf5_backed_delayed(named))
+  expect_true(methods::validObject(named))
+  expect_error(collapse_all(pa, "year", drop = TRUE), "required time role")
+  expect_error(collapse_all(pa, "area.name", drop = TRUE), "required area role")
+  expect_error(collapse_all(pa, "sex", drop = NA), "drop")
 })
 
 test_that("collapse_all validates every dimension before reducing", {
