@@ -21,6 +21,3 @@ the modified array
 Drop Level(s) from an Array Dimension
 Internal function to handle dropping one or more levels from an array dimension
 }
-\examples{
-tmp <- drop_array_level(census, "age.char", "All")
-}
