@@ -74,23 +74,31 @@ error; use \code{dim_labels()} with an explicit name to resolve ambiguity.
 }
 \examples{
 
-selected_ages <- dim_labels(census, "age.char", remove = c("All", "85 +"))
-selected_ages
-cen <- census[year = "2020",
-             area.name = "Tarrant",
-             sex = "All",
-             age.char = selected_ages,
-             race = "All",
-             ethnicity = "All",
-             drop = FALSE]
+cube_file <- tempfile(fileext = ".h5")
 
-dimnames(cen)["age.char"]
+census <- as.poparray(
+  array(
+    c(100, 120, 80),
+    dim = c(1, 1, 3),
+    dimnames = list(
+      year = "2020",
+      area.name = "Tarrant",
+      age.char = c("0-4", "5-9", "85 +")
+    )
+  ),
+  filepath = cube_file
+)
 
-dim_labels(arr = cen, dimname = "age.char", remove =  "All")
+dim_labels(census, "age.char")
+# "0-4" "5-9" "85 +"
 
-# or using ages() without removing any age group
-ages(cen)
-dim_labels(cen, dimname = "race", remove = stringr::regex(combination))
+dim_labels(census, "age.char", remove = "85 +")
+# "0-4" "5-9"
+
+ages(census)
+# "0-4" "5-9" "85 +"
+
+unlink(cube_file)
 
 # to do
 }

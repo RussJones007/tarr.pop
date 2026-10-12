@@ -1,4 +1,7 @@
-source(test_path("../../data-raw/tdc_estimates_support.r"))
+tdc_support_path <- test_path("../../data-raw/tdc_estimates_support.r")
+skip_if_not(file.exists(tdc_support_path),
+  "TDC support script is excluded from built packages")
+source(tdc_support_path)
 
 tdc_has_support <- function(support, year, age.char, race.eth) {
   any(
