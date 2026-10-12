@@ -215,8 +215,6 @@ age_to_iv <- function(x, ...){
 #' @param drop_values are the specific values to drop
 #' @returns the modified array
 #'
-#' @examples
-#' tmp <- drop_array_level(census, "age.char", "All")
 drop_array_level <- function(arr, dim_name, drop_values) {
   # Find dimension index from its name
   dim_index <- which(names(dimnames(arr)) == dim_name)
