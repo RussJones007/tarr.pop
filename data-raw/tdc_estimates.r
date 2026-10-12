@@ -247,7 +247,7 @@ tdc_estimate_semantics <- function(support = NULL) {
   if (!is.null(support)) {
     # Repository source rules above and tdc_estimate_support_table establish
     # 2017 as the transition. Resolve boundaries from represented year labels.
-    years <- sort(unique(as.integer(support$year)))
+    years <- support$year |> as.integer() |> unique() |> sort()
     age_labels <- unique(as.character(support$age.char))
     race_labels <- unique(as.character(support$race.eth))
     schemas <- function(early_levels, late_levels) {
@@ -260,8 +260,8 @@ tdc_estimate_semantics <- function(support = NULL) {
         levels = levels[[i]]
       ))
     }
-    early_age <- as.character(rage::as.age_group(c("< 1", as.character(1:84), "85 +")))
-    late_age <- as.character(rage::as.age_group(c("< 1", as.character(1:94), "95 +")))
+    early_age <- c("< 1", as.character(1:84), "85 +") |> rage::as.age_group() |> as.character()
+    late_age <- c("< 1", as.character(1:94), "95 +") |> rage::as.age_group() |> as.character()
     semantics$age.char <- tarr.pop:::pa_update_dim_semantics(semantics$age.char,
       applicability = list(by = "year", schemas = schemas(
         intersect(age_labels, early_age), intersect(age_labels, late_age))))

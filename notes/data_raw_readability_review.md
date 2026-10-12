@@ -6,8 +6,10 @@ Date: 2026-10-10
 
 Reviewed the recent Census build/update scripts, TDC build/update scripts,
 and their support helpers. Excluded `data-raw/Archived/` and the older Census
-implementation (`census_data.r`). This review proposes changes only; no
-source files were changed.
+implementation (`census_data.r`). The improvements below were implemented on 2026-10-11: Census helper
+extraction and mapping pipelines, vintage applicability helpers, and selected
+sequential conversions in Census and TDC scripts. Archived and older Census
+scripts remain outside the scope.
 
 Prefer descriptive helper functions called by `purrr::map()`, `walk()`, or
 `reduce()` over explicit loops when this improves readability. Prefer native

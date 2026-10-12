@@ -15,7 +15,7 @@
   ordered_age_levels <- function(x) {
     age_levels <- levels(x)
     age_levels <- age_levels[age_levels != "All"]
-    c(sort(as.character(rage::as.age_group(age_levels))), "All")
+    c(age_levels |> rage::as.age_group() |> as.character() |> sort(), "All")
   }
   
 ##------------------------------------------------------------------------->
@@ -32,7 +32,7 @@ tdc_estimate_years_from_files <- function(
   years <- basename(files) |>
     stringr::str_extract("^20[1-2][0-9]") |>
     as.integer()
-  years <- sort(unique(stats::na.omit(years)))
+  years <- years |> stats::na.omit() |> unique() |> sort()
 
   if (!length(years)) {
     cli::cli_abort("No TDC estimate years were found in {.file {input_dir}}.")
@@ -43,7 +43,7 @@ tdc_estimate_years_from_files <- function(
 
 tdc_ordered_age_factor <- function(labels, levels = labels) {
   ordered(
-    as.character(rage::as.age_group(labels)),
+    labels |> rage::as.age_group() |> as.character(),
     levels = as.character(sort(rage::as.age_group(levels)))
   )
 }
@@ -61,9 +61,9 @@ tdc_estimate_support_table <- function(
   checkmate::assert_character(sex_levels, min.len = 1L, any.missing = FALSE)
   checkmate::assert_character(race_eth_levels, min.len = 1L, any.missing = FALSE)
 
-  years <- sort(unique(as.integer(years)))
+  years <- years |> as.integer() |> unique() |> sort()
   transition_year <- as.integer(transition_year)
-  county_levels <- sort(unique(as.character(counties)))
+  county_levels <- counties |> as.character() |> unique() |> sort()
   sex_levels <- sort(unique(sex_levels))
   race_eth_levels <- sort(unique(race_eth_levels))
 
@@ -82,7 +82,7 @@ tdc_estimate_support_table <- function(
       area.name = factor(county_levels, levels = county_levels),
       sex = factor(sex_levels, levels = sex_levels),
       age.char = factor(
-        as.character(rage::as.age_group(age_labels)),
+        age_labels |> rage::as.age_group() |> as.character(),
         levels = age_levels,
         ordered = TRUE
       ),

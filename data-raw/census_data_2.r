@@ -86,6 +86,31 @@ census_support_table <- function(df, counties = setdiff(names(tarr.pop::county_f
     dplyr::select(year, area.name, sex, age.char, race, ethnicity)
 }
 
+#' Describe supported labels for one year without changing their order
+#' @param year Source year.
+#' @param dimension Dimension whose labels are selected.
+#' @param support Valid source support.
+#' @return One applicability schema.
+schema_for_year <- function(year, dimension, support) {
+  list(from = as.character(year), through = as.character(year),
+    levels = unique(as.character(support[[dimension]][support$year == year])))
+}
+
+#' Add annual applicability to age and race semantics
+#' @param entry Dimension semantics.
+#' @param dimension Dimension name.
+#' @param support Valid source support.
+#' @return Updated semantics, or the unchanged entry for other dimensions.
+add_year_applicability <- function(entry, dimension, support) {
+  if (!dimension %in% c("age.char", "race")) return(entry)
+  schemas <- support$year |>
+    unique() |>
+    sort() |>
+    purrr::map(schema_for_year, dimension = dimension, support = support)
+  tarr.pop:::pa_update_dim_semantics(entry,
+    applicability = list(by = "year", schemas = schemas))
+}
+
 #' Declare source-specific dimensions and time-varying applicability
 #' @details All dimensions are validated because their definitions follow Census
 #'   source schemas and the documented transformations, including derived Hispanic
@@ -107,11 +132,7 @@ census_dimension_semantics <- function(support, time_note) {
   })
   names(result) <- dims
   years <- sort(unique(support$year))
-  for (dim in intersect(c("age.char", "race"), dims)) {
-    schemas <- lapply(years, function(yr) list(from = as.character(yr), through = as.character(yr),
-      levels = unique(as.character(support[[dim]][support$year == yr]))))
-    result[[dim]] <- tarr.pop:::pa_update_dim_semantics(result[[dim]], applicability = list(by = "year", schemas = schemas))
-  }
+  result <- purrr::imap(result, add_year_applicability, support = support)
   dimnames_list <- lapply(support, function(x) unique(as.character(x)))
   dimnames_list$year <- as.character(years)
   lapply(result, tarr.pop:::pa_compress_applicability, dimnames_list = dimnames_list)
@@ -169,7 +190,9 @@ read_census_decennial <- function(cache_file = file.path(tarr::paths$population,
     if (!all(years %in% df$year)) cli::cli_abort("Decennial cache does not contain all requested years.")
     return(df[df$year %in% years, ])
   }
-  dplyr::bind_rows(lapply(years, read_decennial_year))
+  years |>
+    purrr::map(read_decennial_year) |>
+    dplyr::bind_rows()
 }
 
 #' Decode decennial labels into detailed age/sex/race records
@@ -226,7 +249,8 @@ transform_census_decennial <- function(df, ...) {
 #' @param ... Arguments forwarded to the reader.
 #' @return Cube path.
 build_census_decennial <- function(cube_root, ...) {
-  df <- transform_census_decennial(read_census_decennial(...))
+  df <- read_census_decennial(...) |>
+    transform_census_decennial()
   support <- census_support_table(df)
   ingest_census_table(df, support, census_dimension_semantics(support, "April 1 decennial census counts."),
     "census_decennial_county_1y", cube_root,
@@ -238,6 +262,17 @@ build_census_decennial <- function(cube_root, ...) {
 # Layouts: www2.census.gov/programs-surveys/popest/technical-documentation/
 # file-layouts/2010-2020/intercensal/county/CC-EST2020INT-ALLDATA.pdf
 # file-layouts/2020-2025/CC-EST2025-ALLDATA.pdf
+
+#' Download through a temporary file beside the destination
+#' @param url Source URL.
+#' @param destination Final file path in an existing directory.
+#' @return NULL after installing the file; partial files are cleaned on exit.
+download_census_file <- function(url, destination) {
+  temp <- tempfile(tmpdir = dirname(destination))
+  on.exit(unlink(temp))
+  utils::download.file(url, temp, mode = "wb", quiet = TRUE)
+  if (!file.rename(temp, destination)) cli::cli_abort("Could not save {.file {destination}}.")
+}
 
 #' Identify and obtain the two estimate input files
 #' @param input_dir Downloaded Census source directory.
@@ -255,12 +290,8 @@ census_estimate_files <- function(input_dir, vintage = 2025L, download_missing =
       vintage, "/counties/asrh/", stems[[2]]))
   if (download_missing) {
     dir.create(input_dir, recursive = TRUE, showWarnings = FALSE)
-    invisible(lapply(which(!file.exists(files)), function(i) {
-      temp <- tempfile(tmpdir = input_dir)
-      on.exit(unlink(temp))
-      utils::download.file(urls[[i]], temp, mode = "wb", quiet = TRUE)
-      if (!file.rename(temp, files[[i]])) cli::cli_abort("Could not save {.file {files[[i]]}}.")
-    }))
+    missing <- !file.exists(files)
+    purrr::walk2(urls[missing], files[missing], download_census_file)
   }
   if (!all(file.exists(files))) cli::cli_abort("Missing Census estimate files: {.file {files[!file.exists(files)]}}.")
   files
@@ -304,8 +335,9 @@ read_census_estimate_file <- function(file, series, vintage = 2025L) {
 #' @return Wide county estimate records.
 read_census_estimates <- function(input_dir, vintage = 2025L, download_missing = TRUE, ...) {
   files <- census_estimate_files(input_dir, vintage, download_missing)
-  dplyr::bind_rows(lapply(names(files), function(series)
-    read_census_estimate_file(files[[series]], series, vintage)))
+  files |>
+    purrr::imap(read_census_estimate_file, vintage = vintage) |>
+    dplyr::bind_rows()
 }
 
 #' Map published race codes to explicit category labels
@@ -344,7 +376,8 @@ transform_census_estimates <- function(df, ...) {
 #' @param ... Reader arguments.
 #' @return Cube path.
 build_census_estimates <- function(cube_root, input_dir = file.path(cube_root, "source-data", "census"), vintage = 2025L, ...) {
-  df <- transform_census_estimates(read_census_estimates(input_dir, vintage = vintage, ...))
+  df <- read_census_estimates(input_dir, vintage = vintage, ...) |>
+    transform_census_estimates()
   support <- census_estimate_support(seq.int(2010L, vintage))
   ingest_census_table(df, support, census_dimension_semantics(support, "July 1 annual population estimates."),
     "census_estimates_county_5y", cube_root,
@@ -358,7 +391,7 @@ build_census_estimates <- function(cube_root, input_dir = file.path(cube_root, "
 #' @return Complete county/sex/age/race/ethnicity keys, independently of observed rows.
 census_estimate_support <- function(years) {
   ages <- c(paste0(seq(0, 80, 5), "-", seq(4, 84, 5)), "85 +")
-  tidyr::expand_grid(year = sort(unique(as.integer(years))),
+  tidyr::expand_grid(year = years |> as.integer() |> unique() |> sort(),
     area.name = sort(setdiff(names(tarr.pop::county_fips), "Texas")),
     sex = c("Female", "Male"), age.char = census_age_factor(ages),
     race = sort(unname(census_estimate_races())), ethnicity = c("Hispanic", "Non-Hispanic"))
@@ -418,7 +451,9 @@ read_census_zcta_year <- function(year, zctas) {
 #' @param ... Reserved arguments.
 #' @return Raw ACS data frame.
 read_census_zcta <- function(years, zctas, ...) {
-  dplyr::bind_rows(lapply(years, read_census_zcta_year, zctas = zctas))
+  years |>
+    purrr::map(read_census_zcta_year, zctas = zctas) |>
+    dplyr::bind_rows()
 }
 
 #' Select a numeric ACS measure without dropping unavailable cells
@@ -441,7 +476,7 @@ transform_census_zcta <- function(df, measure = "estimate", ...) {
 #' @param zctas Requested identifiers.
 #' @return Complete year/ZCTA keys; absent observations will be NA, not zero.
 census_zcta_support <- function(years, zctas) {
-  tidyr::expand_grid(year = sort(unique(as.integer(years))), zip.code = sort(unique(as.character(zctas))))
+  tidyr::expand_grid(year = years |> as.integer() |> unique() |> sort(), zip.code = zctas |> as.character() |> unique() |> sort())
 }
 
 #' Define ACS period and ZCTA semantics
@@ -458,6 +493,30 @@ census_zcta_semantics <- function() {
       notes = "Census ZCTAs, not USPS ZIP delivery areas; boundaries may change between releases."))
 }
 
+#' Build an ACS measure with its provenance and uncertainty caveats
+#' @param measure Estimate or moe.
+#' @param raw Raw ACS records.
+#' @param support Expected keys.
+#' @param semantics Shared ACS dimension semantics.
+#' @param cube_root Cube storage root.
+#' @return Invisible cube path.
+build_census_zcta_measure <- function(measure, raw, support, semantics, cube_root) {
+  sem <- semantics
+  if (measure == "moe") {
+    # The area role must remain a partition. Notes document non-additivity;
+    # the current class cannot enforce an MOE-specific reduction rule.
+    sem$zip.code <- tarr.pop:::pa_update_dim_semantics(sem$zip.code,
+      notes = c(sem$zip.code@notes, "MOEs are not additive; use an explicit uncertainty aggregation method."))
+  }
+  df <- transform_census_zcta(raw, measure)
+  ingest_census_table(df, support, sem,
+    if (measure == "estimate") "census_zcta_estimates" else "census_zcta_estimates_moe",
+    cube_root, list(note = paste("ACS five-year B01003", measure, "for Tarrant-area ZCTAs; missing codes retained as NA."),
+      population_type = if (measure == "estimate") "Estimate" else "Margin of error",
+      source = "U.S. Census Bureau ACS5 B01003; MOE confidence level 90%."),
+    data_col = measure, area_dim = "zip.code", completion_policy = "na")
+}
+
 #' Build matching ACS estimate and MOE cubes from one download
 #' @param cube_root Cube directory.
 #' @param years End years; NULL discovers latest published release.
@@ -471,21 +530,8 @@ build_census_zcta <- function(cube_root, years = NULL, zctas = NULL) {
   raw <- read_census_zcta(years, zctas)
   support <- census_zcta_support(years, zctas)
   semantics <- census_zcta_semantics()
-  paths <- lapply(c("estimate", "moe"), function(measure) {
-    sem <- semantics
-    if (measure == "moe") {
-      # The area role must remain a partition. Notes document non-additivity;
-      # the current class cannot enforce an MOE-specific reduction rule.
-      sem$zip.code <- tarr.pop:::pa_update_dim_semantics(sem$zip.code,
-        notes = c(sem$zip.code@notes, "MOEs are not additive; use an explicit uncertainty aggregation method."))
-    }
-    ingest_census_table(transform_census_zcta(raw, measure), support, sem,
-      if (measure == "estimate") "census_zcta_estimates" else "census_zcta_estimates_moe",
-      cube_root, list(note = paste("ACS five-year B01003", measure, "for Tarrant-area ZCTAs; missing codes retained as NA."),
-        population_type = if (measure == "estimate") "Estimate" else "Margin of error",
-        source = "U.S. Census Bureau ACS5 B01003; MOE confidence level 90%."),
-      data_col = measure, area_dim = "zip.code", completion_policy = "na")
-  })
+  paths <- purrr::map(c("estimate", "moe"), build_census_zcta_measure,
+    raw = raw, support = support, semantics = semantics, cube_root = cube_root)
   invisible(unlist(paths))
 }
 

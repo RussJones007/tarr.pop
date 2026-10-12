@@ -115,3 +115,57 @@ test_that("annual appends preserve validated source semantics", {
   expect_equal(dim_semantics(output), semantics)
   expect_true(all(vapply(dim_semantics(output), function(entry) isTRUE(entry@validated), logical(1))))
 })
+
+test_that("Census downloads clean temporary files on success and failure", {
+  h <- load_census_build_helpers()
+  root <- tempfile("census-download-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  source <- file.path(root, "source.csv")
+  destination <- file.path(root, "download.csv")
+  writeLines("fixture", source)
+  url <- paste0("file://", source)
+  h$download_census_file(url, destination)
+  expect_identical(readLines(destination), "fixture")
+  expect_setequal(list.files(root), c("source.csv", "download.csv"))
+  h$file.rename <- function(...) FALSE
+  expect_error(h$download_census_file(url, destination), "Could not save")
+  expect_identical(readLines(destination), "fixture")
+  expect_setequal(list.files(root), c("source.csv", "download.csv"))
+  expect_error(suppressWarnings(h$download_census_file(paste0(url, "-missing"), destination)))
+  expect_setequal(list.files(root), c("source.csv", "download.csv"))
+})
+
+test_that("Census readers retain requested order and estimate series names", {
+  h <- load_census_build_helpers()
+  h$read_decennial_year <- function(year) data.frame(year = year)
+  expect_identical(h$read_census_decennial(cache_file = NULL, years = c(2020L, 2000L))$year,
+    c(2020L, 2000L))
+  h$read_census_zcta_year <- function(year, zctas) data.frame(year = year, zip.code = zctas)
+  expect_identical(h$read_census_zcta(c(2024L, 2023L), "76001")$year, c(2024L, 2023L))
+  h$census_estimate_files <- function(...) c(intercensal = "old.csv", current = "new.csv")
+  h$read_census_estimate_file <- function(file, series, vintage) {
+    data.frame(file = file, series = series, vintage = vintage)
+  }
+  out <- h$read_census_estimates("unused", vintage = 2025L)
+  expect_identical(out$file, c("old.csv", "new.csv"))
+  expect_identical(out$series, c("intercensal", "current"))
+  expect_identical(out$vintage, c(2025L, 2025L))
+})
+
+test_that("ACS measure builds preserve separate values and uncertainty metadata", {
+  h <- load_census_build_helpers()
+  root <- tempfile("acs-measures-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  h$read_census_zcta <- function(...) data.frame(year = 2024L, GEOID = "76001", estimate = 20, moe = 3)
+  paths <- h$build_census_zcta(root, years = 2024L, zctas = "76001")
+  expect_length(paths, 2L)
+  expect_equal(as.numeric(rhdf5::h5read(paths[[1L]], "cube/population")), 20)
+  expect_equal(as.numeric(rhdf5::h5read(paths[[2L]], "cube/population")), 3)
+  expect_identical(cube_metadata(paths[[1L]])$data_col, "estimate")
+  expect_identical(cube_metadata(paths[[2L]])$data_col, "moe")
+  expect_identical(source_meta(paths[[2L]])$population_type, "Margin of error")
+  expect_true(any(grepl("MOEs are not additive", dim_semantics(paths[[2L]])$zip.code@notes)))
+  expect_false(any(grepl("MOEs are not additive", dim_semantics(paths[[1L]])$zip.code@notes)))
+})

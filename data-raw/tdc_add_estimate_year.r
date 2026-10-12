@@ -35,7 +35,7 @@ process_tdc_update_age <- function(x) {
 ## Create an ordered factor from the ages labels ---
 ordered_tdc_update_ages <- function(x) {
   age_levels <- setdiff(levels(x), "All")
-  c(sort(as.character(rage::as.age_group(age_levels))), "All")
+  c(age_levels |> rage::as.age_group() |> as.character() |> sort(), "All")
 }
 
 # 2. Functions to read the raw CSV file and transform the data. -----------------------------------------------------------------------

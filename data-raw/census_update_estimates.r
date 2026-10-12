@@ -58,6 +58,40 @@ prepare_census_vintage_file <- function(input_dir, vintage = 2025L,
   normalizePath(target)
 }
 
+#' Clip historical coverage while preserving an open lower endpoint
+#' @param indices Covered year positions.
+#' @param schema Historical applicability schema.
+#' @param years Historical year labels.
+#' @return Bounded historical schema with unchanged levels.
+historical_schema_bounds <- function(indices, schema, years) {
+  list(from = if (is.null(schema$from)) NULL else years[min(indices)],
+    through = years[max(indices)], levels = schema$levels)
+}
+
+#' Extend one dimension with incoming-vintage applicability
+#' @param entry Existing semantic entry.
+#' @param dimension Dimension name.
+#' @param historical_semantics Historical semantic entries.
+#' @param historical_dimnames Historical dimension labels.
+#' @param incoming_dimnames Incoming dimension labels.
+#' @param combined_dimnames Output dimension labels.
+#' @return Updated and compressed semantics, or an unchanged entry.
+extend_dimension_applicability <- function(entry, dimension, historical_semantics,
+    historical_dimnames, incoming_dimnames, combined_dimnames) {
+  app <- tarr.pop:::pa_dim_applicability(entry)
+  if (is.null(app) || app$by != "year") return(entry)
+  historical_app <- tarr.pop:::pa_dim_applicability(historical_semantics[[dimension]])
+  indices <- tarr.pop:::pa_applicability_indices(historical_app, dimension, historical_dimnames)
+  schemas <- purrr::map2(indices, historical_app$schemas, historical_schema_bounds,
+    years = historical_dimnames$year)
+  incoming_schema <- list(from = incoming_dimnames$year[1L],
+    through = tail(incoming_dimnames$year, 1L), levels = incoming_dimnames[[dimension]])
+  schemas <- c(schemas, list(incoming_schema))
+  entry |>
+    tarr.pop:::pa_update_dim_semantics(applicability = list(by = "year", schemas = schemas)) |>
+    tarr.pop:::pa_compress_applicability(combined_dimnames)
+}
+
 #' Preserve historical applicability and add the incoming source period
 #' @param existing Existing poparray with the complete historical year axis.
 #' @param historical Lazy subset containing 2010-2019 only.
@@ -68,27 +102,11 @@ prepare_census_vintage_file <- function(input_dir, vintage = 2025L,
 #'   period is added. Identical adjacent schemas are then compressed. Domains,
 #'   partition declarations, overlap labels, notes and validated flags are kept.
 census_vintage_semantics <- function(existing, historical, incoming, combined_dimnames) {
-  sem <- tarr.pop::dim_semantics(existing)
-  hist_dn <- dimnames(historical)
-  incoming_dn <- dimnames(incoming)
-  result <- lapply(names(sem), function(nm) {
-    entry <- sem[[nm]]
-    app <- tarr.pop:::pa_dim_applicability(entry)
-    if (is.null(app) || app$by != "year") return(entry)
-    hist_app <- tarr.pop:::pa_dim_applicability(tarr.pop::dim_semantics(historical)[[nm]])
-    indices <- tarr.pop:::pa_applicability_indices(hist_app, nm, hist_dn)
-    schemas <- lapply(seq_along(indices), function(i) {
-      idx <- indices[[i]]
-      list(from = if (is.null(hist_app$schemas[[i]]$from)) NULL else hist_dn$year[min(idx)],
-        through = hist_dn$year[max(idx)], levels = hist_app$schemas[[i]]$levels)
-    })
-    schemas <- c(schemas, list(list(from = incoming_dn$year[1L],
-      through = tail(incoming_dn$year, 1L), levels = incoming_dn[[nm]])))
-    tarr.pop:::pa_compress_applicability(tarr.pop:::pa_update_dim_semantics(entry,
-      applicability = list(by = "year", schemas = schemas)), combined_dimnames)
-  })
-  names(result) <- names(sem)
-  result
+  tarr.pop::dim_semantics(existing) |>
+    purrr::imap(extend_dimension_applicability,
+      historical_semantics = tarr.pop::dim_semantics(historical),
+      historical_dimnames = dimnames(historical),
+      incoming_dimnames = dimnames(incoming), combined_dimnames = combined_dimnames)
 }
 
 #' Replace the current decade in a Census estimate cube into a new candidate file
@@ -201,7 +219,8 @@ update_census_estimate_vintage <- function(cube_root,
   file <- prepare_census_vintage_file(input_dir, vintage,
     cached_dir = file.path(cube_root, "source-data", "census"),
     download_missing = download_missing)
-  df <- helpers$transform_census_estimates(helpers$read_census_estimate_file(file, "current", vintage))
+  df <- helpers$read_census_estimate_file(file, "current", vintage) |>
+    helpers$transform_census_estimates()
   revise_census_estimate_cube(cube, df, output_filepath, vintage, file, helpers)
 }
 
