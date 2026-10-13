@@ -24,8 +24,9 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 `tarr.pop` helps you retrieve population counts for selected places,
 years, and demographic groups. You can return those counts as a data
 frame or tibble for analysis, reporting, or plotting. This guide follows
-one example: obtaining population estimates for Dallas, Tarrant, and
-Travis counties for the latest five available years.
+one example: obtaining population estimates for Dallas and Tarrant
+counties for 2015–2018 using the small example cube included with the
+package.
 
 The usual workflow is to open a population cube, inspect its labels,
 select the population you need, and convert the result to a table. If
@@ -34,24 +35,18 @@ groups before conversion. You do not need to understand the underlying R
 classes to follow these steps.
 
 A population cube is an array with named dimensions. A cell might
-contain the number of female residents of Tarrant County aged 65 in 2022
+contain the number of female residents of Tarrant County aged 65 in 2018
 in a particular race/ethnicity category. The dimension labels identify
 which population each count describes. The package keeps that structure
 and its metadata together while you select and summarize data.
 
 # Find and open a cube
 
-## What you need before starting
+## Load the bundled example
 
-You need the installed `tarr.pop` package and access to its population
-cube files. The large HDF5 cube files live in a configured folder,
-separately from the installed R package. Installing the package does not
-by itself supply every cube listed below or download it from its source.
-Obtain the prepared cube folder from your project or data administrator.
-If you need to build cubes from source data, see the [cube creation
-guide](population_cube_creation_version_2.qmd).
-
-Load the packages used in this guide:
+The package includes a small Texas Demographic Center (TDC) county
+estimates cube. You can run this guide with an installed copy of
+`tarr.pop`; no download or external cube-folder setup is needed.
 
 ```{r libraries}
 #| message: false
@@ -61,54 +56,26 @@ library(tibble)
 library(ggplot2)
 ```
 
-For a first setup, point the package to the root of your prepared cube
-folder, which contains the `base/` and `derived/` directories. Replace
-this example path with your own. This command saves your choice for
-future R sessions; it does not populate an empty folder with cube files.
-
-```{r configure_cubes}
-#| eval: false
-set_cube_path("/path/to/Population/Cubes", create = FALSE)
-```
-
-Once configured, check the active folder:
-
-```{r active_folder}
-cube_path()
-```
-
-## Choose a population series
-
-The packaged `population` lookup list provides convenient series names
-organized by source. It is a guide to known series, not an inventory of
-files present on your computer.
-
-```{r series_names}
-str(population)
-```
-
-Choose a source and series whose geography, time coverage, and
-demographic categories fit your question. This example uses Texas
-Demographic Center county estimates. TDC combines race and Hispanic
-ethnicity into one `race.eth` dimension; cubes from the Census bureau instead
-provide separate `race` and `ethnicity` dimensions. This is an example that you 
-should not assume that every cube has the same axes.
+Use `system.file()` to find the data inside the installed package, then
+pass its path to `open_poparray()`:
 
 ```{r open_tdc_estimates}
-pop <- open_poparray(population$texas.demographic.center$estimates)
+example_path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+stopifnot(nzchar(example_path))
+pop <- open_poparray(filepath = example_path)
 pop
 ```
 
-The lookup above resolves to `"tdc_estimates_county"`, so you can also
-use `open_poparray("tdc_estimates_county")`. Opening the cube reads its
-metadata and creates a disk-backed view; it does not load all population
-values into memory. The printed summary describes its dimensions and
-source.
+Opening reads the labels and metadata and creates a disk-backed view.
+It does not load every population value into memory. This example contains
+Dallas, Denton, and Tarrant counties and the years 2015–2018. We will
+compare Dallas and Tarrant.
 
-If opening fails, check the configured folder, the availability of the
-requested cube, and its registration. After adding prepared cube files
-to `base/`, `rebuild_poparray_registry()` refreshes the series registry.
-It does not download missing data.
+TDC uses one combined `race.eth` dimension for race and Hispanic ethnicity.
+Other sources may use separate dimensions, so always inspect the cube you
+open. For larger data collections, `set_cube_path()` configures an external
+cube folder and `open_poparray()` can open a registered series by name.
+Those steps are not needed for this bundled example.
 
 ## Inspect coverage and labels
 
@@ -127,30 +94,74 @@ sexes(pop)
 dim_labels(pop, "race.eth")
 ```
 
-`times()` and `areas()` follow the cube's time and area roles. `ages()` and `sexes()` find dimensions by their semantic
-meaning. These are just conveneince wrappers around the `dim_labels()` function.  When you want the labels of a specific
-named dimension that does not have a specifically named wrapper function, use the dim_label() function.  For example,
-the race.etc dimension does not have a conveneince function so you would use dim_label(pop, "race/eth") to see it's 
-categories. 
+`times()` and `areas()` return the labels for the time and area
+roles. `ages()` and `sexes()` are convenient ways to inspect demographic
+labels. Use `dim_labels()` for any named dimension, such as `race.eth`.
+The dimensions here are `year`, `area.name`, `sex`, `age.char`, and
+`race.eth`.
 
-For the TDC cube, the dimensions are `year`, `area.name`, `sex`,
-`age.char`, and `race.eth`. The latest five years means the latest five
-labels in this cube, not necessarily the latest five calendar years.
-Check the source notes and labels rather than assuming coverage.
+# Handle the 2016–2017 category change
+
+A **schema** is the set of categories used to report the data. TDC changed
+both age and race/ethnicity categories in 2017. Through 2016, ages end at
+`"85 +"` (everyone aged 85 or older). From 2017, ages 85–94 are reported
+individually, followed by `"95 +"`. Asian residents were included in
+`"other"` through 2016 and reported separately as `"asian"` from 2017.
+
+The cube contains the combined list of labels from both periods. That
+does not mean every label applies in every year. For example, the absence
+of a separate Asian count in 2016 does not mean there were no Asian
+residents. Likewise, removing `"85 +"` from all years would remove the
+older population from 2015 and 2016.
+
+This example file does not yet record which labels apply in each period.
+The following setup adds that information to our R object using the known
+TDC reporting rules. For cubes that already have this **applicability**
+metadata, inspect it and skip this setup. Do not infer reporting rules
+just from missing counts.
+
+```{r describe_reporting_periods}
+semantics <- dim_semantics(pop)
+semantics$age.char@applicability <- list(
+  by = "year",
+  schemas = list(
+    list(from = "2015", through = "2016",
+         levels = c("< 1", as.character(1:84), "85 +")),
+    list(from = "2017", through = "2018",
+         levels = c("< 1", as.character(1:94), "95 +"))
+  )
+)
+semantics$race.eth@applicability <- list(
+  by = "year",
+  schemas = list(
+    list(from = "2015", through = "2016",
+         levels = c("black", "hispanic", "other", "white")),
+    list(from = "2017", through = "2018",
+         levels = c("asian", "black", "hispanic", "other", "white"))
+  )
+)
+dim_semantics(pop) <- semantics
+```
+
+`by = "year"` means that the year determines which categories apply.
+The `from` and `through` endpoints are inclusive. This changes metadata
+on `pop`; it does not rewrite the packaged HDF5 file or change its counts.
+The package can now sum the appropriate categories for each year while
+keeping genuinely missing counts as missing.
 
 # Select your population
 
-Suppose we want Dallas, Tarrant, and Travis counties for the latest five
-available years. Select places and years first:
+Suppose we want Dallas and Tarrant counties for all four available
+years. Select places and years first:
 
 ```{r select_counties_and_years}
-target_counties <- c("Dallas", "Tarrant", "Travis")
-recent_years <- tail(times(pop), 5)
+target_counties <- c("Dallas", "Tarrant")
+example_years <- times(pop)
 
 pop_small <- pop |>
   dplyr::filter(
     area.name %in% target_counties,
-    year %in% recent_years
+    year %in% example_years
   )
 
 pop_small
@@ -187,7 +198,7 @@ categories:
 selected_groups <- pop_small |>
   dplyr::filter(
     area.name == "Tarrant",
-    year == recent_years[length(recent_years)],
+    year == example_years[length(example_years)],
     sex == "female"
   )
 
@@ -213,31 +224,16 @@ classification. First check whether the selected categories overlap:
 overlaps(pop_small)
 ```
 
-The TDC cube declares `"85 +"` as an overlap level. In the recent-year
-selection used here, the age labels include individual ages above 85 and
-the terminal `"95 +"` group. Remove the declared `"85 +"` level before
-summing; the remaining age categories cover older residents. This is not
-a request to exclude everyone aged 85 and older.
+The overlap report lists `"85 +"` because the complete age-label list
+also includes individual older ages. With the period metadata above,
+those labels are never used together in a sum. Keep `"85 +"` for the
+earlier years and let `collapse_all()` use each year's applicable labels.
+There is no need to remove an age group or turn off the safety checks.
 
-```{r prepare_totals}
-pop_for_totals <- pop_small |>
-  drop_overlap_levels(dim = "age.char")
-
-tail(ages(pop_for_totals))
-overlaps(pop_for_totals)
-```
-
-This choice is specific to the categories and period in this example.
-For other cubes or older TDC periods, inspect their age labels and
-source coverage before removing a group. Removing declared overlap
-levels does not guarantee that all overlap has been resolved; the
-reduction guards remain active. If summing is rejected, inspect the
-categories rather than bypassing the guard.
-
-Now collapse the three demographic dimensions:
+Now sum over age, race/ethnicity, and sex:
 
 ```{r county_totals}
-pop_totals <- pop_for_totals |>
+pop_totals <- pop_small |>
   collapse_all(dim = c("age.char", "race.eth", "sex"))
 
 pop_totals
@@ -261,8 +257,8 @@ county_tbl
 ```
 
 Both tables contain the same population values. Choose a data frame for
-base R tools or a tibble for a tidyverse workflow. With three counties
-and five years, the total table contains 15 rows. The `sex`, `age.char`,
+base R tools or a tibble for a tidyverse workflow. With two counties
+and four years, the total table contains eight rows. The `sex`, `age.char`,
 and `race.eth` columns contain `"all"`, recording the dimensions that
 were summed.
 
@@ -282,6 +278,58 @@ At this point you have an ordinary in-memory table. You can join it to
 other analysis data, write it to a file, or plot it using your usual R
 tools.
 
+# Compare age or race groups across the change
+
+County totals are comparable because all residents are included in both
+periods. For an age-specific comparison, use a common age grouping.
+`group_ages()` can retain the earlier `"85 +"` count and sum the later
+individual ages 85–94 plus `"95 +"` to obtain the same 85-and-older group:
+
+```{r common_age_groups}
+pop_age_groups <- pop_small |>
+  group_ages(c("0-84", "85+")) |>
+  collapse_all(dim = c("race.eth", "sex"))
+
+# EAGER: read only the small grouped result for display.
+age_tbl <- tibble::as_tibble(pop_age_groups)
+age_tbl
+```
+
+The output labels may include spaces, such as `"85 +"`. Age groups are
+interpreted as intervals, not by matching their spelling. You cannot
+recover a separate 90-and-older count for 2015 or 2016 from the broader
+85-and-older count. Requesting such a group produces a warning and `NA`
+for the years where it cannot be derived.
+
+For race/ethnicity comparisons, keep the meaning consistent too. One
+option is to combine `"asian"` and `"other"` in the later years to match
+the earlier `"other"` category:
+
+```{r common_race_groups}
+pop_race_groups <- pop_small |>
+  collapse_dim(
+    dim = "race.eth",
+    groups = list(
+      "Asian and other" = c("asian", "other"),
+      "Black" = "black",
+      "Hispanic" = "hispanic",
+      "White" = "white"
+    )
+  ) |>
+  collapse_all(dim = c("age.char", "sex"))
+
+# EAGER: display the selected, summarized counts.
+race_tbl <- tibble::as_tibble(pop_race_groups)
+race_tbl
+```
+
+The period metadata makes the first group use only `"other"` in
+2015–2016 and `"asian"` plus `"other"` in 2017–2018. It cannot split the
+earlier `"other"` count into its Asian and non-Asian components. Avoid
+using `sum(..., na.rm = TRUE)` as a shortcut for handling this change:
+missing reporting categories and genuinely missing counts have different
+meanings.
+
 # Plot the result
 
 ```{r plot_totals}
@@ -292,7 +340,7 @@ ggplot(county_tbl, aes(x = year, y = population, color = area.name)) +
   geom_point(size = 2) +
   scale_y_continuous(labels = scales::label_comma()) +
   labs(
-    title = "Population estimates for three Texas counties",
+    title = "Population estimates for Dallas and Tarrant counties",
     subtitle = paste("Texas Demographic Center;", paste(range(county_tbl$year), collapse = "–")),
     x = "Year",
     y = "Population",
