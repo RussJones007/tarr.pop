@@ -309,6 +309,60 @@ years(tarrant_est)
 
 ```
 
+## Position Selection and Dimension Order
+
+Use `filter()` when you know the labels you want. Use `slice()` when you want
+positions along one dimension. The dimension name is always explicit, and
+positions refer to the current view, so position 1 after filtering may describe
+a different year from position 1 in the original cube.
+
+```{r slice_and_relocate}
+example_path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+example_pop <- open_poparray(filepath = example_path)
+
+first_two_years <- example_pop |>
+  dplyr::slice(1:2, .dimension = "year")
+times(first_two_years)
+
+# Negative positions exclude labels; every dimension remains present.
+remaining_counties <- example_pop |>
+  dplyr::slice(-1, .dimension = "area.name")
+areas(remaining_counties)
+
+# Move age before year without reading population values.
+age_first <- first_two_years |>
+  dplyr::relocate(age.char, .before = year)
+names(dimnames(age_first))
+time_role(age_first)
+```
+
+Both operations return lazy `poparray` views and preserve roles and semantic
+metadata. Slicing also trims reporting-category applicability. Duplicate retained
+positions are rejected because repeating a population category could lead to
+double counting. Time positions must remain in increasing order. Missing and
+fractional positions are errors; zeros and out-of-range positions are ignored.
+All dimensions remain, including those with zero or one selected labels. The
+separate `slice_head()`, `slice_tail()`, and other `slice_*()` helpers are not
+implemented for `poparray`.
+
+`relocate()` accepts dimension names and tidy-select helpers such as `all_of()`.
+Without a destination it moves selected dimensions to the front; `.after` moves
+them after a destination instead. It changes axis order, not the order of labels
+within each axis. Use `rename()` separately to change dimension names.
+
+Your existing base array indexing remains useful: `slice()` provides a named
+interface to that same delayed subsetting machinery. For a small ordinary base R
+array, `[` selects positions and `aperm()` reorders axes in memory; converting a
+cube with `as.array()` for those operations is **EAGER** and unnecessary here.
+
+R uses column-major order, with the first subscript varying fastest. That does
+not guarantee that moving a dimension first speeds up disk-backed work.
+HDF5 chunks and the access pattern also matter. `relocate()` creates a delayed
+permutation and does not rewrite or rechunk the source file. See the
+[R array documentation](https://www.stat.math.ethz.ch/R-manual/R-devel/library/base/html/array.html)
+and [HDF5Array performance guide](https://bioconductor.org/packages/devel/bioc/vignettes/HDF5Array/inst/doc/HDF5Array_performance.html).
+Benchmark your actual analysis before choosing dimension order for performance.
+
 ## Grouped Aggregation
 
 Aggregation is where semantic errors become easy to make, so the grouped aggregation API is

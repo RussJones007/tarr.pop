@@ -8,6 +8,14 @@ editor_options:
 
 Reviewed 2026-10-11. This is a design review, not a performance benchmark.
 
+Implementation update, 2026-10-13: `rename()` was already implemented;
+`slice()` and `relocate()` now have poparray methods. `slice()` requires
+`.dimension`, preserves all dimensions, rejects duplicate retained positions,
+and keeps time order. `relocate()` permutes the delayed view with tidy-select
+selectors and `.before`/`.after`. Both preserve metadata without extracting
+population values. The remaining recommendations below are retained as design
+context; `group_by()`/`summarise()` and the deferred verbs remain proposals.
+
 ## Findings from primary sources
 
 | Package | Array interface | Evidence about laziness | Relevance to poparray |

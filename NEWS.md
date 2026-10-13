@@ -4,6 +4,13 @@ Changes since development version 0.0.0.9221.
 
 ## New features
 
+* Added lazy `slice()` for integer positions in an explicitly named dimension.
+  Dimensions and roles are retained, applicability is trimmed, duplicate
+  retained positions are rejected, and time order is preserved.
+* Added lazy `relocate()` for dimension order with tidy-select selectors and
+  `.before`/`.after`. It preserves named semantics and roles without rewriting
+  or rechunking the backing HDF5 dataset.
+
 * Cube schema 1.2.0 adds stable cube IDs and metadata revision history inside
   HDF5 files. Metadata setters record snapshots automatically; explicit updates
   accept a reason. Added history, version, snapshot, restoration, and interrupted
