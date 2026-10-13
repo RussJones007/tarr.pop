@@ -2,15 +2,15 @@ Package: tarr.pop
 Type: Package
 Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
 Version: 0.0.0.9222
-Description: Population figures and functions to retrieve subsets of the data.
-    Data is stored on disk in multidimensional arrays or cubes. Operations
-    use delayed evaluation, and selected results can be retrieved into memory.
-    Contains population figures for Texas, Tarrant County, comparable large
-    counties, and counties in the metroplex. Data sources include the U.S.
-    Census Bureau decennial census and population estimates, ACS population
-    estimates by ZIP Code Tabulation Area, Texas Demographic Center estimates
-    and projections, and National Cancer Institute SEER population estimates
-    and standard populations used for adjustments.
+Description: A package that can retrive population figures.
+    Data is stored on disk as compressed HDF5 files in 
+    multidimensional arrays or cubes. Operations use delayed evaluation, and 
+    selected results can be retrieved into memory. Contains population figures 
+    for all of the counties in Texas. Data sources include the U.S. Census 
+    Bureau decennial census and population estimates, ACS population estimates 
+    by ZIP Code Tabulation Area, Texas Demographic Center estimates and 
+    projections, and National Cancer Institute SEER population estimates and 
+    standard populations used for adjustments.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
