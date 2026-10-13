@@ -1,6 +1,6 @@
-# tarr.pop 0.0.0.9221
+# tarr.pop 0.0.0.9222
 
-Changes since development version 0.0.0.9220.
+Changes since development version 0.0.0.9221.
 
 ## New features
 
@@ -32,6 +32,48 @@ Changes since development version 0.0.0.9220.
   excludes non-finite values. Trimmed means and covariance are not supported.
 * Standard deviation now shares a stable centered variance accumulator with
   `var()`, excludes structurally inapplicable cells, and guards overlap risk.
+* `open_poparray(filepath = ...)` opens an HDF5 cube directly without
+  consulting the series registry or requiring a configured cube folder.
+  Supply exactly one of `series_id` and `filepath`; direct file opening also
+  supports checkout copies and preserves cube metadata and delayed storage.
+
+## Example data and documentation
+
+* Added the small `inst/extdata/tdc_example.h5` cube containing TDC county
+  estimates for 2015–2018, including the 2016–2017 age and race/ethnicity
+  category changes. It can be located with `system.file()` and opened directly.
+  Added a source script for preparing the example cube.
+* Removed the older full population cubes from the installed package to reduce
+  package size. Full cubes are built with the source scripts and stored in an
+  external cube folder; installing the package supplies the small example.
+* Rewrote the Introduction vignette as a beginner workflow using Dallas and
+  Tarrant for all four bundled years. Examples execute and display actual
+  tables and a plot. The guide explains applicability metadata, safe county
+  totals, common age groups, and combining Asian and Other categories across
+  the 2017 transition without inventing counts or discarding missing values.
+* Expanded the package description and added design notes covering array verbs,
+  semantic domains, cube metadata versioning, and source-script readability.
+
+## Maintenance and validation
+
+* Refactored Census build and vintage-update scripts and TDC age-support
+  handling into smaller helpers and mapping pipelines while retaining source
+  ordering and reporting categories. Added regression coverage for download
+  cleanup, reader ordering, and separate ACS measure metadata.
+* Made the `dim_labels()` help example self-contained with a temporary cube,
+  removed a failing `drop_array_level()` example, and guarded TDC support tests
+  when source-only helpers are absent from a built package.
+* Added regression tests for metadata history and recovery, semantic label
+  helpers, age overlap indexing, lazy renaming, negated and text filtering,
+  applicability-aware statistics, and direct file opening and checkout.
+  Removed tests that depended on the retired bundled full cubes.
+
+# tarr.pop 0.0.0.9221
+
+Changes since development version 0.0.0.9220.
+
+## New features
+
 * `overlaps()` reports declared overlap levels, declared levels still present,
   and current overlap risk for every dimension without reading population
   values. Risk uses the same interval and applicability checks as reductions;
