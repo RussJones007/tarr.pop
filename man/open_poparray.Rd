@@ -8,15 +8,17 @@
 open_tarr_pop(...)
 
 open_poparray(
-  series_id,
+  series_id = NULL,
   dataset = "cube/population",
   data_col = NULL,
   checkout = FALSE,
-  checkout_dir = tempdir()
+  checkout_dir = tempdir(),
+  filepath = NULL
 )
 }
 \arguments{
-\item{series_id}{Name of the population series.}
+\item{series_id}{Name of a registered population series. Supply exactly one
+of \code{series_id} and \code{filepath}.}
 
 \item{dataset}{HDF5 dataset path for numeric cube data.
 Defaults to \code{"cube/population"} for the migrated cube schema.}
@@ -26,9 +28,12 @@ Defaults to \code{"cube/population"} for the migrated cube schema.}
 \item{checkout}{Logical; copy the HDF5 file locally before opening it.}
 
 \item{checkout_dir}{Local destination directory, used when \code{checkout = TRUE}.}
+
+\item{filepath}{Path to an HDF5 population cube. Opens the file directly
+without consulting the series registry.}
 }
 \value{
-A poparray.
+An HDF5-backed poparray with delayed population data.
 }
 \description{
 Opens a population series from HDF5 and constructs a \code{poparray} using
@@ -45,5 +50,11 @@ The function reads all semantic metadata from the same HDF5 file:
 Optional applicability is restored from each dimension's nested semantic
 metadata. Older cubes without it retain \code{applicability = NULL} and legacy
 overlap behavior. Metadata inspection does not extract population values.
+}
+}
+\examples{
+path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+if (nzchar(path)) {
+  example_cube <- open_poparray(filepath = path)
 }
 }

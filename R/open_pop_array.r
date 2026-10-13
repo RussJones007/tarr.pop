@@ -705,7 +705,10 @@ open_tarr_pop <- function(...) {
 #' Opens a population series from HDF5 and constructs a `poparray` using
 #' metadata stored in the same file under `cube/metadata`.
 #'
-#' @param series_id Name of the population series.
+#' @param series_id Name of a registered population series. Supply exactly one
+#'   of `series_id` and `filepath`.
+#' @param filepath Path to an HDF5 population cube. Opens the file directly
+#'   without consulting the series registry.
 #' @param dataset HDF5 dataset path for numeric cube data.
 #'   Defaults to `"cube/population"` for the migrated cube schema.
 #' @param data_col Name of the value column when coercing to a data frame.
@@ -723,33 +726,45 @@ open_tarr_pop <- function(...) {
 #' metadata. Older cubes without it retain `applicability = NULL` and legacy
 #' overlap behavior. Metadata inspection does not extract population values.
 #'
-#' @returns A poparray.
+#' @returns An HDF5-backed poparray with delayed population data.
+#' @examples
+#' path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+#' if (nzchar(path)) {
+#'   example_cube <- open_poparray(filepath = path)
+#' }
 #' @export
-open_poparray <- function(series_id,
+open_poparray <- function(series_id = NULL,
                           dataset = "cube/population",
                           data_col = NULL,
                           checkout = FALSE,
-                          checkout_dir = tempdir()) {
-  checkmate::assert_string(series_id, min.chars = 1)
+                          checkout_dir = tempdir(),
+                          filepath = NULL) {
+  if (is.null(series_id) == is.null(filepath)) {
+    cli::cli_abort("Supply exactly one of {.arg series_id} and {.arg filepath}.")
+  }
   checkmate::assert_flag(checkout)
   if (checkout) checkmate::assert_string(checkout_dir, min.chars = 1)
-  root <- resolve_cube_dir()
-  reg  <- tarr_series_registry(root)
-  
-  # change to test through network simulated mounted folder
-  # reg <- reg |> 
-  #   mutate(filepath = str_replace(filepath, "/home/russ/R/Projects/Population/Cubes/base/", "/mnt/office_share/"))
-  
-  row <- reg[reg$series_id == series_id, , drop = FALSE]
-  if (nrow(row) == 0L) {
-    cli::cli_abort("Unknown {.field series_id}: {.val {series_id}}.")
-  }
-  if (nrow(row) > 1L) {
-    cli::cli_abort("Duplicate registry rows found for {.field series_id}: {.val {series_id}}.")
+
+  if (!is.null(filepath)) {
+    checkmate::assert_string(filepath, min.chars = 1)
+    checkmate::assert_file_exists(filepath)
+    path <- normalizePath(filepath, winslash = "/", mustWork = TRUE)
+    cube_label <- path
+  } else {
+    checkmate::assert_string(series_id, min.chars = 1)
+    root <- resolve_cube_dir()
+    reg <- tarr_series_registry(root)
+    row <- reg[reg$series_id == series_id, , drop = FALSE]
+    if (nrow(row) == 0L) {
+      cli::cli_abort("Unknown {.field series_id}: {.val {series_id}}.")
+    }
+    if (nrow(row) > 1L) {
+      cli::cli_abort("Duplicate registry rows found for {.field series_id}: {.val {series_id}}.")
+    }
+    path <- resolve_registry_filepath(row, root = root)
+    cube_label <- series_id
   }
 
-  path <- resolve_registry_filepath(row, root = root)
-  
   # If the user wants to check out the data cube, this next statement handles that
   if(checkout) {
     backing_file <- path
@@ -764,7 +779,7 @@ open_poparray <- function(series_id,
   src   <- read_source_from_cube(path, meta = meta)
   dc    <- if (is.null(data_col)) read_data_col_from_cube(path, meta = meta) else data_col
 
-  validate_labels_against_cube(h5, dimn, series_id)
+  validate_labels_against_cube(h5, dimn, cube_label)
   dimnames(h5) <- dimn
 
   pa <- new_poparray(

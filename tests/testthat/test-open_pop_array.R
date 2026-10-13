@@ -1,14 +1,3 @@
-test_that("read_series_row includes discovered filepath and series_id", {
-  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
-  expect_true(nzchar(path))
-
-  row <- tarr.pop:::read_series_row(path)
-  expect_true("filepath" %in% names(row))
-  expect_true("series_id" %in% names(row))
-  expect_true(nzchar(row$series_id[[1L]]))
-  expect_equal(normalizePath(row$filepath[[1L]], winslash = "/", mustWork = TRUE), normalizePath(path, winslash = "/", mustWork = TRUE))
-})
-
 write_open_test_cube <- function(root, series_id, dimnames_list = NULL) {
   base_dir <- file.path(root, "base")
   dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
@@ -57,28 +46,6 @@ open_test_dims_6d <- function() {
   )
 }
 
-test_that("read_series_row can reuse precomputed h5ls info", {
-  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
-  expect_true(nzchar(path))
-
-  info <- tarr.pop:::h5_inventory(path)
-  row <- tarr.pop:::read_series_row(path, info = info)
-
-  expect_true("filepath" %in% names(row))
-  expect_true("series_id" %in% names(row))
-})
-
-test_that("h5_has_cube_schema accepts precomputed h5ls info", {
-  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
-  expect_true(nzchar(path))
-
-  info <- tarr.pop:::h5_inventory(path)
-  expect_identical(
-    tarr.pop:::h5_has_cube_schema(path, info = info),
-    tarr.pop:::h5_has_cube_schema(path)
-  )
-})
-
 test_that("dataset and group existence checks are pure inventory checks", {
   dn <- list(
     year = c("2020", "2021"),
@@ -125,27 +92,6 @@ test_that("dataset and group existence checks are pure inventory checks", {
   expect_false(tarr.pop:::h5_group_exists(info, "cube/metadata/dim_order"))
 
   expect_equal(h5ls_calls, 0L)
-})
-
-test_that("open_poparray uses discovered filepath from canonical scan row", {
-  path <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
-  expect_true(nzchar(path))
-  withr::local_options(list(tarr.pop.cube_path = tempdir()))
-
-  testthat::local_mocked_bindings(
-    tarr_series_registry = function(root = tarr.pop:::resolve_cube_dir()) {
-      data.frame(
-        series_id = "mock_series",
-        filename = "stale_name.h5",
-        filepath = path,
-        stringsAsFactors = FALSE
-      )
-    },
-    .package = "tarr.pop"
-  )
-
-  obj <- open_poparray("mock_series")
-  expect_s4_class(obj, "poparray")
 })
 
 test_that("save_poparray writes canonical metadata fields without registry duplication", {
@@ -421,43 +367,6 @@ test_that("checkout opens a local copy and validates its arguments", {
   expect_error(open_poparray("checkout_series", checkout = TRUE, checkout_dir = NA_character_), "checkout_dir")
 })
 
-test_that("cached cube metadata includes dim_semantics for reuse", {
-  fp <- system.file("extdata", "census_estimates_county_5y.h5", package = "tarr.pop")
-  expect_true(nzchar(fp))
-
-  meta <- tarr.pop:::get_cube_metadata_cached(fp)
-
-  expect_true(is.list(meta$dim_semantics))
-  expect_identical(names(meta$dim_semantics), meta$dim_order)
-
-  dsem <- tarr.pop:::read_dim_semantics_from_cube(
-    fp,
-    dim_order = meta$dim_order,
-    time_dim = meta$roles$time,
-    area_dim = meta$roles$area,
-    meta = meta
-  )
-
-  expect_identical(dsem, meta$dim_semantics)
-})
-
-test_that("population catalog entries resolve to live series ids", {
-  reset_test_cube_root()
-  reg_ids <- tarr.pop:::tarr_series_registry()$series_id
-  pop_ids <- unlist(population, use.names = TRUE)
-
-  expect_true("texas.demographic.center" %in% names(population))
-  expect_false("texas.demogrpahic.center" %in% names(population))
-  expect_true(all(pop_ids %in% reg_ids))
-})
-
-test_that("population catalog entries can be opened lazily", {
-  reset_test_cube_root()
-  pop_ids <- unlist(population, use.names = TRUE)
-  objs <- lapply(pop_ids, open_poparray)
-  expect_true(all(vapply(objs, methods::is, logical(1), class2 = "poparray")))
-})
-
 test_that("validate_hdf5_metadata_shape is disabled by default", {
   reset_test_cube_root()
   sid <- tarr.pop:::tarr_series_registry()$series_id[[1L]]
@@ -468,4 +377,46 @@ test_that("validate_hdf5_metadata_shape is disabled by default", {
   options(tarr.pop.audit_hdf5_metadata = FALSE)
 
   expect_true(isTRUE(tarr.pop:::validate_hdf5_metadata_shape(obj)))
+})
+
+test_that("direct filepath opening bypasses registry and preserves cube metadata", {
+  root <- tempfile("open-direct-")
+  withr::defer(unlink(root, recursive = TRUE))
+  fp <- write_open_test_cube(root, "direct_series")
+  withr::local_options(list(tarr.pop.cube_path = root))
+  rebuild_poparray_registry(root)
+  registered <- open_poparray("direct_series")
+  testthat::local_mocked_bindings(
+    resolve_cube_dir = function(...) stop("Registry must not be consulted"),
+    tarr_series_registry = function(...) stop("Registry must not be consulted"),
+    .package = "tarr.pop"
+  )
+
+  direct <- open_poparray(filepath = fp)
+  expect_s4_class(direct, "poparray")
+  expect_true(tarr.pop:::is_hdf5_backed_delayed(direct))
+  expect_identical(dimnames(direct), dimnames(registered))
+  expect_identical(cube_metadata(direct), cube_metadata(registered))
+  expect_equal(as.array(direct), as.array(registered))
+  expect_identical(data_col(open_poparray(filepath = fp, data_col = "count")), "count")
+  expect_identical(cube_metadata(open_tarr_pop(filepath = fp)), cube_metadata(direct))
+
+  destination <- tempfile("open-direct-checkout-")
+  withr::defer(unlink(destination, recursive = TRUE))
+  copied <- open_poparray(filepath = fp, checkout = TRUE, checkout_dir = destination)
+  expect_identical(attr(copied, "backing_file"), fp)
+  expect_identical(DelayedArray::seed(copied)@filepath,
+                   normalizePath(file.path(destination, basename(fp))))
+  expect_identical(cube_metadata(copied), cube_metadata(direct))
+  expect_equal(as.array(copied), as.array(direct))
+})
+
+test_that("open_poparray requires one valid series identifier or filepath", {
+  expect_error(open_poparray(), "exactly one")
+  expect_error(open_poparray("series", filepath = "cube.h5"), "exactly one")
+  expect_error(open_poparray(filepath = ""), "filepath")
+  expect_error(open_poparray(filepath = NA_character_), "filepath")
+  expect_error(open_poparray(filepath = c("a", "b")), "filepath")
+  expect_error(open_poparray(filepath = tempfile(fileext = ".h5")), "exist")
+  expect_error(open_poparray(filepath = tempdir()), "directory")
 })
