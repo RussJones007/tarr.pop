@@ -22,12 +22,13 @@ library(data.table)
 #library(tarr)
 library(rage)
 library(DelayedArray)
+library(tarr.pop)
 
 rm(list = ls())
 
 # need paths defines globally for some functions to work.
 # source( "R/Paths.r")
-devtools::load_all()
+#devtools::load_all()
 paths <- tarr::paths
 #paths <- tarr:::paths_defined()
 
