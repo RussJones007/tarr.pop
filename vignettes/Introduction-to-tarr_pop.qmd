@@ -60,22 +60,23 @@ Use `system.file()` to find the data inside the installed package, then
 pass its path to `open_poparray()`:
 
 ```{r open_tdc_estimates}
-example_path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+example_path <-  system.file("extdata/tdc_example.h5", package = "tarr.pop")
 stopifnot(nzchar(example_path))
 pop <- open_poparray(filepath = example_path)
 pop
 ```
 
-Opening reads the labels and metadata and creates a disk-backed view.
-It does not load every population value into memory. This example contains
+Opening reads the labels and metadata and creates a disk-backed view. It
+does not load every population value into memory. This example contains
 Dallas, Denton, and Tarrant counties and the years 2015–2018. We will
 compare Dallas and Tarrant.
 
-TDC uses one combined `race.eth` dimension for race and Hispanic ethnicity.
-Other sources may use separate dimensions, so always inspect the cube you
-open. For larger data collections, `set_cube_path()` configures an external
-cube folder and `open_poparray()` can open a registered series by name.
-Those steps are not needed for this bundled example.
+TDC uses one combined `race.eth` dimension for race and Hispanic
+ethnicity. Other sources may use separate dimensions, so always inspect
+the cube you open. For larger data collections, `set_cube_path()`
+configures an external cube folder and `open_poparray()` can open a
+registered series by name. Those steps are not needed for this bundled
+example.
 
 ## Inspect coverage and labels
 
@@ -94,31 +95,32 @@ sexes(pop)
 dim_labels(pop, "race.eth")
 ```
 
-`times()` and `areas()` return the labels for the time and area
-roles. `ages()` and `sexes()` are convenient ways to inspect demographic
+`times()` and `areas()` return the labels for the time and area roles.
+`ages()` and `sexes()` are convenient ways to inspect demographic
 labels. Use `dim_labels()` for any named dimension, such as `race.eth`.
 The dimensions here are `year`, `area.name`, `sex`, `age.char`, and
 `race.eth`.
 
 # Handle the 2016–2017 category change
 
-A **schema** is the set of categories used to report the data. TDC changed
-both age and race/ethnicity categories in 2017. Through 2016, ages end at
-`"85 +"` (everyone aged 85 or older). From 2017, ages 85–94 are reported
-individually, followed by `"95 +"`. Asian residents were included in
-`"other"` through 2016 and reported separately as `"asian"` from 2017.
+A **schema** is the set of categories used to report the data. TDC
+changed both age and race/ethnicity categories in 2017. Through 2016,
+ages end at `"85 +"` (everyone aged 85 or older). From 2017, ages 85–94
+are reported individually, followed by `"95 +"`. Asian residents were
+included in `"other"` through 2016 and reported separately as `"asian"`
+from 2017.
 
 The cube contains the combined list of labels from both periods. That
-does not mean every label applies in every year. For example, the absence
-of a separate Asian count in 2016 does not mean there were no Asian
-residents. Likewise, removing `"85 +"` from all years would remove the
-older population from 2015 and 2016.
+does not mean every label applies in every year. For example, the
+absence of a separate Asian count in 2016 does not mean there were no
+Asian residents. Likewise, removing `"85 +"` from all years would remove
+the older population from 2015 and 2016.
 
 This example file does not yet record which labels apply in each period.
-The following setup adds that information to our R object using the known
-TDC reporting rules. For cubes that already have this **applicability**
-metadata, inspect it and skip this setup. Do not infer reporting rules
-just from missing counts.
+The following setup adds that information to our R object using the
+known TDC reporting rules. For cubes that already have this
+**applicability** metadata, inspect it and skip this setup. Do not infer
+reporting rules just from missing counts.
 
 ```{r describe_reporting_periods}
 semantics <- dim_semantics(pop)
@@ -143,9 +145,9 @@ semantics$race.eth@applicability <- list(
 dim_semantics(pop) <- semantics
 ```
 
-`by = "year"` means that the year determines which categories apply.
-The `from` and `through` endpoints are inclusive. This changes metadata
-on `pop`; it does not rewrite the packaged HDF5 file or change its counts.
+`by = "year"` means that the year determines which categories apply. The
+`from` and `through` endpoints are inclusive. This changes metadata on
+`pop`; it does not rewrite the packaged HDF5 file or change its counts.
 The package can now sum the appropriate categories for each year while
 keeping genuinely missing counts as missing.
 
@@ -227,8 +229,9 @@ overlaps(pop_small)
 The overlap report lists `"85 +"` because the complete age-label list
 also includes individual older ages. With the period metadata above,
 those labels are never used together in a sum. Keep `"85 +"` for the
-earlier years and let `collapse_all()` use each year's applicable labels.
-There is no need to remove an age group or turn off the safety checks.
+earlier years and let `collapse_all()` use each year's applicable
+labels. There is no need to remove an age group or turn off the safety
+checks.
 
 Now sum over age, race/ethnicity, and sex:
 
@@ -257,8 +260,8 @@ county_tbl
 ```
 
 Both tables contain the same population values. Choose a data frame for
-base R tools or a tibble for a tidyverse workflow. With two counties
-and four years, the total table contains eight rows. The `sex`, `age.char`,
+base R tools or a tibble for a tidyverse workflow. With two counties and
+four years, the total table contains eight rows. The `sex`, `age.char`,
 and `race.eth` columns contain `"all"`, recording the dimensions that
 were summed.
 
@@ -283,7 +286,8 @@ tools.
 County totals are comparable because all residents are included in both
 periods. For an age-specific comparison, use a common age grouping.
 `group_ages()` can retain the earlier `"85 +"` count and sum the later
-individual ages 85–94 plus `"95 +"` to obtain the same 85-and-older group:
+individual ages 85–94 plus `"95 +"` to obtain the same 85-and-older
+group:
 
 ```{r common_age_groups}
 pop_age_groups <- pop_small |>
