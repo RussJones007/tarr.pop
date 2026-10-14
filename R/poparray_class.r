@@ -20,6 +20,7 @@ setClass(
     strata_roles  = "character",
     dim_semantics = "list",
     data_col      = "character",
+    group_vars    = "character",
     source        = "list",
     dn_cache      = "list"   # dimension name cache
   )
@@ -43,6 +44,8 @@ setClass(
 #' @slot strata_roles Character vector of optional stratification dimensions.
 #' @slot dim_semantics Named list of `DimSemantics` objects (one per dimension).
 #' @slot data_col Name used for value column in tabular coercions.
+#' @slot group_vars Ordered grouping dimension names. Grouping is an in-memory
+#'   analysis setting and is not stored in saved HDF5 cube metadata.
 #' @slot source Provenance metadata as a named list.
 #'
 #' @name poparray
@@ -287,6 +290,10 @@ setValidity("poparray", function(object) {
   if (is.null(dn) || is.null(names(dn))) {
     return("dimnames must exist and be named.")
   }
+  groups <- object@group_vars
+  if (anyNA(groups) || anyDuplicated(groups) || any(!groups %in% names(dn))) {
+    return("group_vars must contain unique, non-missing current dimension names.")
+  }
   if (length(object@time_role) != 1L || !nzchar(object@time_role)) {
     return("slot 'time_role' must be a single non-empty character string.")
   }
@@ -386,6 +393,7 @@ setReplaceMethod("dimnames", "poparray",
 #' @param validate_semantics Logical scalar. Internal control for staged
 #'   migration; if `FALSE`, strict contract checks are skipped but
 #'   `dim_semantics` is still populated.
+#' @param group_vars Ordered grouping dimension names; defaults to ungrouped.
 #' @param ... Reserved for future use.
 #'
 #' @return An S4 object of class `"poparray"`.
@@ -398,6 +406,7 @@ setReplaceMethod("dimnames", "poparray",
                                    area_dim = "area.name",
                                    dim_semantics = NULL,
                                    validate_semantics = TRUE,
+                                   group_vars = character(),
                                    ...) {
   if (!is(x, "DelayedArray")) {
     cli::cli_abort("{.arg x} must be a {.cls DelayedArray}.")
@@ -450,6 +459,7 @@ setReplaceMethod("dimnames", "poparray",
     strata_roles = setdiff(nms, c(time_dim, area_dim)),
     dim_semantics = dim_semantics,
     data_col = data_col,
+    group_vars = group_vars,
     source = src,
     dn_cache =  dimnames_list #dimnames(x)
   )
@@ -475,6 +485,7 @@ new_poparray <- function(x,
                          time_dim = "year",
                          area_dim = "area.name",
                          dim_semantics = NULL,
+                         group_vars = character(),
                          ...) {
   if (is.null(dim_semantics)) {
     cli::cli_abort("{.arg dim_semantics} is required and cannot be NULL.")
@@ -488,6 +499,7 @@ new_poparray <- function(x,
     area_dim = area_dim,
     dim_semantics = dim_semantics,
     validate_semantics = TRUE,
+    group_vars = group_vars,
     ...
   )
 }
@@ -505,11 +517,19 @@ setMethod("show", "poparray", function(object) {
   cat("Length: ", format(as.numeric(prod(dim(object))), big.mark = ","), "\n", sep = "")
   cat("Roles: time = '", object@time_role, "', area = '", object@area_role, "'\n", sep = "")
   cat("Dimensions: ", dimensions, "\n", sep = "")
+  if (length(object@group_vars)) {
+    cat("Grouped by: ", paste(object@group_vars, collapse = ", "), "\n", sep = "")
+  }
   cat("Data column as data frame: '", object@data_col, "'\n", sep = "")
   invisible(object)
 })
 
-setMethod("collapse_dim", "poparray", collapse_dim_poparray_impl)
+setMethod("collapse_dim", "poparray", function(x, dim, groups,
+  keep_empty = FALSE, name = NULL, strict = TRUE, allow_overlap = FALSE,
+  drop = FALSE) {
+  collapse_dim_poparray_impl(x, dim, groups, keep_empty, name, strict,
+                             allow_overlap, drop)
+})
 
 
 #' Validate poparray object
@@ -819,7 +839,8 @@ wrap_subset_poparray <- function(x, out, before_dimnames, after_dimnames) {
     source = x@source,
     time_dim = x@time_role,
     area_dim = x@area_role,
-    dim_semantics = updated_dim_semantics
+    dim_semantics = updated_dim_semantics,
+    group_vars = intersect(x@group_vars, names(after_dimnames))
   )
 }
 
@@ -1028,7 +1049,8 @@ as.double.poparray <- function(x, ...) {
     source = get_source(x),
     time_dim = time_role(x),
     area_dim = area_role(x),
-    dim_semantics = dim_semantics(x)
+    dim_semantics = dim_semantics(x),
+    group_vars = x@group_vars
   )
 }
 

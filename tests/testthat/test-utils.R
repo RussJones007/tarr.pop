@@ -1,50 +1,31 @@
-# Utility function testing
+test_that("label access and removal work with the bundled example cube", {
+  # Use an explicit package file so this test never depends on the local registry.
+  path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+  expect_true(file.exists(path))
+  arr <- open_poparray(filepath = path)
 
+  expected_ages <- c("< 1", as.character(1:85), "85 +",
+                     as.character(86:94), "95 +")
+  expect_identical(ages(arr), expected_ages)
+  expect_identical(ages(arr, remove = "< 1"), expected_ages[-1])
+  expect_identical(ages(arr, remove = stringr::regex("^1")),
+                   setdiff(expected_ages, as.character(c(1, 10:19))))
 
+  expect_identical(sexes(arr), c("female", "male"))
+  expect_identical(sexes(arr, remove = "female"), "male")
+  expect_identical(areas(arr), c("Dallas", "Denton", "Tarrant"))
+  expect_identical(areas(arr, remove = stringr::regex("^D")), "Tarrant")
 
-test_that("Array access and assignment functions", {
-  # test using the census population array
-  arr <- open_poparray(series_id = population$census.bureau$estimates)
-  age <- ages(arr)
-  expect_type(age, "character")
-  expect_length(age, 18)
-  age <- ages(arr, remove = c("< 1"))
-  expect_length(age, 18)
-  # test regex
-  age <- ages(arr, remove = regex("(1|All)"))
-  expect_length(age, 16)
+  # This cube stores combined race/ethnicity categories, not a separate race axis.
+  expect_identical(dim_labels(arr, "race.eth"),
+                   c("asian", "black", "hispanic", "other", "white"))
+  expect_identical(dim_labels(arr, "race.eth", remove = stringr::regex("^h")),
+                   c("asian", "black", "other", "white"))
+  expect_error(races(arr), "absent")
+  expect_null(races(arr, missing = "null"))
 
-  sex <- sexes(arr)
-  expect_type(sex, "character")
-  expect_length(sex, 2)
-  expect_in(sex, c("Female", "Male"))
-
-  # Using census estimates array here
-  race <- races(arr)
-  expect_type(race, "character")
-  expect_length(race, 11)
-
-  # check that regex works
-  race <- races(arr, remove =regex("combination$"))
-  expect_in(race, c("All", "Asian", "Black", "American Indian and Alaska Native",
-                    "Hawaiian or Pacific Islander", "Two or more", "White")
-  )
-
-  yr <- years(arr, remove = as.character(2010:2019))
-  expect_true(all(as.numeric(yr) > 2019))
-
-  # check assignment operators
-  
-  # ages(arr) <- seq(1, 50, by = 2) |> as.character()
-  # expect_setequal(ages(arr), seq(1, 50, by = 2) |> as.character())
-  # 
-  # sexes(arr) <- "Female"
-  # sex <- sexes(arr)
-  # expect_equal(sex, "Female")
-  # 
-  # counties <- areas(arr)
-  # expect_in(c("Tarrant", "Harris", "Tom Green"), counties)
-  # areas(arr) <- "Tarrant"
-  # expect_equal(areas(arr), "Tarrant")
-
+  expect_identical(years(arr), as.character(2015:2018))
+  expect_identical(years(arr, remove = as.character(2015:2016)),
+                   c("2017", "2018"))
+  expect_identical(times(arr), years(arr))
 })
