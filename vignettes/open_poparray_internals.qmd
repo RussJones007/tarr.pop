@@ -1,0 +1,686 @@
+---
+title: "How open_poparray() opens a population cube"
+subtitle: "Call sequences, support functions, metadata, and delayed storage"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+vignette: >
+  %\VignetteIndexEntry{How open_poparray() opens a population cube}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{quarto::html}
+editor:
+  markdown:
+    wrap: 100
+---
+
+```{r setup}
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+# Isolate package loading from storage initialization in this implementation guide.
+(function() {
+  previous <- Sys.getenv("TARR_POP_SKIP_CUBE_SETUP", unset = NA_character_)
+  on.exit({
+    if (is.na(previous)) Sys.unsetenv("TARR_POP_SKIP_CUBE_SETUP") else
+      Sys.setenv(TARR_POP_SKIP_CUBE_SETUP = previous)
+  })
+  Sys.setenv(TARR_POP_SKIP_CUBE_SETUP = "true")
+  library(tarr.pop)
+})()
+```
+
+## What this guide explains
+
+`open_poparray()` locates an HDF5 file, reconstructs the meaning of its axes from
+stored metadata, and returns a delayed `poparray`. It connects storage lookup,
+metadata decoding, the HDF5Array backend, and the package's object contract.
+Understanding those connections helps explain why opening a cube usually needs
+little population-data memory, why an unregistered file can still be opened, and
+why malformed metadata can prevent opening an otherwise readable HDF5 file.
+
+This is a source-level walkthrough of the implementation reviewed at development
+version **0.0.0.9223**, based on commit **eaadf44**. The diagrams show package-level
+calls and decisions. Repeated per-dimension loops and library-internal calls are
+condensed; arrows do not imply that independent-looking readers run in parallel.
+The text distinguishes the actual execution order from supporting data flow.
+
+The main implementation is in
+[R/open_pop_array.r](https://github.com/RussJones007/tarr.pop/blob/eaadf44/R/open_pop_array.r).
+Storage configuration is in
+[R/cube_storage.R](https://github.com/RussJones007/tarr.pop/blob/eaadf44/R/cube_storage.R),
+object construction in
+[R/poparray_class.r](https://github.com/RussJones007/tarr.pop/blob/eaadf44/R/poparray_class.r),
+and semantic/applicability validation in
+[R/dim_semantics.r](https://github.com/RussJones007/tarr.pop/blob/eaadf44/R/dim_semantics.r)
+and
+[R/dim_applicability.R](https://github.com/RussJones007/tarr.pop/blob/eaadf44/R/dim_applicability.R).
+These pinned sources make the walkthrough reproducible when the package later changes.
+
+Support functions discussed below are mostly internal. Calls using `tarr.pop:::`
+in the tracing example deliberately inspect those internals; they are not a
+recommended replacement for the public opening API.
+
+The examples require a package installation containing the current `filepath`
+entry point. Updating a Git checkout does not update the installed R package.
+Check `packageVersion("tarr.pop")` and `args(tarr.pop::open_poparray)` if an
+example reports an unused `filepath` argument. During repository development,
+`devtools::load_all()` loads the working source; otherwise install the current
+package and check `.libPaths()` for an older installation taking precedence.
+
+### Opening versus package startup
+
+The call sequence begins **after the package has loaded**. Package loading has its
+own `.onLoad()` hook, which calls `tarr_pop_startup_setup()` and may initialize
+configured storage through `init_cubes()`. Those startup actions are separate
+from `open_poparray(filepath = ...)`. The setup chunk temporarily suppresses that
+startup work so this guide uses only the bundled file and explicitly created
+scratch directories. This distinction matters when interpreting a process-wide
+trace: a registry scan during package startup is not evidence that direct-file
+opening itself consulted the registry.
+
+## The public entry point
+
+The current signature is:
+
+```r
+open_poparray(series_id = NULL,
+              dataset = "cube/population",
+              data_col = NULL,
+              checkout = FALSE,
+              checkout_dir = tempdir(),
+              filepath = NULL)
+```
+
+| Argument | What it controls |
+|---|---|
+| `series_id` | A logical series name looked up in configured storage. |
+| `filepath` | A known HDF5 file, opened directly without registry lookup. |
+| `dataset` | The numeric array within that file, normally `cube/population`. |
+| `data_col` | An optional value-column name for the returned object and tabular output. |
+| `checkout` | Whether to copy the entire backing file before opening it. |
+| `checkout_dir` | The copy destination when checkout is requested. |
+
+Exactly one of `series_id` and `filepath` must be supplied. Supplying neither or
+both fails before storage lookup. `checkout` must be a non-missing logical scalar;
+its directory argument is checked when checkout is enabled.
+
+The compatibility function `open_tarr_pop(...)` simply forwards its arguments to
+`open_poparray(...)`; it does not introduce another storage or metadata strategy.
+
+```{r direct_example}
+example_path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
+pop <- open_poparray(filepath = example_path)
+list(class = class(pop)[1], dimensions = names(dimnames(pop)),
+     time = time_role(pop), area = area_role(pop), value = data_col(pop))
+```
+
+## The complete opening sequence
+
+```{mermaid}
+flowchart TD
+  A["open_poparray(): validate arguments"] --> B{"Which input was supplied?"}
+  B -->|filepath| C["Check file and normalize its path"]
+  B -->|series_id| D["Resolve root, read registry, select row, resolve file"]
+  C --> E{"checkout = TRUE?"}
+  D --> E
+  E -->|yes| F["checkout_poparray(): copy file; keep original path"]
+  E -->|no| G["get_cube_metadata_cached(path)"]
+  F --> G
+  G --> H["HDF5Array::HDF5Array(): create delayed dataset handle"]
+  H --> I["Read cached labels, roles, semantics, source, value name"]
+  I --> J["validate_labels_against_cube(): compare extents"]
+  J --> K["Attach dimnames to the handle"]
+  K --> L["new_poparray(): validate and construct S4 object"]
+  L --> M["If checked out, attach backing_file attribute"]
+  M --> N["Return delayed poparray"]
+```
+
+Once a file has been resolved, both entry paths use the same sequence. The
+metadata bundle is obtained **before** the delayed HDF5 dataset handle is created.
+On a cold cache, this bundle already includes parsed semantic objects. The later
+reader functions usually extract those prepared fields rather than reconstruct
+semantics a second time.
+
+| Order after locating the file | Actual function or operation | Result passed onward |
+|---|---|---|
+| 1, optional | `checkout_poparray()` | A copy's normalized path; original path retained separately. |
+| 2 | `get_cube_metadata_cached()` | One bundle named `meta`. |
+| 3 | `HDF5Array::HDF5Array()` | The delayed dataset handle named `h5`. |
+| 4 | `read_dimnames_from_cube()` | Named coordinate vectors named `dimn`. |
+| 5 | `read_roles_from_cube()` | Time, area, and stored strata roles. |
+| 6 | `read_dim_semantics_from_cube()` | Named per-axis semantic objects. |
+| 7 | `read_source_from_cube()` | Provenance fields. |
+| 8, conditional | `read_data_col_from_cube()` | Stored value-column name, unless overridden. |
+| 9 | `validate_labels_against_cube()` | Confirmation that handle extents match label lengths. |
+| 10 | `dimnames(h5) <- dimn` | Labels attached to the in-memory delayed handle. |
+| 11 | `new_poparray()` | The role-aware S4 `poparray`. |
+| 12, optional | `attr(pa, "backing_file") <- backing_file` | A reference to the original file when checkout was used. |
+
+Attaching names to `h5` changes the R handle. It does not rewrite the HDF5 dataset
+or its stored metadata. The opening function also does not rebuild the registry,
+repair interrupted metadata edits, migrate a file, or save the returned object.
+
+## Path A: opening a known file
+
+The direct-file path uses `checkmate::assert_string()` and
+`checkmate::assert_file_exists()`, then `normalizePath(..., mustWork = TRUE)`.
+The normalized file path also becomes the label used in dimension-mismatch
+messages. There is no call to `resolve_cube_dir()`, `tarr_series_registry()`, or
+`resolve_registry_filepath()` in this branch.
+
+This is useful for portable examples, tests, and scripts whose input file is
+already known. The bundled cube does not need a matching registry row for the
+example above to succeed. A valid file still needs the metadata layout and
+semantic contract expected by the remainder of the opener.
+
+## Path B: resolving a registered series
+
+A series name first needs a storage root, then a registry row, then a physical
+file. The registry is a lightweight locator; the selected HDF5 file remains the
+source of dimensional and semantic metadata.
+
+```{mermaid}
+flowchart TD
+  A["resolve_cube_dir()"] --> B["cube_path(create = FALSE)"]
+  B --> C["configured_cube_path(): option, then YAML config"]
+  C --> D{"Configured path available?"}
+  D -->|yes| E["Verify root directory and normalize path"]
+  D -->|no| F["Interactive prompt or configuration error"]
+  F -->|path chosen| E
+  E --> G["tarr_series_registry(root)"]
+  G --> H{"Memoised registry available?"}
+  H -->|yes| L["Return registry data frame"]
+  H -->|no| I[".tarr_series_registry_impl()"]
+  I --> J["cube_registry_cache_file() then read_cube_registry_cache()"]
+  J --> K["Check required columns and unique, nonblank series IDs"]
+  K --> L
+  L --> M["open_poparray(): select exactly one series row"]
+  M --> N["resolve_registry_filepath(): stored path, then filename fallback"]
+  N --> O["Normalize first existing candidate"]
+```
+
+### Resolving the storage root
+
+`resolve_cube_dir()` calls `cube_path(create = FALSE)` and verifies that the
+resulting directory exists. Its `legacy_ok` argument is forwarded for
+compatibility, but the current `cube_path()` ignores that deprecated argument;
+it does not automatically fall back to package `extdata`.
+
+`cube_path()` calls `configured_cube_path()`. That helper first checks the
+`tarr.pop.cube_path` R option. If it is absent, `read_cube_path_config()` reads the
+user's YAML configuration. `tarr_pop_config_file()` builds that configuration
+filename using `tarr_pop_config_dir()`, which delegates to `tools::R_user_dir()`.
+
+Without configuration, `prompt_for_cube_path()` offers an interactive prompt.
+Its default comes from `tarr_pop_default_cube_path()` and
+`tarr_pop_data_dir()`. A selected path is handled by `set_cube_path()`, which can
+call `write_cube_path_config()` to persist the choice. In a non-interactive
+session, the prompt returns no choice and the required-root lookup fails with a
+configuration error. This first-use configuration case can write a YAML file;
+it should not be confused with rewriting cube metadata or population values.
+
+### Reading the registry
+
+`tarr_series_registry()` normalizes the root and calls
+`.tarr_series_registry_memoised()`. Memoise holds a registry result in process
+memory. On a cache miss, `.tarr_series_registry_impl()` locates
+`cache/cube_registry.rds` through `cube_registry_cache_file()` and its storage-path
+helpers, then calls `read_cube_registry_cache()`.
+
+`read_cube_registry_cache()` reads an RDS data frame. It requires `series_id`,
+`filepath`, and `filename` columns and normalizes them to character vectors. A
+missing, unreadable, or structurally unsuitable cache returns `NULL`; the caller
+then reports that the registry must be initialized or rebuilt.
+`.tarr_series_registry_impl()` additionally rejects missing, blank, and duplicate
+series IDs. The opener selects the requested ID and requires exactly one row.
+Its duplicate-row check is an additional defensive check after the registry's
+own uniqueness validation.
+
+### Finding the file named by a row
+
+`resolve_registry_filepath()` tries the row's stored `filepath` first. It also
+builds a candidate from `filename` and `resolve_cube_base_dir(root)`. That helper
+uses `base/` when it exists, otherwise the root itself. The first existing
+candidate is normalized and returned. If none exists, the error points the user
+toward rebuilding the registry after moving, removing, or replacing files.
+
+This fallback helps when a recorded absolute path is obsolete but the filename
+still identifies a cube in the active base directory. It is not a recursive
+search for similarly named files, and a registry row is not proof that a file's
+complete semantic metadata is valid.
+
+### Registry construction is separate from lookup
+
+`rebuild_poparray_registry()` is an explicit preparation operation. It calls
+`cube_registry_inventory()` to enumerate HDF5 files, `build_poparray_registry()`
+to screen their layouts and build rows, and `write_cube_registry_cache()` to save
+the index. `build_poparray_registry()` uses `h5_inventory()`,
+`h5_has_cube_schema()`, and `read_series_row()`. The latter reads identifying
+metadata, with compatibility fallbacks for series names and optional registry
+fields. `read_registry_row()` is an older alias for that row reader.
+
+These helpers do not run automatically when `open_poparray()` sees an unknown
+series. Rebuilding invalidates the memoised registry and inventory results.
+`init_cubes()` is a higher-level setup operation that prepares directories,
+may copy bundled files, and rebuilds the registry.
+
+```{r registered_example}
+registered_example <- (function() {
+  root <- tempfile("opening-guide-registry-")
+  previous <- getOption("tarr.pop.cube_path")
+  on.exit({
+    options(tarr.pop.cube_path = previous)
+    unlink(root, recursive = TRUE)
+  }, add = TRUE)
+  set_cube_path(root, persist = FALSE)
+  dir.create(file.path(root, "base"))
+  stopifnot(file.copy(example_path,
+                     file.path(root, "base", basename(example_path))))
+  # This preparation is explicit, not an implicit step inside open_poparray().
+  registry <- rebuild_poparray_registry(root)
+  series <- registry$series_id[[1L]]
+  registered <- open_poparray(series_id = series)
+  stopifnot(identical(dimnames(registered), dimnames(pop)))
+  list(series_id = series, registry_columns = names(registry),
+       dimensions = names(dimnames(registered)))
+})()
+registered_example
+```
+
+The example restores the previous storage option and removes only its temporary
+root. It does not persist a new user configuration or modify a production cube.
+
+## Optional checkout: copying the backing file
+
+`checkout_poparray()` checks the source and destination arguments, verifies the
+source exists, creates the destination directory when needed, and calls
+`file.copy()` with overwrite enabled and file mode/date preservation. The
+filename is the source's basename. It returns the normalized destination path.
+
+The opener keeps the original path in `backing_file`, switches its active path to
+the copy, and subsequently reads metadata and creates the HDF5Array handle from
+that copy. After construction it attaches the original path as the
+`backing_file` attribute. Source/provenance metadata comes from the copied file;
+checkout does not invent a new provenance record or automatically save analysis
+changes back to the source.
+
+Copying remains different from realizing an array in R: the entire file,
+including population bytes and other HDF5 content, is copied through the
+filesystem. This can be substantial I/O even though population values are not
+expanded into an ordinary R array. A unique checkout directory avoids basename
+collisions and accidental overwriting of an earlier copy.
+
+```{r checkout_example}
+checkout_details <- (function() {
+  destination <- tempfile("opening-guide-checkout-")
+  on.exit(unlink(destination, recursive = TRUE), add = TRUE)
+  copied <- open_poparray(filepath = example_path, checkout = TRUE,
+                         checkout_dir = destination)
+  seed_path <- DelayedArray::seed(copied)@filepath
+  stopifnot(file.exists(seed_path),
+            identical(dimnames(copied), dimnames(pop)))
+  list(copy_exists = file.exists(seed_path),
+       copy_uses_requested_directory = identical(dirname(seed_path),
+                                                 normalizePath(destination)),
+       original_file = basename(attr(copied, "backing_file")))
+})()
+checkout_details
+```
+
+## Loading and caching the metadata bundle
+
+The process-memory environment `.cube_metadata_cache` stores metadata bundles.
+It is distinct from the memoised registry and from the RDS registry file on disk.
+No population array is stored in this metadata cache.
+
+```{mermaid}
+flowchart TD
+  A["get_cube_metadata_cached(path, refresh = FALSE)"] --> B["cube_metadata_path_cache_key(path)"]
+  B --> C{"Not refreshing and path key exists?"}
+  C -->|yes| D["Return cached bundle immediately"]
+  C -->|no| E["cube_metadata_cache_key(): normalized path and file mtime"]
+  E --> F{"Timestamp key exists?"}
+  F -->|yes| G["assign_cube_metadata_cache(): add aliases"]
+  G --> D
+  F -->|no| H["get_cube_metadata()"]
+  H --> I["h5_inventory() and metadata h5read calls"]
+  I --> J["parse_dim_semantics_from_meta()"]
+  J --> K["assign_cube_metadata_cache(): store bundle under keys"]
+  K --> D
+```
+
+### The cache helpers and their limits
+
+`cube_metadata_path_cache_key()` makes a key from the supplied path string.
+`cube_metadata_cache_key()` verifies the file exists and combines its normalized
+path with a formatted modification time. `assign_cube_metadata_cache()` puts the
+bundle into the environment under the requested keys and a path alias.
+
+An ordinary path-key hit returns immediately, **without checking modification
+time**. Therefore normal opening is not an automatic out-of-process file-change
+detector. The internal `refresh = TRUE` flag bypasses that first lookup, but can
+still reuse a timestamp-key entry; it is not an unconditional disk reread.
+Same-key external edits or timestamp preservation can therefore matter.
+
+`reset_poparray_cache()` clears the metadata environment and forgets the memoised
+registry and inventory results. It is an internal maintenance/testing helper,
+used below to make a cold-start trace reproducible. A fresh R session also starts
+with fresh process caches. Package writers and administration functions have
+cache-management responsibilities of their own; external HDF5 edits should not
+be assumed to refresh existing R objects or process caches automatically.
+
+### Building a cold metadata bundle
+
+`get_cube_metadata()` calls `h5_inventory()` unless an inventory was supplied.
+The opener does not supply one. `h5_inventory()` uses `rhdf5::h5ls()` and disables
+its `datasetinfo` option when that argument is available. This lists the HDF5
+hierarchy; it does not extract the population dataset.
+
+The inventory helpers `cube_info_has_entry()`, `h5_dataset_exists()`, and
+`h5_group_exists()` check names, groups, and object types in the already available
+inventory. They do not individually rescan the file. `h5_read_scalar_chr()` reads
+one metadata value and converts its first element to character.
+`h5_read_scalar_chr_if_present()` checks the inventory before reading an optional
+scalar. With no supplied inventory it would perform its own inventory call, but
+the cold bundle passes the shared inventory through.
+
+| Bundle field | How `get_cube_metadata()` obtains it |
+|---|---|
+| `path` | Normalized file path. |
+| `info` | Shared HDF5 hierarchy inventory. |
+| `dim_order` | `cube/metadata/dim_order`, read with `rhdf5::h5read()`. |
+| `dimnames` | One character vector under `cube/metadata/dimnames/<dimension>` per axis. |
+| `roles` | Time and area scalars, plus stored strata labels. |
+| `source` | Note, source, updated timestamp, and population type. |
+| `data_col` | Optional stored name; absent or empty storage falls back to `"population"`. |
+| `dim_semantics` | Parsed semantic objects described in the next section. |
+
+The inventory can list history groups, but this bundle is not a full history
+object. Opening does not call `cube_history()` or `cube_metadata_at()` to restore
+a historical revision. It opens the current metadata and current population
+dataset.
+
+## Reconstructing semantic objects and applicability
+
+`parse_dim_semantics_from_meta()` requires the
+`cube/metadata/dim_semantics` group. For each dimension it checks whether the
+complete current field layout is available. When it is, the parser calls
+`read_dim_semantics_entry()` and constructs an S7 `DimSemantics` object through
+`new_dim_semantics()`.
+
+`read_dim_semantics_entry()` reads the dimension name, domain, scale type,
+partition type, validation flag, overlap labels, notes, and optional
+applicability. Its local `read_if_present()` closure handles optional scalar
+fields using the shared inventory.
+
+`read_dim_applicability()` looks for the nested applicability group. Absence
+produces `NULL`. When present, it reads `by`, checks that `n_schemas` is a finite,
+non-negative whole-number count, and reads each schema's `from`, `through`, and
+`levels`. Its local `read_boundary()` closure turns a stored zero-length boundary
+into `NULL`; a null boundary is later interpreted as an open endpoint in the
+current controlling labels.
+
+| Helper | Responsibility |
+|---|---|
+| `parse_dim_semantics_from_meta()` | Select current or supported legacy layout; produce one named semantic object per axis. |
+| `read_dim_semantics_entry()` | Read the fields for a current-layout semantic entry. |
+| `read_dim_applicability()` | Restore the optional controller/schema list and validate the schema count. |
+| `new_dim_semantics()` | Call the S7 `DimSemantics` constructor with decoded properties. |
+| `pa_default_dim_domain()` | Supply a domain when translating supported legacy fields: time, area, age, or the dimension name. |
+| `pa_default_dim_scale_type()` | Supply a legacy scale default: interval for time/`age.char`, nominal otherwise. |
+| `pa_applicability_structure_problems()` | Describe malformed controller/schema structures during semantic validation. |
+
+If a complete current layout is not found, the parser expects the supported
+legacy `class` and `validated` fields. It translates `partition`, `set`, or an
+unrecognized legacy class to the corresponding partition type/default. This is
+an in-memory compatibility translation, not an on-disk migration. Missing
+required legacy fields or a missing semantic group causes an error.
+
+Applicability says which target categories are reported for each controller
+period. It is restored as metadata, not applied by reading and rewriting values
+during opening. Subsequent filtering and guarded reductions use it to distinguish
+structural exclusions from applicable missing population counts.
+
+## Creating the delayed handle and extracting cached fields
+
+`HDF5Array::HDF5Array(filepath = path, name = dataset)` constructs the delayed
+handle for the requested dataset. The backend inspects dataset metadata such as
+shape and type; creating the handle is not `as.array()` and does not load the full
+population cube into R.
+
+The five package readers are deliberately small when called with `meta`:
+
+| Reader | Field returned during normal opening |
+|---|---|
+| `read_dimnames_from_cube(path, meta)` | `meta$dimnames`. |
+| `read_roles_from_cube(path, meta)` | `meta$roles`. |
+| `read_dim_semantics_from_cube(..., meta)` | `meta$dim_semantics`, already parsed. |
+| `read_source_from_cube(path, meta)` | `meta$source`. |
+| `read_data_col_from_cube(path, meta)` | `meta$data_col`. |
+
+The ordinary readers call `get_cube_metadata_cached()` themselves if `meta` was
+not supplied. The semantic reader has a separate uncached fallback that builds a
+minimal metadata context and calls the parser. Neither fallback is needed for
+these readers in the normal opener, which passes its bundle explicitly.
+
+With a `data_col` override, the opener skips `read_data_col_from_cube()` and uses
+the requested name for the returned object. A cold metadata bundle still reads
+the stored name while being assembled. The override changes neither the
+population values nor the stored file metadata.
+
+```{r value_name_override}
+renamed_value <- open_poparray(filepath = example_path, data_col = "count")
+c(object_name = data_col(renamed_value), stored_default = data_col(pop))
+```
+
+A custom `dataset` must have the extents and axis ordering expected by the cube's
+metadata. The extent check cannot prove that another same-shaped dataset has the
+same scientific meaning. The current object contract still requires the roles
+and semantics of a population cube.
+
+## Shape checks and S4 construction
+
+`validate_labels_against_cube()` compares `dim(h5)` with the number of label
+vectors and each vector's length. It raises a dimension-count or dimension-length
+error before labels are attached to the handle. This is the explicit connection
+between the physical dataset shape and the coordinate metadata.
+
+```{mermaid}
+flowchart TD
+  A["new_poparray(h5, labels, roles, semantics, source, value name)"] --> B["Reject NULL semantics"]
+  B --> C[".new_poparray_internal()"]
+  C --> D["Check DelayedArray and HDF5-backed seed"]
+  D --> E["Check named labels, value name, and distinct role names"]
+  E --> F["validate_dim_semantics()"]
+  F --> G["pa_validate_applicability() where applicable"]
+  G --> H["methods::new: populate the S4 poparray"]
+  H --> I["Populate compatibility attributes"]
+  I --> J["Return object with delayed seed and metadata slots"]
+```
+
+`new_poparray()` is the public constructor. It rejects null semantics and delegates
+to `.new_poparray_internal()` with strict semantic validation enabled. The
+internal helper checks for a `DelayedArray`, an HDF5-backed seed, a named list of
+labels, a single non-missing character value name, and distinct time/area names
+present in that list.
+
+`is_hdf5_backed_delayed()` checks the seed graph, including multi-seed delayed
+operations. It inspects seed structures rather than extracting population values.
+`validate_dim_semantics()` checks that semantic names match the axes in order,
+that entries are S7 `DimSemantics` objects with consistent `dim_name` properties,
+and that required role axes are declared partitions. It then checks
+applicability against the current labels.
+
+`pa_validate_applicability()` uses `pa_dim_applicability()` to retrieve optional
+schemas, then `pa_applicability_indices()` to resolve their boundaries and levels.
+The latter rejects self/missing controllers, unknown target levels, unknown or
+reversed boundaries, overlapping schema ranges, and uncovered controller labels.
+For interval partitions with active applicability schemas, semantic validation
+also uses `pa_is_partition()`, `pa_is_interval()`, and
+`pa_has_interval_overlap()` to reject overlapping or unrecognized interval
+contributors. These checks inspect categories and schemas, not numeric counts.
+
+`methods::new()` populates the S4 object slots. The constructor's explicit
+semantic checks above are part of the opening sequence. Separately,
+`methods::validObject(pop)` invokes registered S4 validity checks, including
+inherited delayed-array validity. The `poparray` validity callback checks role
+references, semantic names/types, applicability, grouping names, and metadata
+shape consistency. These validity checks should be distinguished from the
+selected calls observed during opening in the trace below.
+`validate_hdf5_metadata_shape()` is an optional extra audit controlled by
+`tarr.pop.audit_hdf5_metadata`, disabled by default. When enabled during validity
+checking, it compares the object with cached HDF5 metadata where its
+seed/dataset supports that audit.
+
+The more general `validate_poparray()` also checks chronological ordering of time
+labels when invoked by later operations such as `filter()`. It is not called
+explicitly by the `open_poparray()` body. Opening should not be described as a
+scan of all numeric data or a complete scientific audit: it does not validate
+population counts by reading them, harmonize reporting schemas, or certify that
+all axes can safely be summed.
+
+### What the returned object contains
+
+| Slot or component | Source |
+|---|---|
+| Delayed seed | The HDF5Array handle for the selected file and dataset. |
+| `time_role`, `area_role` | Stored role names. |
+| `strata_roles` | Recomputed as axes other than time and area. |
+| `dim_semantics` | The decoded named semantic list. |
+| `data_col` | Stored/default name or the caller's override. |
+| `source` | Provenance converted to a list. |
+| `dn_cache` | The named coordinate list for fast in-memory inspection. |
+| `group_vars` | Empty by default; opening does not restore analysis grouping. |
+
+The constructor also fills transitional `data_col`, `source`, and `dimroles`
+attributes for compatibility. These attributes are secondary to the explicit
+S4 slots. The stored strata field is read into the metadata bundle, but the
+constructor derives the returned strata roles from the actual axis names and
+required roles.
+
+## Observing the call sequence in a running R session
+
+The following maintainer-oriented example traces selected package functions for
+one cold opening and one warm opening of the same bundled file. It logs function
+**entries**, not execution times or every third-party call. Traces are removed on
+exit, even if the example fails. Clearing process caches here is intentional and
+should not be copied into every ordinary analysis script.
+
+```{r observed_calls}
+#| message: false
+observed <- (function() {
+  ns <- asNamespace("tarr.pop")
+  functions <- c("open_poparray", "get_cube_metadata_cached", "get_cube_metadata",
+    "h5_inventory", "parse_dim_semantics_from_meta", "read_dimnames_from_cube",
+    "read_roles_from_cube", "read_dim_semantics_from_cube", "read_source_from_cube",
+    "read_data_col_from_cube", "validate_labels_against_cube", "new_poparray",
+    ".new_poparray_internal", "validate_dim_semantics", "pa_validate_applicability")
+  audit <- new.env(parent = emptyenv())
+  audit$events <- character()
+  traced <- character()
+  on.exit({
+    for (name in traced) {
+      invisible(capture.output(untrace(name, where = ns)))
+    }
+  }, add = TRUE)
+  recorder <- function(name) {
+    force(name)
+    function() audit$events <- c(audit$events, name)
+  }
+  for (name in functions) {
+    invisible(capture.output(trace(name, tracer = recorder(name),
+                                   where = ns, print = FALSE)))
+    traced <- c(traced, name)
+  }
+  tarr.pop:::reset_poparray_cache()
+  cold <- tarr.pop::open_poparray(filepath = example_path)
+  first <- audit$events
+  audit$events <- character()
+  warm <- tarr.pop::open_poparray(filepath = example_path)
+  second <- audit$events
+  stopifnot(identical(dimnames(cold), dimnames(warm)))
+  list(
+    inventory = data.frame(opening = c("cold", "warm"),
+      package_inventory_calls = c(sum(first == "h5_inventory"),
+                                  sum(second == "h5_inventory"))),
+    calls = data.frame(opening = c(rep("cold", length(first)), rep("warm", length(second))),
+      step = c(seq_along(first), seq_along(second)),
+      function_name = c(first, second))
+  )
+})()
+observed$inventory
+observed$calls
+```
+
+A cold opening normally calls the package inventory once, while a warm path hit
+avoids `get_cube_metadata()` and that inventory call. The warm opening still
+creates a handle, checks shape, and constructs a new object. These counts concern
+`h5_inventory()` specifically; HDF5Array can perform its own dataset-header I/O,
+so they are not a count of all HDF5 library operations.
+
+## Where population values are actually retrieved
+
+Metadata reads are real I/O: coordinates, roles, semantics, and provenance must
+be obtained when they are not cached. HDF5Array also needs structural information
+about the selected dataset. Those operations do not materialize the full numeric
+population cube. DelayedArray validity may perform zero-length extraction for
+seed checking; that is not a full population-value scan.
+
+A later `filter()` or named subset usually records a new delayed view. A
+conversion or numerical reduction is a separate boundary. For example,
+`as.array()` is **EAGER** for the current view, whereas a guarded cube sum or
+`summarise()` reads values through the appropriate backend/reduction machinery.
+Checkout is its own boundary: it copies file bytes even though array realization
+is still delayed.
+
+```{r realization_boundary}
+# Select a single reported cell using named coordinates before retrieval.
+one_cell <- pop[year = "2018", area.name = "Tarrant", sex = "female",
+                age.char = "10", race.eth = "white", drop = FALSE]
+dim(one_cell)
+# EAGER, but only this selected R result is materialized.
+as.array(one_cell)
+```
+
+An HDF5 chunk can contain more cells than the selected result, so physical reads
+and decompression need not equal exactly one cell's bytes. The important memory
+property is that this example does not expand the entire cube into an R array or
+long table. A base R `rhdf5::h5read(path, "cube/population")` would instead be an
+**EAGER** read of that dataset. Likewise, `as.data.frame(pop)` or
+`tibble::as_tibble(pop)` expands the current cube view into a table; opening a
+cube alone does neither.
+
+## Diagnosing failures by stage
+
+| Symptom | Stage to inspect | Explanation or next step |
+|---|---|---|
+| Exactly-one-input error | Argument validation | Choose either `series_id` or `filepath`. |
+| Cube folder is not configured | Registered-series root resolution | Configure storage, or use an explicit file path. |
+| No registry found | Registry RDS lookup | Prepare storage with `init_cubes()` or explicitly rebuild its registry. |
+| Unknown/duplicate series | Registry validation and row selection | Inspect series IDs and rebuild after changing stored cubes. |
+| Registered file not found | Candidate path resolution | Check stored paths and the base-directory filename fallback. |
+| Checkout failure | Directory creation or file copy | Check source, destination, and copying permissions; use a unique directory. |
+| Missing semantic group or fields | Metadata reconstruction | The file does not have a supported opening layout; migrate explicitly. |
+| Dimension count/length mismatch | Handle-to-label shape validation | Dataset extents disagree with the stored coordinate list. |
+| Role/semantic/applicability error | Constructor validation | Fix the inconsistent metadata contract rather than coercing away the class. |
+| Old metadata after an external file edit | Process caches/existing handles | Do not assume a path hit refreshes itself; use a fresh session or deliberate internal cache maintenance. |
+
+For interrupted metadata replacement, the appropriate administration workflow
+may involve `recover_cube_metadata()` before reopening. Opening itself does not
+perform that recovery. For scientific aggregation errors, inspect `overlaps()`
+and applicability; successful opening is not permission to bypass those guards.
+
+## Keeping this walkthrough current
+
+When the opener changes, review the input branches, checkout placement, metadata
+cache behavior, reader order, constructor arguments, and object validity checks.
+Then execute the direct-file, temporary-registry, checkout, and trace examples.
+The existing `test-open_pop_array.R` regression tests cover direct-path bypass,
+registry failures, selected-cube inventories, dimensionality-independent hierarchy
+scans, metadata consistency, checkout, and delayed backing. Related applicability
+and class tests exercise the semantic/object contracts.
+
+The call graph should describe actual conditional execution, not merely list
+names found in a function body. In particular, preserve the distinctions between
+explicit registry rebuilding and lookup, cache construction and cache reuse,
+metadata inspection and population retrieval, and file copying and R realization.

@@ -1,3 +1,55 @@
+# tarr.pop 0.0.0.9223 (development version)
+
+Changes since development version 0.0.0.9222.
+
+## New features
+
+* Added metadata-only `group_by()` and `ungroup()` for cube dimensions, with
+  grouping preserved through lazy axis operations and inspected by `group_vars()`
+  and `groups()`.
+* Added `summarise()` / `summarize()` for one named population sum, including
+  `.by`, output grouping controls, and `na.rm`. Required roles and applicability
+  controllers must remain grouped. Overlap is checked before population reads;
+  reductions use bounded blocks and temporary HDF5 storage with double sums.
+  Structurally unavailable groups remain `NA`, even with `na.rm = TRUE`.
+* Added lazy `slice_head()` and `slice_tail()` for first or last coordinates in
+  an explicitly named dimension, supporting dplyr's `n` and `prop` size rules.
+* Added lazy `rename_with()` for transforming selected dimension names while
+  updating roles, semantic names, and applicability controller references.
+* Added lazy `slice()` for integer positions in an explicitly named dimension.
+  Dimensions and roles are retained, applicability is trimmed, duplicate
+  retained positions are rejected, and time order is preserved.
+* Added lazy `relocate()` for dimension order with tidy-select selectors and
+  `.before`/`.after`. It preserves named semantics and roles without rewriting
+  or rechunking the backing HDF5 dataset.
+
+## Documentation and design notes
+
+* Added a long-form `open_poparray()` implementation vignette with call-sequence
+  diagrams, support-function explanations, cache and validation limits, and
+  executable direct-file, registry, checkout, and cold/warm trace examples.
+* Reorganized the API reference into purpose-based categories covering all
+  exported functions and supported generic methods. Examples use the bundled
+  population cube and explain metadata-only operations, lazy views, bounded
+  computation, and EAGER conversions.
+* Documented grouping as an in-memory analysis setting, supported summary
+  expressions, required role/controller retention, and applicable missingness
+  versus structural exclusions.
+* Added proposals for ACS/SVI numeric-measure metadata, geographic hierarchy
+  and grouping metadata, package separation and TexasPop, and shared storage
+  for ACS measures. These notes describe future designs, not implemented APIs.
+
+## Testing and fixes
+
+* Replaced the utility test's local census-series dependency with the bundled
+  example cube and exact label/removal expectations.
+* Added regression coverage for lazy dimension verbs, grouping preservation,
+  overlap preflight, applicability, missing values, empty dimensions, double
+  sums beyond the integer limit, and HDF5 round trips.
+* The full test suite passed 1,829 assertions with no failures or errors.
+  Public help examples and API-reference chunks executed successfully, and
+  the reference rendered to HTML.
+
 # tarr.pop 0.0.0.9222
 
 Changes since development version 0.0.0.9221.

@@ -58,3 +58,7 @@ if (nzchar(path)) {
   example_cube <- open_poparray(filepath = path)
 }
 }
+\seealso{
+For the call-sequence and support-function walkthrough, see
+\code{vignette("open_poparray_internals", package = "tarr.pop")}.
+}

@@ -12,6 +12,7 @@ new_poparray(
   time_dim = "year",
   area_dim = "area.name",
   dim_semantics = NULL,
+  group_vars = character(),
   ...
 )
 }
@@ -29,6 +30,8 @@ new_poparray(
 \item{area_dim}{Single character string naming the area dimension.}
 
 \item{dim_semantics}{Named list of per-dimension \code{DimSemantics} objects.}
+
+\item{group_vars}{Ordered grouping dimension names; defaults to ungrouped.}
 
 \item{...}{Reserved for future use.}
 }
