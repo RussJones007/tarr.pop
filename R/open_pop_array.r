@@ -727,6 +727,8 @@ open_tarr_pop <- function(...) {
 #' overlap behavior. Metadata inspection does not extract population values.
 #'
 #' @returns An HDF5-backed poparray with delayed population data.
+#' @seealso For the call-sequence and support-function walkthrough, see
+#'   `vignette("open_poparray_internals", package = "tarr.pop")`.
 #' @examples
 #' path <- system.file("extdata", "tdc_example.h5", package = "tarr.pop")
 #' if (nzchar(path)) {

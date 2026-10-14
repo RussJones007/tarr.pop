@@ -25,6 +25,9 @@ Changes since development version 0.0.0.9222.
 
 ## Documentation and design notes
 
+* Added a long-form `open_poparray()` implementation vignette with call-sequence
+  diagrams, support-function explanations, cache and validation limits, and
+  executable direct-file, registry, checkout, and cold/warm trace examples.
 * Reorganized the API reference into purpose-based categories covering all
   exported functions and supported generic methods. Examples use the bundled
   population cube and explain metadata-only operations, lazy views, bounded

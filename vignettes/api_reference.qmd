@@ -55,6 +55,10 @@ Initialization is normally a setup step. Pass an explicit `filepath` to
 `open_poparray()` when a script should use a known file independently of the local
 series registry. The examples below use the bundled cube for that reason.
 
+For call-sequence diagrams and a source-level explanation of the registry,
+metadata cache, checkout, and constructor helpers, see
+[How open_poparray() opens a population cube](open_poparray_internals.qmd).
+
 ## Opening, constructing, and saving cubes
 
 | Function | Purpose | Execution / result |
