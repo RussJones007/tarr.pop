@@ -13,6 +13,7 @@
   area_dim = "area.name",
   dim_semantics = NULL,
   validate_semantics = TRUE,
+  group_vars = character(),
   ...
 )
 }
@@ -34,6 +35,8 @@
 \item{validate_semantics}{Logical scalar. Internal control for staged
 migration; if \code{FALSE}, strict contract checks are skipped but
 \code{dim_semantics} is still populated.}
+
+\item{group_vars}{Ordered grouping dimension names; defaults to ungrouped.}
 
 \item{...}{Reserved for future use.}
 }

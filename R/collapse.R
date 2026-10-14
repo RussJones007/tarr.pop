@@ -133,8 +133,10 @@ collapse_dim_poparray_impl <- function(x,
                                        name = NULL,
                                        strict = TRUE,
                                        allow_overlap = FALSE,
-                                       drop = FALSE) {
+                                       drop = FALSE,
+                                       na.rm = FALSE) {
   checkmate::assert_flag(drop)
+  checkmate::assert_flag(na.rm)
   
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
@@ -291,6 +293,7 @@ collapse_dim_poparray_impl <- function(x,
     block_dim <- dim(block_arr)
     n_row <- if (length(block_dim) == 1L) 1L else prod(block_dim[-nd])
     mat_old <- matrix(block_arr, nrow = n_row, ncol = n_old_keep)
+    if (na.rm) mat_old[is.na(mat_old)] <- 0
     mat_new <- if (is.null(schema_plan)) mat_old %*% M else
       pa_collapse_schema_block(mat_old, block_dim, block_idx, perm, schema_plan)
     out_block <- array(mat_new, dim = c(block_dim[-nd], n_new))
@@ -381,7 +384,11 @@ collapse_dim_poparray_impl <- function(x,
     source = source_out,
     time_dim = time_dim_out,
     area_dim = area_dim_out,
-    dim_semantics = dsem
+    dim_semantics = dsem,
+    group_vars = intersect(
+      if (is.null(name)) x@group_vars else
+        replace(x@group_vars, x@group_vars == dim_nm, name),
+      names(dn_new))
   )
   
   # refresh age_iv if age.char changed (if you store it as attribute)

@@ -29,6 +29,9 @@ overlap guards consider simultaneous levels, without numerical harmonization.
 
 \item{\code{data_col}}{Name used for value column in tabular coercions.}
 
+\item{\code{group_vars}}{Ordered grouping dimension names. Grouping is an in-memory
+analysis setting and is not stored in saved HDF5 cube metadata.}
+
 \item{\code{source}}{Provenance metadata as a named list.}
 }}
 

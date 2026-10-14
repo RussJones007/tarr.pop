@@ -71,5 +71,6 @@ relocate.poparray <- function(.data, ..., .before = NULL, .after = NULL) {
   new_poparray(out, dimnames_list = dn[permutation],
                data_col = data_col(.data), source = get_source(.data),
                time_dim = time_role(.data), area_dim = area_role(.data),
-               dim_semantics = dim_semantics(.data)[reordered_names])
+               dim_semantics = dim_semantics(.data)[reordered_names],
+               group_vars = .data@group_vars)
 }

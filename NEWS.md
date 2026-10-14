@@ -4,6 +4,18 @@ Changes since development version 0.0.0.9221.
 
 ## New features
 
+* Added metadata-only `group_by()` and `ungroup()` for cube dimensions, with
+  grouping preserved through lazy axis operations and inspected by `group_vars()`
+  and `groups()`.
+* Added `summarise()` / `summarize()` for one named population sum, including
+  `.by`, output grouping controls, and `na.rm`. Required roles and applicability
+  controllers must remain grouped. Overlap is checked before population reads;
+  reductions use bounded blocks and temporary HDF5 storage with double sums.
+  Structurally unavailable groups remain `NA`, even with `na.rm = TRUE`.
+* Added lazy `slice_head()` and `slice_tail()` for first or last coordinates in
+  an explicitly named dimension, supporting dplyr's `n` and `prop` size rules.
+* Added lazy `rename_with()` for transforming selected dimension names while
+  updating roles, semantic names, and applicability controller references.
 * Added lazy `slice()` for integer positions in an explicitly named dimension.
   Dimensions and roles are retained, applicability is trimmed, duplicate
   retained positions are rejected, and time order is preserved.

@@ -33,8 +33,9 @@ dimensions, even when a dimension has zero or one selected labels.
 }
 \details{
 Positions refer to the current dimension after any earlier filtering
-or relocation. Labels are not evaluated as table columns; helpers such as
-\code{dplyr::n()} and the separate \verb{slice_*()} generics are not supported here.
+or relocation. Labels are not evaluated as table columns; the helper
+\code{dplyr::n()} is not supported here. Use \code{\link[=slice_head.poparray]{slice_head.poparray()}} and
+\code{\link[=slice_tail.poparray]{slice_tail.poparray()}} for first or last positions.
 Use \code{length(dim_labels(pop, "year"))} to obtain a dimension's size.
 
 Unlike table slicing, duplicate selections are rejected to prevent repeated

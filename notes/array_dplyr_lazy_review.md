@@ -13,8 +13,15 @@ Implementation update, 2026-10-13: `rename()` was already implemented;
 `.dimension`, preserves all dimensions, rejects duplicate retained positions,
 and keeps time order. `relocate()` permutes the delayed view with tidy-select
 selectors and `.before`/`.after`. Both preserve metadata without extracting
-population values. The remaining recommendations below are retained as design
-context; `group_by()`/`summarise()` and the deferred verbs remain proposals.
+population values. `slice_head()` and `slice_tail()` now select first or last
+coordinates with dplyr's size rules and the same named-dimension subset contract.
+`rename_with()` transforms selected dimension names and shares `rename()`'s
+metadata updates. `group_by()` and `ungroup()` now record analysis grouping on
+named axes. `summarise()` and `summarize()` support one named population sum with
+guarded, bounded-memory execution into temporary HDF5 storage. They retain
+required roles and applicability controllers, with structural exclusions kept
+distinct from applicable missing values. The recommendations below are retained
+as design context; the other deferred verbs remain proposals.
 
 ## Findings from primary sources
 
