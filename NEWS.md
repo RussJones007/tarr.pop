@@ -1,6 +1,6 @@
-# tarr.pop 0.0.0.9222
+# tarr.pop 0.0.0.9223 (development version)
 
-Changes since development version 0.0.0.9221.
+Changes since development version 0.0.0.9222.
 
 ## New features
 
@@ -22,6 +22,36 @@ Changes since development version 0.0.0.9221.
 * Added lazy `relocate()` for dimension order with tidy-select selectors and
   `.before`/`.after`. It preserves named semantics and roles without rewriting
   or rechunking the backing HDF5 dataset.
+
+## Documentation and design notes
+
+* Reorganized the API reference into purpose-based categories covering all
+  exported functions and supported generic methods. Examples use the bundled
+  population cube and explain metadata-only operations, lazy views, bounded
+  computation, and EAGER conversions.
+* Documented grouping as an in-memory analysis setting, supported summary
+  expressions, required role/controller retention, and applicable missingness
+  versus structural exclusions.
+* Added proposals for ACS/SVI numeric-measure metadata, geographic hierarchy
+  and grouping metadata, package separation and TexasPop, and shared storage
+  for ACS measures. These notes describe future designs, not implemented APIs.
+
+## Testing and fixes
+
+* Replaced the utility test's local census-series dependency with the bundled
+  example cube and exact label/removal expectations.
+* Added regression coverage for lazy dimension verbs, grouping preservation,
+  overlap preflight, applicability, missing values, empty dimensions, double
+  sums beyond the integer limit, and HDF5 round trips.
+* The full test suite passed 1,829 assertions with no failures or errors.
+  Public help examples and API-reference chunks executed successfully, and
+  the reference rendered to HTML.
+
+# tarr.pop 0.0.0.9222
+
+Changes since development version 0.0.0.9221.
+
+## New features
 
 * Cube schema 1.2.0 adds stable cube IDs and metadata revision history inside
   HDF5 files. Metadata setters record snapshots automatically; explicit updates
