@@ -198,14 +198,6 @@ age_to_iv <- function(x, ...){
   ret
 }
 
-# format ivs is not exported from the ivs package.  This function make it available for this package.
-# @export
-# format.ivs_iv <- function(x, ...){
-#   ivs:::format.ivs_iv(x, ...)
-# }
-
-
-
 # Array dimension label functions ---------------------------------------------------------------------------------
 
 #' Drop Level(s) from an Array Dimension

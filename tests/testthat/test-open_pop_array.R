@@ -355,14 +355,14 @@ test_that("checkout opens a local copy and validates its arguments", {
   source <- DelayedArray::seed(original)@filepath
   destination <- tempfile("checkout-local-")
   copied <- open_poparray("checkout_series", checkout = TRUE, checkout_dir = destination)
-  expect_identical(DelayedArray::seed(copied)@filepath,
-                   normalizePath(file.path(destination, basename(source))))
+  expect_identical(normalizePath(DelayedArray::seed(copied)@filepath, winslash = "/"),
+                   normalizePath(file.path(destination, basename(source)), winslash = "/"))
   expect_identical(attr(copied, "backing_file"), source)
   expect_equal(as.array(copied), as.array(original))
   expect_identical(dim_semantics(copied), dim_semantics(original))
   expect_null(attr(original, "backing_file"))
   default_copy <- open_poparray("checkout_series", checkout = TRUE)
-  expect_identical(dirname(DelayedArray::seed(default_copy)@filepath), normalizePath(tempdir()))
+  expect_identical(normalizePath(dirname(DelayedArray::seed(default_copy)@filepath), winslash = "/"), normalizePath(tempdir(), winslash = "/"))
   expect_error(open_poparray("checkout_series", checkout = NA), "checkout")
   expect_error(open_poparray("checkout_series", checkout = TRUE, checkout_dir = NA_character_), "checkout_dir")
 })
@@ -405,8 +405,8 @@ test_that("direct filepath opening bypasses registry and preserves cube metadata
   withr::defer(unlink(destination, recursive = TRUE))
   copied <- open_poparray(filepath = fp, checkout = TRUE, checkout_dir = destination)
   expect_identical(attr(copied, "backing_file"), fp)
-  expect_identical(DelayedArray::seed(copied)@filepath,
-                   normalizePath(file.path(destination, basename(fp))))
+  expect_identical(normalizePath(DelayedArray::seed(copied)@filepath, winslash = "/"),
+                   normalizePath(file.path(destination, basename(fp)), winslash = "/"))
   expect_identical(cube_metadata(copied), cube_metadata(direct))
   expect_equal(as.array(copied), as.array(direct))
 })
