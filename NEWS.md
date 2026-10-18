@@ -1,3 +1,31 @@
+# tarr.pop 0.0.0.9224 (development version)
+
+Changes since development version 0.0.0.9223.
+
+## Example cube and documentation
+
+* Regenerated the bundled TDC example for Collin, Dallas, Denton, and Tarrant
+  counties in 2015–2018. Named subsetting preserves dimension semantics;
+  older source cubes receive documented age and race/ethnicity applicability
+  rules when those metadata are absent. Saving and reopening verifies that
+  dimension labels and semantics survive the HDF5 round trip.
+* Expanded the introduction's explanation of array storage, delayed computation,
+  and dimension-label helpers. Removed manual applicability assignment because
+  the bundled example now includes the reporting-period metadata.
+* Added an open_poparray() internals vignette with call-sequence diagrams,
+  support-function explanations, cache and validation limits, and executable
+  direct-file, registry, checkout, and cold/warm trace examples. Linked the
+  walkthrough from the function help and API reference.
+* Clarified the package description's population coverage and delayed workflow.
+
+## Maintenance
+
+* Normalized checkout paths in open_poparray() tests for consistent comparisons
+  on Windows and Linux, refreshed generic imports and method registrations,
+  and removed obsolete commented utility code.
+* Corrected the example script's object-size reference and used an explicit
+  filepath argument when reopening the saved cube.
+
 # tarr.pop 0.0.0.9223 (development version)
 
 Changes since development version 0.0.0.9222.
