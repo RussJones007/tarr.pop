@@ -8,7 +8,7 @@
 #
 # Steps:
 #    Run this script after setting up the environment in control_def.r
-#    Read and select four years of data from three counties.  Save as a
+#    Read and select four years of data from four counties.  Save as a
 #    data set in the package that can be loaded via sysfile
 #
 # -------------------------------------------------------------------------------------->
@@ -23,7 +23,15 @@ tdc_all <- open_poparray(population$texas.demographic.center$estimates)
 counties <- c("Collin", "Dallas", "Denton", "Tarrant")
 dimnames(tdc_all) |> names()
 
-tdc_example <- tdc_all[as.character(2015:2018), counties, , , ]
+# Subsetting preserves the source dimension semantics and adapts schema
+# applicability to the selected years without realizing the population array.
+tdc_example <- tdc_all[
+  year = as.character(2015:2018),
+  area.name = counties,
+  drop = FALSE
+]
+
+dim_semantics(tdc_example)
 
 source_info <- list(
   note            = c("This is the package example poparray for use in documentation examples.",
@@ -36,7 +44,7 @@ source_info <- list(
 )
 
 source_meta(tdc_example) <- source_info
-lobstr::obj_size(tdc)
+lobstr::obj_size(tdc_example)
 source_meta(tdc_example)
 
 # save the example in extdata
@@ -50,7 +58,14 @@ tarr.pop::save_poparray(tdc_example,
   overwrite = TRUE
 )
 
-rm(source_info, tdc_example, tdc_all, counties)
+# Verify that dimension labels and semantics survive the HDF5 round trip.
+saved_example <- open_poparray("inst/extdata/tdc_example.h5")
+stopifnot(
+  identical(dimnames(saved_example), dimnames(tdc_example)),
+  identical(dim_semantics(saved_example), dim_semantics(tdc_example))
+)
+
+rm(source_info, saved_example, tdc_example, tdc_all, counties)
 
 
 
