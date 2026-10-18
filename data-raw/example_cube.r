@@ -31,6 +31,33 @@ tdc_example <- tdc_all[
   drop = FALSE
 ]
 
+# Older source cubes lack applicability. Supply the documented TDC rules
+# used by tdc_estimate_semantics() in data-raw/tdc_estimates.r when absent.
+semantics <- dim_semantics(tdc_example)
+if (is.null(semantics$age.char@applicability)) {
+  semantics$age.char@applicability <- list(
+    by = "year",
+    schemas = list(
+      list(from = "2015", through = "2016",
+           levels = c("< 1", as.character(1:84), "85 +")),
+      list(from = "2017", through = "2018",
+           levels = c("< 1", as.character(1:94), "95 +"))
+    )
+  )
+}
+if (is.null(semantics$race.eth@applicability)) {
+  semantics$race.eth@applicability <- list(
+    by = "year",
+    schemas = list(
+      list(from = "2015", through = "2016",
+           levels = c("black", "hispanic", "other", "white")),
+      list(from = "2017", through = "2018",
+           levels = c("asian", "black", "hispanic", "other", "white"))
+    )
+  )
+}
+dim_semantics(tdc_example) <- semantics
+
 dim_semantics(tdc_example)
 
 source_info <- list(
@@ -59,13 +86,13 @@ tarr.pop::save_poparray(tdc_example,
 )
 
 # Verify that dimension labels and semantics survive the HDF5 round trip.
-saved_example <- open_poparray("inst/extdata/tdc_example.h5")
+saved_example <- open_poparray(filepath = "inst/extdata/tdc_example.h5")
 stopifnot(
   identical(dimnames(saved_example), dimnames(tdc_example)),
   identical(dim_semantics(saved_example), dim_semantics(tdc_example))
 )
 
-rm(source_info, saved_example, tdc_example, tdc_all, counties)
+rm(source_info, semantics, saved_example, tdc_example, tdc_all, counties)
 
 
 

@@ -28,11 +28,22 @@ one example: obtaining population estimates for Dallas and Tarrant
 counties for 2015–2018 using the small example cube included with the
 package.
 
-The usual workflow is to open a population cube, inspect its labels,
+Population data when represented as a data frame are very convenient for
+manipulating in grouping, sub-setting, aggregating. However, reading 
+large population data sets into R can be memory consuming, using tens or
+even hundreds of megabytes of memory that can slow execution. The 
+tarr.pop package allows you to get the needed population you need by using
+two methods. [Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com)
+store data much more efficeintly than data frames. For population stratified by age, sex, race, ethinicty, area, and
+year, an array can be 20% of the data frame size.  The second part of the solution is manipulating the metadata with
+deplayed computation. For example, selecting the years, ages, county you want, aggregating by one or more groups, can be
+done in memory without touching the data.  Then when you want the data iti is retrived.  This workflow saves memory 
+and time.
+
+The usual workflow is to open a population cube, inspect its labels and categories,
 select the population you need, and convert the result to a table. If
 you want totals rather than separate demographic groups, you sum those
-groups before conversion. You do not need to understand the underlying R
-classes to follow these steps.
+groups before conversion. 
 
 A population cube is an array with named dimensions. A cell might
 contain the number of female residents of Tarrant County aged 65 in 2018
@@ -68,42 +79,42 @@ pop
 
 Opening reads the labels and metadata and creates a disk-backed view. It
 does not load every population value into memory. This example contains
-Dallas, Denton, and Tarrant counties and the years 2015–2018. We will
+Collin, Dallas, Denton, and Tarrant counties and the years 2015–2018. We will
 compare Dallas and Tarrant.
 
-TDC uses one combined `race.eth` dimension for race and Hispanic
+The TDC uses one combined `race.eth` dimension for race and Hispanic
 ethnicity. Other sources may use separate dimensions, so always inspect
-the cube you open. For larger data collections, `set_cube_path()`
-configures an external cube folder and `open_poparray()` can open a
-registered series by name. Those steps are not needed for this bundled
-example.
+the cube you open. 
 
 ## Inspect coverage and labels
 
-Start with the source notes and available coordinates. These operations
+Start with the source notes and available dimensions. These operations
 inspect metadata without extracting population values.
 
 ```{r inspect_cube}
 source_meta(pop)
-names(dimnames(pop))
+dimnames(pop) |> names()
 dim(pop)
 
-head(times(pop))
-head(areas(pop))
-head(ages(pop))
-sexes(pop)
+# Get the label or categories for several dimensions
+# dim_labels() is the functin yo can use on aby dimension
 dim_labels(pop, "race.eth")
+
+# Look at the  par of the labels in each dimension
+# These convenience functions are wrappers areound dim_labels()
+times(pop) |> head()
+areas(pop) |> head()
+ages(pop)  |> head()
+sexes(pop)
 ```
 
-`times()` and `areas()` return the labels for the time and area roles.
-`ages()` and `sexes()` are convenient ways to inspect demographic
-labels. Use `dim_labels()` for any named dimension, such as `race.eth`.
-The dimensions here are `year`, `area.name`, `sex`, `age.char`, and
-`race.eth`.
+`times()` and `areas()` return the labels for the time and area roles. `ages()` and `sexes()` are convenient ways to
+inspect demographic labels. These are just function wrappers around the dim_labels() function.  Use `dim_labels()` for
+any named dimension, such as `race.eth`. The dimensions here are `year`, `area.name`, `sex`, `age.char`, and `race.eth`.
 
 # Handle the 2016–2017 category change
 
-A **schema** is the set of categories used to report the data. TDC
+A **schema** is the set of categories used to report the data. The TDC
 changed both age and race/ethnicity categories in 2017. Through 2016,
 ages end at `"85 +"` (everyone aged 85 or older). From 2017, ages 85–94
 are reported individually, followed by `"95 +"`. Asian residents were
@@ -116,40 +127,11 @@ absence of a separate Asian count in 2016 does not mean there were no
 Asian residents. Likewise, removing `"85 +"` from all years would remove
 the older population from 2015 and 2016.
 
-This example file does not yet record which labels apply in each period.
-The following setup adds that information to our R object using the
-known TDC reporting rules. For cubes that already have this
-**applicability** metadata, inspect it and skip this setup. Do not infer
-reporting rules just from missing counts.
-
-```{r describe_reporting_periods}
-semantics <- dim_semantics(pop)
-semantics$age.char@applicability <- list(
-  by = "year",
-  schemas = list(
-    list(from = "2015", through = "2016",
-         levels = c("< 1", as.character(1:84), "85 +")),
-    list(from = "2017", through = "2018",
-         levels = c("< 1", as.character(1:94), "95 +"))
-  )
-)
-semantics$race.eth@applicability <- list(
-  by = "year",
-  schemas = list(
-    list(from = "2015", through = "2016",
-         levels = c("black", "hispanic", "other", "white")),
-    list(from = "2017", through = "2018",
-         levels = c("asian", "black", "hispanic", "other", "white"))
-  )
-)
-dim_semantics(pop) <- semantics
-```
-
-`by = "year"` means that the year determines which categories apply. The
-`from` and `through` endpoints are inclusive. This changes metadata on
-`pop`; it does not rewrite the packaged HDF5 file or change its counts.
-The package can now sum the appropriate categories for each year while
-keeping genuinely missing counts as missing.
+The example cube includes **applicability** metadata for the TDC reporting
+periods. This records which age and race/ethnicity categories apply in
+each year, so no manual assignment of dimension semantics is needed.
+The package uses this metadata to sum the appropriate categories for
+each year while keeping genuinely missing counts as missing.
 
 # Select your population
 
