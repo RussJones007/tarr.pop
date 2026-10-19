@@ -134,10 +134,13 @@ collapse_dim_poparray_impl <- function(x,
                                        strict = TRUE,
                                        allow_overlap = FALSE,
                                        drop = FALSE,
-                                       na.rm = FALSE) {
+                                       na.rm = FALSE,
+                                       reducer = pa_measure_reducers$sum,
+                                       plan = NULL, prepare_only = FALSE) {
   checkmate::assert_flag(drop)
   checkmate::assert_flag(na.rm)
   
+  if (is.null(plan)) {
   # ---- 1) Resolve dimension + labels ----
   dn <- dimnames(x)
   dim_names <- names(dn)
@@ -249,6 +252,14 @@ collapse_dim_poparray_impl <- function(x,
     dims = c(length(g), length(new_levels))
   )
   
+  plan <- list(dn = dn, k = k, dim_nm = dim_nm, keep = keep,
+    new_levels = new_levels, g = g, schema_plan = schema_plan, M = M,
+    drop_target = drop_target)
+  }
+  if (prepare_only) return(plan)
+  dn <- plan$dn; k <- plan$k; dim_nm <- plan$dim_nm; keep <- plan$keep
+  new_levels <- plan$new_levels; g <- plan$g; schema_plan <- plan$schema_plan
+  M <- plan$M; drop_target <- plan$drop_target
   # ---- 4) Permute so target dim is last, and subset to kept labels ----
   a <- x
   nd <- length(dim(a))
@@ -269,7 +280,7 @@ collapse_dim_poparray_impl <- function(x,
   n_new <- length(new_levels)
   
   d_new_perm <- c(d_perm[-nd], n_new)
-  type_in <- DelayedArray::type(a_perm)
+  type_in <- if (is.null(reducer$type)) DelayedArray::type(a_perm) else reducer$type
   bytes_per <- pa_bytes_per_cell(type_in)
   blockdim_perm <- pa_collapse_blockdim(
     dim = if (is.null(schema_plan)) d_perm else c(d_perm[-nd], max(n_old_keep, n_new)),
@@ -293,9 +304,11 @@ collapse_dim_poparray_impl <- function(x,
     block_dim <- dim(block_arr)
     n_row <- if (length(block_dim) == 1L) 1L else prod(block_dim[-nd])
     mat_old <- matrix(block_arr, nrow = n_row, ncol = n_old_keep)
+    mat_old <- reducer$before(mat_old)
     if (na.rm) mat_old[is.na(mat_old)] <- 0
     mat_new <- if (is.null(schema_plan)) mat_old %*% M else
       pa_collapse_schema_block(mat_old, block_dim, block_idx, perm, schema_plan)
+    mat_new <- reducer$after(mat_new)
     out_block <- array(mat_new, dim = c(block_dim[-nd], n_new))
 
     if (length(block_idx) == 0L) {
