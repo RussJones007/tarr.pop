@@ -154,7 +154,7 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
   )
 
   long[ , c("race.eth", "sex") := data.table::tstrsplit(race.sex, split = ".", fixed = TRUE, fill = NA)
-  ][    , age      := forcats::fct_relabel(age,\(x) process_age_char(x) |> rage::as.age_group() |> as.character())
+  ][    , age      := forcats::fct_relabel(age,\(x) process_age_char(x) |> agecraft::as.age_group() |> as.character())
   ][    , age      := ordered(age, levels = ordered_age_levels(age))
   ][    , sex      := forcats::fct_na_value_to_level(sex, level = "All")
   ][    , race.eth := factor(race.eth)
@@ -260,8 +260,8 @@ tdc_estimate_semantics <- function(support = NULL) {
         levels = levels[[i]]
       ))
     }
-    early_age <- c("< 1", as.character(1:84), "85 +") |> rage::as.age_group() |> as.character()
-    late_age <- c("< 1", as.character(1:94), "95 +") |> rage::as.age_group() |> as.character()
+    early_age <- c("< 1", as.character(1:84), "85 +") |> agecraft::as.age_group() |> as.character()
+    late_age <- c("< 1", as.character(1:94), "95 +") |> agecraft::as.age_group() |> as.character()
     semantics$age.char <- tarr.pop:::pa_update_dim_semantics(semantics$age.char,
       applicability = list(by = "year", schemas = schemas(
         intersect(age_labels, early_age), intersect(age_labels, late_age))))

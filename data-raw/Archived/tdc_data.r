@@ -111,7 +111,7 @@ tdc.estimates[
       , county := fct_relabel(county, ~str_to_title(gsub(pattern = " COUNTY", "", .x , ignore.case = T))) |>
         fct_recode("Texas" = "State Of Texas" )][
           , age := fct_relabel(age,
-                               .fun = ~process_age_char(.x) |> rage::as.age_group() |> as.character()) ][
+                               .fun = ~process_age_char(.x) |> agecraft::as.age_group() |> as.character()) ][
                                  , age := ordered(age, levels = ord_ages(age))][
                                    , c("race.eth", "sex") := tstrsplit(race.sex, split = ".", fixed = TRUE, fill = NA)][
                                      , sex := fct_na_value_to_level(sex, level = "All")][

@@ -41,7 +41,7 @@ before running the update script:
 library(tidyverse)
 library(janitor)
 library(data.table)
-library(rage)
+library(agecraft)
 library(DelayedArray)
 
 devtools::load_all()
@@ -98,7 +98,7 @@ process_tdc_update_age <- function(x) {
 
 ordered_tdc_update_ages <- function(x) {
   age_levels <- setdiff(levels(x), "All")
-  c(sort(as.character(rage::as.age_group(age_levels))), "All")
+  c(sort(as.character(agecraft::as.age_group(age_levels))), "All")
 }
 ```
 
@@ -183,7 +183,7 @@ The transformer in `data-raw/tdc_add_estimate_year.r`:
 5. Removes unavailable population values and physical `"All"` aggregate records.
 6. Drops unused factor levels and restores canonical column order.
 
-Age labels retain interval order through `rage::as.age_group()` and an ordered factor. This avoids
+Age labels retain interval order through `agecraft::as.age_group()` and an ordered factor. This avoids
 alphabetic ordering such as placing age 10 before age 2. Physical `"All"` rows are removed because
 `tarr.pop` treats totals as virtual aggregates rather than independent cube cells.
 

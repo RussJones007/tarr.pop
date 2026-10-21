@@ -49,7 +49,7 @@ For an interactive development session, the setup looks like this:
 library(tidyverse)
 library(janitor)
 library(data.table)
-library(rage)
+library(agecraft)
 library(DelayedArray)
 
 devtools::load_all()
@@ -108,14 +108,14 @@ process_age_char <- function(x) {
 ```
 
 Age is not treated as a plain character field. In a population cube, age labels have interval
-meaning. The helper below uses `rage::as.age_group()` to sort age groups by their interval order,
+meaning. The helper below uses `agecraft::as.age_group()` to sort age groups by their interval order,
 not by alphabetic order.
 
 ```{r ordered-age-levels}
 ordered_age_levels <- function(x) {
   age_levels <- levels(x)
   age_levels <- age_levels[age_levels != "All"]
-  c(sort(as.character(rage::as.age_group(age_levels))), "All")
+  c(sort(as.character(agecraft::as.age_group(age_levels))), "All")
 }
 ```
 
@@ -239,7 +239,7 @@ transform_tdc_estimates <- function(df, counties = NULL, include_texas_total = F
     ,
     age := forcats::fct_relabel(
       age,
-      \(x) process_age_char(x) |> rage::as.age_group() |> as.character()
+      \(x) process_age_char(x) |> agecraft::as.age_group() |> as.character()
     )
   ][
     ,
@@ -395,7 +395,7 @@ age_levels <- c(
   "< 1", as.character(1:84), "85", "85 +",
   as.character(86:94), "95 +"
 ) |>
-  rage::as.age_group() |>
+  agecraft::as.age_group() |>
   ordered()
 
 support_table <- tidyr::expand_grid(

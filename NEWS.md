@@ -1,3 +1,31 @@
+# tarr.pop 0.0.0.9225 (development version)
+
+Changes since development version 0.0.0.9224.
+
+## Dependency migration
+
+* Replaced rage with agecraft for age interval conversion, ordering, age
+  grouping, and overlap checks. Updated data preparation scripts and vignettes
+  to use agecraft, and age-group examples to use agecraft::age_group_presets.
+* Added regression tests for preset-based grouping, population totals, delayed
+  HDF5-backed results, metadata preservation, and infant/open-ended interval
+  safety. Existing age filtering, applicability, collapse, and Census vintage
+  tests also pass with agecraft.
+
+## Linked population estimates and margins of error
+
+* Added poparray_measures(), select_measures(), save_measures(), and
+  open_measures() for aligned population estimates and companion ACS margins
+  of error, with shared coordinates and semantics in HDF5 storage.
+* Added coordinated collapse_dim() reductions: population counts are summed
+  and compatible ACS margins of error use sqrt(sum(moe^2)), with derived
+  uncertainty metadata recording the covariance limitation. Missing estimates,
+  missing MOEs, and negative MOE sentinels propagate to paired results.
+* Enforced alignment and compatibility contracts, blocked reductions across
+  reference periods and unsupported statistics, and retained explicit handling
+  of legacy single-measure cubes. Added usage documentation and tests for
+  storage round trips, selection, safety checks, and fractional MOE results.
+
 # tarr.pop 0.0.0.9224 (development version)
 
 Changes since development version 0.0.0.9223.

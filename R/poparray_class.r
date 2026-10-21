@@ -1404,7 +1404,7 @@ polish_df <- function(df,
     
     if (!is.null(ages)) {
       ages_no_all <- if (rlang::is_empty(all_term)) ages else ages[ages != all_term]
-      age_ivs <- rage::as.age_group(ages_no_all) |>
+      age_ivs <- agecraft::as.age_group(ages_no_all) |>
         sort()
       
       age_levels <- c(as.character(age_ivs), all_term)

@@ -35,7 +35,7 @@ process_tdc_update_age <- function(x) {
 ## Create an ordered factor from the ages labels ---
 ordered_tdc_update_ages <- function(x) {
   age_levels <- setdiff(levels(x), "All")
-  c(age_levels |> rage::as.age_group() |> as.character() |> sort(), "All")
+  c(age_levels |> agecraft::as.age_group() |> as.character() |> sort(), "All")
 }
 
 # 2. Functions to read the raw CSV file and transform the data. -----------------------------------------------------------------------
@@ -163,7 +163,7 @@ transform_tdc_estimate_year <- function(
     ][, county := forcats::fct_recode(county, "Texas" = "State Of Texas")
     ][, age := forcats::fct_relabel(
           age,
-          \(x) process_tdc_update_age(x) |> rage::as.age_group() |> as.character())
+          \(x) process_tdc_update_age(x) |> agecraft::as.age_group() |> as.character())
     ][, age := ordered(age, levels = ordered_tdc_update_ages(age))
   ][, sex := forcats::fct_na_value_to_level(sex, level = "All")
   ][, race.eth := factor(race.eth)

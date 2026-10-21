@@ -149,7 +149,7 @@ Sys.setenv(TARR_POP_SKIP_CUBE_SETUP = "true")
 library(tidyverse)
 library(janitor)
 library(data.table)
-library(rage)
+library(agecraft)
 devtools::load_all()
 
 # Capture the configured production root before selecting an isolated build root.
@@ -161,7 +161,7 @@ sessionInfo()
 
 `tarr::paths$population` is the local path convention used by the supplied script. It is not a
 portable requirement: set `input_dir` explicitly for another computer. The local ingestion tooling
-uses packages such as readr, janitor, forcats, and rage in addition to the package itself.
+uses packages such as readr, janitor, forcats, and agecraft in addition to the package itself.
 
 Find the source data files and place the file names in a list called "files".
 
@@ -241,7 +241,7 @@ drop them. State identifiers resolve to canonical `Texas`; exclusion is controll
 `include_texas_total`, including when `counties = NULL`.
 
 The wide counts are then melted, race/sex column names are split, age labels are interpreted through
-rage, aggregates are removed, and remaining factor levels are retained in their intended order.
+agecraft, aggregates are removed, and remaining factor levels are retained in their intended order.
 Do not reorder raw age factor levels alphabetically before this transformation. Check infancy and
 upper-age labels directly after normalization.
 

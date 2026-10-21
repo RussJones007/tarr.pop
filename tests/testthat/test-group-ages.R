@@ -58,3 +58,25 @@ test_that("group_ages matches collapse_dim age specialization", {
   expect_equal(as.array(grouped), as.array(collapsed))
   expect_equal(dimnames(grouped), dimnames(collapsed))
 })
+
+test_that("group_ages accepts agecraft preset breaks and preserves totals", {
+  pa <- make_group_ages_fixture()
+  out <- group_ages(pa, agecraft::age_group_presets$ILI)
+
+  expect_identical(dimnames(out)$age.char, c("0-4", "5-24"))
+  expect_true(tarr.pop:::is_hdf5_backed_delayed(out))
+  expect_equal(time_role(out), time_role(pa))
+  expect_equal(area_role(out), area_role(pa))
+  expect_equal(as.array(out)[, , 1], as.array(pa)[, , 1])
+  expect_equal(as.array(out)[, , 2], as.array(pa)[, , 2] + as.array(pa)[, , 3])
+  expect_silent(validate_poparray(out))
+})
+
+test_that("agecraft canonical labels retain interval safety", {
+  expect_false(pa_has_interval_overlap(c("< 1", "1-4", "5-9", "85 +")))
+  expect_true(pa_has_interval_overlap(c("< 1", "0-4")))
+  expect_true(pa_has_interval_overlap(c("85 +", "90-94")))
+  expect_identical(pa_age_contributors(c("85-89", "90-94", "95 +"), "85+"),
+    c("85-89", "90-94", "95 +"))
+  expect_identical(pa_age_contributors("85 +", "90+"), character())
+})

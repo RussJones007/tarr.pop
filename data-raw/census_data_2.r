@@ -42,10 +42,10 @@ census_county_names <- function(codes) {
 
 #' Normalize and order interval-valued ages
 #' @param x Age labels, excluding aggregate labels.
-#' @return Ordered factor using rage interval ordering.
+#' @return Ordered factor using agecraft interval ordering.
 census_age_factor <- function(x) {
   labels <- unique(as.character(x))
-  ages <- rage::as.age_group(labels)
+  ages <- agecraft::as.age_group(labels)
   ordered(as.character(ages)[match(as.character(x), labels)],
     levels = as.character(sort(unique(ages))))
 }

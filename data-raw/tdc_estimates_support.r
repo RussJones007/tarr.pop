@@ -15,7 +15,7 @@
   ordered_age_levels <- function(x) {
     age_levels <- levels(x)
     age_levels <- age_levels[age_levels != "All"]
-    c(age_levels |> rage::as.age_group() |> as.character() |> sort(), "All")
+    c(age_levels |> agecraft::as.age_group() |> as.character() |> sort(), "All")
   }
   
 ##------------------------------------------------------------------------->
@@ -43,8 +43,8 @@ tdc_estimate_years_from_files <- function(
 
 tdc_ordered_age_factor <- function(labels, levels = labels) {
   ordered(
-    labels |> rage::as.age_group() |> as.character(),
-    levels = as.character(sort(rage::as.age_group(levels)))
+    labels |> agecraft::as.age_group() |> as.character(),
+    levels = as.character(sort(agecraft::as.age_group(levels)))
   )
 }
 
@@ -82,7 +82,7 @@ tdc_estimate_support_table <- function(
       area.name = factor(county_levels, levels = county_levels),
       sex = factor(sex_levels, levels = sex_levels),
       age.char = factor(
-        age_labels |> rage::as.age_group() |> as.character(),
+        age_labels |> agecraft::as.age_group() |> as.character(),
         levels = age_levels,
         ordered = TRUE
       ),
