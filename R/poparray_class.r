@@ -354,7 +354,7 @@ setValidity("poparray", function(object) {
 #'  The dimnames() function is time expensive.  This method caches the dimension names
 #'  to prevent pinging the on disk file.  
 #'
-#' @param poparray the name of th epoparray
+#' @param poparray the name of the poparray
 #'
 #' @returns the poparray
 
@@ -854,6 +854,8 @@ setMethod(
     before_dimnames <- dimnames(x)
     dim_order <- names(before_dimnames)
     h <- methods::as(x, "DelayedArray")
+    
+    if(is.null(dimnames(h))) dimnames(h) <- before_dimnames
 
     extra_dots <- as.list(substitute(list(...)))[-1L]
     extra_names <- names(extra_dots) %||% rep("", length(extra_dots))
