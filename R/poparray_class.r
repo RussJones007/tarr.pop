@@ -853,8 +853,8 @@ setMethod(
     validate_poparray(x)
     before_dimnames <- dimnames(x)
     dim_order <- names(before_dimnames)
-    h <- methods::as(x, "DelayedArray")
     
+    h <- methods::as(x, "DelayedArray")
     if(is.null(dimnames(h))) dimnames(h) <- before_dimnames
 
     extra_dots <- as.list(substitute(list(...)))[-1L]
