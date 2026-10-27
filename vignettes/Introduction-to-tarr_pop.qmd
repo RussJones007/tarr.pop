@@ -29,21 +29,24 @@ counties for 2015–2018 using the small example cube included with the
 package.
 
 Population data when represented as a data frame are very convenient for
-manipulating in grouping, sub-setting, aggregating. However, reading 
+manipulating in grouping, sub-setting, aggregating. However, reading
 large population data sets into R can be memory consuming, using tens or
-even hundreds of megabytes of memory that can slow execution. The 
-tarr.pop package allows you to get the needed population you need by using
-two methods. [Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com)
-store data much more efficeintly than data frames. For population stratified by age, sex, race, ethinicty, area, and
-year, an array can be 20% of the data frame size.  The second part of the solution is manipulating the metadata with
-deplayed computation. For example, selecting the years, ages, county you want, aggregating by one or more groups, can be
-done in memory without touching the data.  Then when you want the data iti is retrived.  This workflow saves memory 
-and time.
+even hundreds of megabytes of memory that can slow execution. The
+tarr.pop package allows you to get the needed population you need by
+using two methods.
+[Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com)
+store data much more efficeintly than data frames. For population
+stratified by age, sex, race, ethinicty, area, and year, an array can be
+20% of the data frame size. The second part of the solution is
+manipulating the metadata with deplayed computation. For example,
+selecting the years, ages, county you want, aggregating by one or more
+groups, can be done in memory without touching the data. Then when you
+want the data iti is retrived. This workflow saves memory and time.
 
-The usual workflow is to open a population cube, inspect its labels and categories,
-select the population you need, and convert the result to a table. If
-you want totals rather than separate demographic groups, you sum those
-groups before conversion. 
+The usual workflow is to open a population cube, inspect its labels and
+categories, select the population you need, and convert the result to a
+table. If you want totals rather than separate demographic groups, you
+sum those groups before conversion.
 
 A population cube is an array with named dimensions. A cell might
 contain the number of female residents of Tarrant County aged 65 in 2018
@@ -79,12 +82,12 @@ pop
 
 Opening reads the labels and metadata and creates a disk-backed view. It
 does not load every population value into memory. This example contains
-Collin, Dallas, Denton, and Tarrant counties and the years 2015–2018. We will
-compare Dallas and Tarrant.
+Collin, Dallas, Denton, and Tarrant counties and the years 2015–2018. We
+will compare Dallas and Tarrant.
 
 The TDC uses one combined `race.eth` dimension for race and Hispanic
 ethnicity. Other sources may use separate dimensions, so always inspect
-the cube you open. 
+the cube you open.
 
 ## Inspect coverage and labels
 
@@ -108,9 +111,12 @@ ages(pop)  |> head()
 sexes(pop)
 ```
 
-`times()` and `areas()` return the labels for the time and area roles. `ages()` and `sexes()` are convenient ways to
-inspect demographic labels. These are just function wrappers around the dim_labels() function.  Use `dim_labels()` for
-any named dimension, such as `race.eth`. The dimensions here are `year`, `area.name`, `sex`, `age.char`, and `race.eth`.
+`times()` and `areas()` return the labels for the time and area roles.
+`ages()` and `sexes()` are convenient ways to inspect demographic
+labels. These are just function wrappers around the dim_labels()
+function. Use `dim_labels()` for any named dimension, such as
+`race.eth`. The dimensions here are `year`, `area.name`, `sex`,
+`age.char`, and `race.eth`.
 
 # Handle the 2016–2017 category change
 
@@ -127,11 +133,11 @@ absence of a separate Asian count in 2016 does not mean there were no
 Asian residents. Likewise, removing `"85 +"` from all years would remove
 the older population from 2015 and 2016.
 
-The example cube includes **applicability** metadata for the TDC reporting
-periods. This records which age and race/ethnicity categories apply in
-each year, so no manual assignment of dimension semantics is needed.
-The package uses this metadata to sum the appropriate categories for
-each year while keeping genuinely missing counts as missing.
+The example cube includes **applicability** metadata for the TDC
+reporting periods. This records which age and race/ethnicity categories
+apply in each year, so no manual assignment of dimension semantics is
+needed. The package uses this metadata to sum the appropriate categories
+for each year while keeping genuinely missing counts as missing.
 
 # Select your population
 
@@ -219,7 +225,7 @@ Now sum over age, race/ethnicity, and sex:
 
 ```{r county_totals}
 pop_totals <- pop_small |>
-  collapse_all(dim = c("age.char", "race.eth", "sex"))
+  collapse_all(dim = c("age.char", "race.eth", "sex"), allow_overlap = TRUE)
 
 pop_totals
 ```
