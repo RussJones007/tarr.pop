@@ -7,7 +7,7 @@
 \S4method{dimnames}{poparray}(x)
 }
 \arguments{
-\item{poparray}{the name of th epoparray}
+\item{poparray}{the name of the poparray}
 }
 \value{
 the poparray
