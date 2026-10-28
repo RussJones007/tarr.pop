@@ -11,7 +11,7 @@ vignette: >
   %\VignetteEngine{quarto::html}
 editor:
   markdown:
-    wrap: 72
+    wrap: 100
 ---
 
 ```{r}
@@ -32,23 +32,27 @@ Population data when represented as a data frame are very convenient for
 manipulating in grouping, sub-setting, aggregating. However, reading
 large population data sets into R can be memory consuming, using tens or
 even hundreds of megabytes of memory that can slow execution. The
-tarr.pop package allows you to get the needed population you need by
+tarr.pop package allows you to get the population you need by
 using two methods.
-[Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com)
-store data much more efficeintly than data frames. For population
-stratified by age, sex, race, ethinicty, area, and year, an array can be
+
+[Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com) 
+store data much more efficiently than data frames. For population
+stratified by age, sex, race, ethnicity, area, and year, an array can be
 20% of the data frame size. The second part of the solution is
 manipulating the metadata with deplayed computation. For example,
 selecting the years, ages, county you want, aggregating by one or more
 groups, can be done in memory without touching the data. Then when you
-want the data iti is retrived. This workflow saves memory and time.
+want the data it is retrieved. This workflow saves memory and time.
 
-The usual workflow is to open a population cube, inspect its labels and
+The usual workflow is to open a population array, alos called a cube, inspect its labels and
 categories, select the population you need, and convert the result to a
-table. If you want totals rather than separate demographic groups, you
+table/data frame. If you want totals rather than separate demographic groups, you
 sum those groups before conversion.
 
-A population cube is an array with named dimensions. A cell might
+A population array may contain two or more dimensions and is often referred to as a population cube and is 
+saved to disk in a compressed [HDF5](https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html) type file.
+The dimensions and categories/levels contained in them are used to select the 
+data that you may need.  For exampe a cell might
 contain the number of female residents of Tarrant County aged 65 in 2018
 in a particular race/ethnicity category. The dimension labels identify
 which population each count describes. The package keeps that structure
@@ -58,9 +62,8 @@ and its metadata together while you select and summarize data.
 
 ## Load the bundled example
 
-The package includes a small Texas Demographic Center (TDC) county
-estimates cube. You can run this guide with an installed copy of
-`tarr.pop`; no download or external cube-folder setup is needed.
+The package includes a small https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html (TDC) county
+population estimates cube.
 
 ```{r libraries}
 #| message: false
@@ -81,13 +84,13 @@ pop
 ```
 
 Opening reads the labels and metadata and creates a disk-backed view. It
-does not load every population value into memory. This example contains
+does not load every population value into memory. Rather all the meta data is loaded
+so you can select what may be needed, then "realize" the data.  This example popuaton cube contains
 Collin, Dallas, Denton, and Tarrant counties and the years 2015–2018. We
 will compare Dallas and Tarrant.
 
-The TDC uses one combined `race.eth` dimension for race and Hispanic
-ethnicity. Other sources may use separate dimensions, so always inspect
-the cube you open.
+The TDC uses one combined `race.eth` dimension for race
+and Hispanic ethnicity. Other sources may use separate dimensions, so always inspect the cube you open.
 
 ## Inspect coverage and labels
 
