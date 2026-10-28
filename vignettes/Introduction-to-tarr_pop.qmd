@@ -33,25 +33,34 @@ manipulating in grouping, sub-setting, aggregating. However, reading
 large population data sets into R can be memory consuming, using tens or
 even hundreds of megabytes of memory that can slow execution. The
 tarr.pop package allows you to get the population you need by
-using two methods.
+two means:  efficient data organization and manipulation of metadata and 
+selectively loading the data.
 
 [Arrays](https://www.programiz.com/r/arrays?utm_source=chatgpt.com) 
 store data much more efficiently than data frames. For population
 stratified by age, sex, race, ethnicity, area, and year, an array can be
-20% of the data frame size. The second part of the solution is
+20% of the data frame size. The second part is
 manipulating the metadata with deplayed computation. For example,
 selecting the years, ages, county you want, aggregating by one or more
 groups, can be done in memory without touching the data. Then when you
-want the data it is retrieved. This workflow saves memory and time.
+want the data only the selected data is retrieved from disk. 
+This workflow reduces memory use and saves time.
 
-The usual workflow is to open a population array, alos called a cube, inspect its labels and
+Arrays can multiple dimensions. Think of  as a 2-dimension array as a table with rows and columns.
+A 3-dimension is cube with rows, columns and depth.  An array with more thn three dimensions is 
+hard to visualize in a physica sense, but can be thought of a a hyper-cube.  For simplicity, the package
+refers to all popuolation arracys with mulitple dimesions as population cubes.  
+
+To use the package, the usual workflow is to open a population cube, inspect its labels and
 categories, select the population you need, and convert the result to a
-table/data frame. If you want totals rather than separate demographic groups, you
-sum those groups before conversion.
+table/data frame. If you want totals rather than separate demographic groups, you "collapse"" the dimension
+categories into fewer groups within the diemnsion which automatically sums the population figures into the new groups.
+All this os done by manipulating the metadata - dimesion selection, removing or grouping categories, then
+asking converting to a data.frame or in memory array which causes selected data to be fetched and where needed 
+summed. 
 
-A population array may contain two or more dimensions and is often referred to as a population cube and is 
-saved to disk in a compressed [HDF5](https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html) type file.
-The dimensions and categories/levels contained in them are used to select the 
+A population array/cube contains two or more dimensions cube and is 
+saved to disk in a compressed [HDF5](https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html) type file. The dimensions and categories/levels contained in them are used to select the 
 data that you may need.  For exampe a cell might
 contain the number of female residents of Tarrant County aged 65 in 2018
 in a particular race/ethnicity category. The dimension labels identify
@@ -62,8 +71,7 @@ and its metadata together while you select and summarize data.
 
 ## Load the bundled example
 
-The package includes a small https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html (TDC) county
-population estimates cube.
+The package includes a small TDC county population estimates cube. that will be used in the following examples.
 
 ```{r libraries}
 #| message: false
@@ -85,9 +93,10 @@ pop
 
 Opening reads the labels and metadata and creates a disk-backed view. It
 does not load every population value into memory. Rather all the meta data is loaded
-so you can select what may be needed, then "realize" the data.  This example popuaton cube contains
-Collin, Dallas, Denton, and Tarrant counties and the years 2015–2018. We
-will compare Dallas and Tarrant.
+so you can select what may be needed, then "realize" the data when a data frame is needed.  
+This example population cube contains
+Collin, Dallas, Denton, and Tarrant counties estimates for the years 2015–2018. We will select
+ and compare Dallas and Tarrant.
 
 The TDC uses one combined `race.eth` dimension for race
 and Hispanic ethnicity. Other sources may use separate dimensions, so always inspect the cube you open.
