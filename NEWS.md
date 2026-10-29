@@ -2,6 +2,13 @@
 
 Changes since development version 0.0.0.9225.
 
+* Added `select()` for poparray dimensions with tidyselect name helpers,
+  ordering, and renaming. Omitted dimensions are collapsed in original array
+  order and dropped, while omitted time/area roles remain singleton dimensions.
+  Predicate selectors are unsupported; existing overlap and applicability
+  guards remain active. Reordering and renaming stay lazy, and reductions use
+  bounded HDF5-backed computation.
+
 * Fixed subsetting so conversion of a subsetted poparray to DelayedArray
   preserves dimension names and labels on the underlying delayed object.
 * Expanded and refined the introduction with explanations of population cubes,
