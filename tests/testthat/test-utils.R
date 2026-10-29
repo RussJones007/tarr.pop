@@ -13,8 +13,8 @@ test_that("label access and removal work with the bundled example cube", {
 
   expect_identical(sexes(arr), c("female", "male"))
   expect_identical(sexes(arr, remove = "female"), "male")
-  expect_identical(areas(arr), c("Dallas", "Denton", "Tarrant"))
-  expect_identical(areas(arr, remove = stringr::regex("^D")), "Tarrant")
+  expect_identical(areas(arr), c("Collin", "Dallas", "Denton", "Tarrant"))
+  expect_identical(areas(arr, remove = stringr::regex("^D")), c("Collin", "Tarrant"))
 
   # This cube stores combined race/ethnicity categories, not a separate race axis.
   expect_identical(dim_labels(arr, "race.eth"),
