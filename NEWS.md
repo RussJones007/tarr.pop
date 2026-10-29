@@ -1,3 +1,23 @@
+# tarr.pop 0.0.0.9226 (development version)
+
+Changes since development version 0.0.0.9225.
+
+* Fixed subsetting so conversion of a subsetted poparray to DelayedArray
+  preserves dimension names and labels on the underlying delayed object.
+* Expanded and refined the introduction with explanations of population cubes,
+  array and HDF5 storage, metadata manipulation, and the TDC source.
+
+## Linked-measure branch summary
+
+* Added aligned population estimate and ACS margin-of-error bundles, measure
+  selection, shared HDF5 persistence, and coordinated count/MOE reductions.
+  Alignment, uncertainty compatibility, missingness, and aggregation guards
+  protect these operations; usage notes and regression tests cover the APIs.
+* Migrated age interval conversion, grouping, ordering, and overlap checks from
+  rage to agecraft throughout package code, source scripts, and examples.
+* Preserved dimension names during delayed subsetting and improved introductory
+  documentation. The select.poparray() design remains future work.
+
 # tarr.pop 0.0.0.9225 (development version)
 
 Changes since development version 0.0.0.9224.

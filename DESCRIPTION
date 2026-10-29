@@ -1,7 +1,7 @@
 Package: tarr.pop
 Type: Package
 Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
-Version: 0.0.0.9225
+Version: 0.0.0.9226
 Description: A package for retrieving and manipulating population data.
     Data is stored on disk in multidimensional arrays or cubes. Operations
     use delayed evaluation, and then selected results can be retrieved into 
