@@ -58,5 +58,6 @@ tarr_pop_startup_setup <- function(interactive_session = interactive()) {
 }
 
 .onLoad <- function(libname, pkgname) {
+  S7::methods_register()
   tarr_pop_startup_setup(interactive_session = interactive())
 }

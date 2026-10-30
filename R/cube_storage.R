@@ -189,7 +189,7 @@ init_cubes <- function(path = cube_path(), persist = TRUE) {
 
   dirs <- file.path(
     root,
-    c("base", "cache", "derived", "derived/projections", "derived/filtered", "derived/custom")
+    c("base", "cache", "views", "derived", "derived/projections", "derived/filtered", "derived/custom")
   )
   invisible(vapply(dirs, dir.create, logical(1), recursive = TRUE, showWarnings = FALSE))
 

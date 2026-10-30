@@ -71,6 +71,7 @@ test_that("init_cubes creates expected storage subdirectories", {
   expect_equal(out, normalizePath(root, winslash = "/", mustWork = FALSE))
   expect_true(dir.exists(file.path(root, "base")))
   expect_true(dir.exists(file.path(root, "cache")))
+  expect_true(dir.exists(file.path(root, "views")))
   expect_true(dir.exists(file.path(root, "derived", "projections")))
   expect_true(dir.exists(file.path(root, "derived", "filtered")))
   expect_true(dir.exists(file.path(root, "derived", "custom")))
