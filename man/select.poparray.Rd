@@ -12,27 +12,24 @@
 \item{...}{Tidy-select expressions selecting dimensions, not category levels.}
 }
 \value{
-A HDF5-backed \code{poparray} with selected dimensions followed by any
-omitted required dimensions. Invalid or unsafe collapses throw an error.
+A HDF5-backed \code{poparray} with selected dimensions followed by any omitted required dimensions. Invalid or
+unsafe collapses throw an error.
 }
 \description{
-Select dimensions using tidyselect names, ranges, negative selections, and
-name-based helpers. Predicate helpers such as \code{where()} are not supported.
-Unlike selection of data-frame columns, omitting a dimension aggregates its
-levels with \code{\link[=collapse_all]{collapse_all()}}. Omitted dimensions are collapsed in their
-original array order, independently of the requested output order.
+Select dimensions using tidyselect names, ranges, negative selections, and name-based helpers. Predicate helpers such
+as \code{where()} are not supported. Unlike selection of data-frame columns, omitting a dimension aggregates its levels
+with \code{\link[=collapse_all]{collapse_all()}} so that counts are preserved. Omitted dimensions are collapsed in their original array order,
+independently of the requested output order.
 }
 \details{
-Omitted dimensions are dropped except for the required time and area roles,
-which remain as singleton dimensions and are appended in their original
-relative order. An empty selection collapses every dimension and retains
-these two roles. Existing overlap and applicability guards apply, including
-restrictions on collapsing or dropping applicability controllers.
+Omitted dimensions are dropped except for the required time and area roles, which remain as singleton dimensions and
+are appended in their original relative order. An empty selection collapses every dimension and retains these two
+roles. Existing overlap and applicability guards apply to ensure data integrity, including restrictions on collapsing
+or dropping applicability controllers.
 
-Renaming uses \code{new_name = old_name}. Roles, grouping, semantic dimension
-names, and applicability references follow the result. Reordering and
-renaming are lazy; aggregation computes bounded blocks into temporary HDF5
-storage without realizing the full cube in memory. The input is unchanged.
+Renaming uses \code{new_name = old_name}. Roles, grouping, semantic dimension names, and applicability references follow
+the result. Reordering and renaming are lazy; aggregation computes bounded blocks into temporary HDF5 storage without
+realizing the full cube in memory. The input is unchanged.
 }
 \examples{
 \dontrun{
