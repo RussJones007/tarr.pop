@@ -1,6 +1,6 @@
-# tarr.pop 0.0.0.9226 (development version)
+# tarr.pop 0.0.0.9227 (development version)
 
-Changes since development version 0.0.0.9225.
+Changes since development version 0.0.0.9226.
 
 * Added an experimental S7 `poparray_view` recipe with plain-data RDS
   persistence, fixed operation replay, minimal source compatibility checks,
@@ -8,6 +8,15 @@ Changes since development version 0.0.0.9225.
   population values. Added `view_group_ages()`, default named storage, a separate
   view registry and `list_poparray_views()`, descriptive metadata editing, and
   printing without replay. `init_cubes()` creates a sibling `views` directory.
+
+* Added regression coverage for semantic metadata preservation, guarded
+  aggregation, bounded reads, cross-session restoration, and independent
+  temporary HDF5 lifetimes after garbage collection. Source validation remains
+  strict: appending years currently invalidates existing view definitions.
+
+# tarr.pop 0.0.0.9226
+
+Changes since development version 0.0.0.9225.
 
 * Added `select()` for poparray dimensions with tidyselect name helpers,
   ordering, and renaming. Omitted dimensions are collapsed in original array
