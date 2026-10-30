@@ -2,6 +2,13 @@
 
 Changes since development version 0.0.0.9225.
 
+* Added an experimental S7 `poparray_view` recipe with plain-data RDS
+  persistence, fixed operation replay, minimal source compatibility checks,
+  and source checkout support. Views record transformations without saving
+  population values. Added `view_group_ages()`, default named storage, a separate
+  view registry and `list_poparray_views()`, descriptive metadata editing, and
+  printing without replay. `init_cubes()` creates a sibling `views` directory.
+
 * Added `select()` for poparray dimensions with tidyselect name helpers,
   ordering, and renaming. Omitted dimensions are collapsed in original array
   order and dropped, while omitted time/area roles remain singleton dimensions.
