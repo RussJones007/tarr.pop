@@ -105,12 +105,10 @@ dn <- list(
 )
 arr <- array(seq_along(dn$year), dim = c(7, 1, 1), dimnames = dn)
 
-parray <- new_poparray(
-  x = DelayedArray::DelayedArray(arr),
-  dimnames_list = dn,
-  data_col = "population",
-  source = "example"
-)
+parray <- as.poparray(arr, filepath = tempfile(fileext = ".h5"))
+semantics <- dim_semantics(parray)
+semantics$sex@partition_type <- "partition"
+dim_semantics(parray) <- semantics
 
 \dontrun{
   pr <- project(parray, h = 3, method = "auto", level = 0.95, guard = FALSE)

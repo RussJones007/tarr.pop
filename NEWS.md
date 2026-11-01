@@ -2,6 +2,25 @@
 
 Changes since development version 0.0.0.9227.
 
+* Introduced virtual S4 `demographic_array`, extending DelayedArray, as the
+  shared superclass of sibling classes `poparray` and `poparray_projection`.
+  Shared slots and structural validation cover dimension roles, current
+  semantics, applicability, source provenance, and the value-column name.
+* Added subclass reconstruction and shared lazy subsetting, filtering,
+  positional slicing, renaming, and relocation. Projection transformations
+  preserve forecasting metadata; count arrays retain analysis grouping.
+  Canonical role/source/metadata accessors now support both subclasses and
+  preserve projection-specific provenance during edits.
+* Projection dimension selection supports retaining, reordering, and renaming
+  all axes, but rejects omissions requiring uncertainty aggregation. Combined
+  projection objects reject scalar reductions until a statistic is explicitly
+  extracted. Dropping standard-error statistics never creates a count array.
+* Fixed projection validation after statistic filtering: declarations follow
+  retained labels while the statistical axis remains non-additive. Updated
+  class documentation and added inheritance, dispatch, laziness, and numerical
+  boundary regression coverage. Corrected stale projection examples and
+  declared the withr test dependency. Existing HDF5 schemas remain unchanged.
+
 * Filtering and subsetting now remove absent labels from `overlap_levels`.
   When all declared overlaps are removed and the retained labels pass the
   existing overlap guard, the returned dimension is marked as a partition.

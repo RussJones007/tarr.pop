@@ -108,7 +108,7 @@ test_that("special axes and numerical boundaries remain projection-specific", {
   expect_identical(attr(counts, "projection_method"), x@method)
   expect_equal(as.numeric(counts), as.numeric(projection(x)))
   expect_equal(as.numeric(as.poparray(x)), as.numeric(projection(x)))
-  for (fn in list(sum, mean, min, max, range, var, sd)) {
+  for (fn in list(sum, mean, min, max, range, var, sd, summary)) {
     expect_error(fn(x), "Extract a statistic")
   }
   expect_error(save_poparray(x, filepath = tempfile(fileext = ".h5")), "poparray")
@@ -139,4 +139,56 @@ test_that("projection structural verbs do not extract HDF5 payloads", {
   # Confirm the instrumentation observes a real read after the lazy operations.
   expect_gt(length(as.numeric(std_error(out))), 0)
   expect_gt(sum(tracker$cells), 0)
+})
+
+test_that("canonical metadata access shares structure without losing projection provenance", {
+  for (projected in c(FALSE, TRUE)) {
+    x <- make_demographic_fixture(projected)
+    expect_identical(roles(x)$strata, "race")
+    expect_identical(cube_metadata(x)$dim_semantics, dim_semantics(x))
+    expect_identical(source_meta(x)$note, if (projected) "Fixture" else "")
+    roles(x) <- roles(x)
+    expect_true(validObject(x))
+    if (projected) x@source$fit_details <- list(parameter = "retained")
+    source_meta(x) <- list(note = "Edited source", source = "example", updated = "2026-11-01")
+    expect_identical(source_meta(x)$note, "Edited source")
+    metadata <- cube_metadata(x)
+    metadata$data_col <- "estimate"
+    cube_metadata(x) <- metadata
+    expect_identical(data_col(x), "estimate")
+    expect_true(validObject(x))
+    if (projected) {
+      expect_identical(get_source(x)$fit_details, list(parameter = "retained"))
+      expect_identical(x@method, "ETS")
+      expect_error(`roles<-`(x, list(time = "stat", area = "area.name")), "dimension names")
+    }
+  }
+})
+
+
+test_that("shared structure does not impose count storage on in-memory projections", {
+  template <- make_demographic_fixture(TRUE)
+  backend <- DelayedArray::DelayedArray(as.array(template))
+  x <- new_poparray_projection_s4(backend, template@level, template@method,
+    template@source, template@base_years, "year", "area.name",
+    dim_semantics = dim_semantics(template))
+  expect_true(validObject(x))
+  expect_false(is_hdf5_backed_delayed(x))
+  selected <- dplyr::filter(x, race != "Total")
+  expect_s4_class(selected, "poparray_projection")
+  expect_false(is_hdf5_backed_delayed(selected))
+  dropped <- selected[stat = "projection", drop = TRUE]
+  expect_s4_class(dropped, "DelayedArray")
+  expect_false(is(dropped, "poparray"))
+  expect_error(new_poparray(backend, dim_semantics = dim_semantics(template)), "HDF5Array seed")
+})
+
+
+test_that("shared entry points retain count-specific ordered-time validation", {
+  x <- make_demographic_fixture()
+  reordered <- x[year = c("2031", "2030")]
+  expect_true(validObject(reordered))
+  expect_error(time_role(reordered), "ordered")
+  expect_error(reordered[year = "2030"], "ordered")
+  expect_error(dplyr::rename(reordered, period = year), "ordered")
 })

@@ -7,13 +7,13 @@
 get_source(obj)
 }
 \arguments{
-\item{x}{is the object with a source attribute, like a poparray.}
+\item{obj}{A demographic_array subclass or an object with a source attribute.}
 }
 \value{
 A named character list with entries such as \code{note}, \code{source}, and \code{updated}.
 }
 \description{
-Gets the list of information contained in the \code{source} attribute of \code{x}. Objects from poparray have source attributes
-as possibly other objects.
+Reads the authoritative source slot of a demographic array, with an
+attribute fallback for legacy objects. No population values are read.
 }
 \keyword{internal}

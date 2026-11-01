@@ -66,3 +66,53 @@ Regression coverage must exercise role invariants, special axes, subclass return
 types, metadata editing, overlap pruning, applicability trimming and renaming,
 independent projection fit metadata, no payload reads for structural operations,
 unchanged source files, persistence round trips, and guarded reductions.
+
+## Implemented behavior
+
+The shared class, structural validity, metadata accessors, reconstruction
+methods, and structural verb dispatch are implemented. Canonical `roles()`,
+`source_meta()`, and `cube_metadata()` access also supports both subclasses;
+projection-specific provenance is retained during canonical source edits.
+Count-only ordered-time validation remains in effect at shared entry points.
+
+Counts retain their analysis grouping and HDF5 storage contract. Projections
+retain confidence level, forecasting method, base years, and creation time.
+An in-memory projection stays in memory during structural transformations;
+dropping its statistic axis returns a raw delayed result if the count class's
+HDF5 contract cannot be met. No implicit storage conversion is introduced.
+
+The projection `stat` contract follows selected labels but remains non-additive.
+Combined projection reductions and summary are guarded. Projection selection
+rejects omitted dimensions, and standard-error-only results cannot silently
+become population count arrays. Existing HDF5 layouts and source files are
+unchanged by the inheritance migration.
+
+## Validation commands
+
+Run with `TARR_POP_SKIP_CUBE_SETUP=true` to prevent startup configuration writes:
+
+```r
+devtools::test(stop_on_failure = TRUE)
+devtools::check(
+  document = FALSE,
+  build_args = c("--no-build-vignettes", "--no-manual"),
+  args = c("--no-manual", "--no-tests", "--ignore-vignettes")
+)
+```
+
+Tests are run separately from package checking. Regression coverage includes
+concrete-class dispatch, shared and canonical metadata interfaces, semantic
+updates, ordered-time compatibility, numerical boundaries, in-memory backends,
+source-file checksums, and instrumentation of HDF5 payload extraction. Existing
+projection reopening, count persistence, and saved-view replay tests remain
+active. Fresh installed-package checks exercise inherited S3 dispatch and
+count/projection HDF5 round trips outside the development namespace.
+
+Validation completed on November 1, 2026: the full development test suite and
+focused compatibility/metadata tests passed. A fresh installation and installed
+smoke checks passed, including inherited verb dispatch and persistence. Package
+checking ran examples successfully and reported 0 errors, 6 warnings, and
+3 notes; tests were run separately and vignettes were not rebuilt. Remaining
+warnings cover existing path portability, non-ASCII code, namespace references,
+S3 signature consistency, and unrelated documentation gaps. The earlier stale
+projection examples and overlap assertions were corrected as part of this work.

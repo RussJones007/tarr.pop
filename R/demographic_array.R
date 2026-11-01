@@ -83,6 +83,9 @@ setValidity("demographic_array", function(object) {
 #' @noRd
 validate_demographic_array <- function(x) {
   if (!is(x, "demographic_array")) cli::cli_abort("{.arg x} must be a {.cls demographic_array}.")
+  # Preserve the count class's ordered-time validation at public entry points.
+  # Its S4 structural validity deliberately still permits explicit reindexing.
+  if (is(x, "poparray")) return(validate_poparray(x))
   result <- methods::validObject(x, test = TRUE)
   if (!isTRUE(result)) cli::cli_abort(result)
   invisible(x)
@@ -133,7 +136,7 @@ area_role <- function(x) {
 #'
 #' @param x A demographic_array subclass or canonical HDF5 cube path.
 #' @param value New value-column name for replacement.
-#' @return Character string.
+#' @return A character string when reading; replacement returns the updated object or path.
 #' @export
 data_col <- function(x) {
   if (is.character(x) && length(x) == 1L && nzchar(x)) {
@@ -262,9 +265,9 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames,
 #
 #' Subset a demographic array lazily
 #'
-#' Subsets a `poparray` while preserving dimension metadata and roles whenever the resulting object still contains both
-#' the time and area dimensions. The method defaults to `drop = FALSE`, so selecting a single time or area level does
-#' not silently strip the `poparray` class.
+#' Subsets a demographic array while preserving dimension metadata and its
+#' concrete class whenever the remaining axes satisfy the subclass contract.
+#' The default `drop = FALSE` retains singleton time and area dimensions.
 #'
 #' Named subscripts are supported and are matched against dimension names.
 #' Applicability ranges and levels are trimmed using metadata only. If dropping
@@ -276,9 +279,11 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames,
 #'   "Female"]`). Missing positional indices are treated as `TRUE`.
 #' @param drop Logical; passed to the backend `[` call. Defaults to `FALSE`.
 #'
-#' @return A `poparray` when both role dimensions remain after subsetting; otherwise the underlying delayed subset.
+#' @return The reconstructed concrete subclass when its contract is retained;
+#'   otherwise the underlying delayed result. Dropping a projection statistic
+#'   can explicitly yield a count-only `poparray` as described below.
 #' @name subset-poparray
-#' @aliases [,poparray-method [,demographic_array-method [,poparray_projection-method
+#' @aliases [,poparray-method [,demographic_array-method [,poparray_projection-method [,demographic_array,ANY,ANY,ANY-method
 #' @details Shared reconstruction retains the concrete class and metadata.
 #' Projection arrays retain their class while `stat` remains. Dropping only a
 #' singleton projection statistic can return a count array; dropping a standard

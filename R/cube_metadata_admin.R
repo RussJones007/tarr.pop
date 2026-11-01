@@ -1,8 +1,8 @@
 # -------------------------------------------------------------------------------------->
 # Script: cube_metadata_admin.R
 # Description:
-#   Metadata edits require an editor or admin role and preserve the population dataset; tracked updates
-#   delegate to the revision machinery.
+#   File-backed metadata edits require an editor or admin role and preserve the population dataset.
+#   Shared in-memory edits validate concrete demographic subclasses without rewriting source files.
 #
 #   Provides file-backed roles(), source_meta(), cube_metadata(), and associated replacement interfaces.
 #   Helpers validate and normalize role, provenance, value-column, and semantic metadata before writing.
@@ -164,12 +164,12 @@ write_cube_data_col_impl <- function(path, data_col) {
   update_cube_metadata(path, metadata, "Updated value column name")
 }
 
-#' Get cube roles from a poparray or cube file
+#' Get cube roles from a demographic array or cube file
 #'
-#' Returns dimension role metadata from either an in-memory `poparray` or an
+#' Returns dimension role metadata from an in-memory `demographic_array` or an
 #' HDF5 cube path.
 #'
-#' @param x A `poparray` or HDF5 cube path.
+#' @param x A `demographic_array` subclass or HDF5 cube path.
 #'
 #' @return Named list with `time`, `area`, and `strata`.
 #' @export
@@ -177,15 +177,14 @@ roles <- function(x) {
   if (is.character(x) && length(x) == 1L && nzchar(x)) {
     return(read_cube_roles_impl(x))
   }
-  if (is(x, "poparray")) {
-    dn <- names(dimnames(x))
+  if (is(x, "demographic_array")) {
     return(list(
       time = time_role(x),
       area = area_role(x),
-      strata = setdiff(dn, c(time_role(x), area_role(x)))
+      strata = x@strata_roles
     ))
   }
-  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
 }
 
 #' @rdname roles
@@ -195,24 +194,24 @@ roles <- function(x) {
     write_cube_roles_impl(x, value)
     return(x)
   }
-  if (!is(x, "poparray")) {
-    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  if (!is(x, "demographic_array")) {
+    cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
   }
   dn <- names(dimnames(x))
-  val <- normalize_cube_roles(value, dn)
+  val <- normalize_cube_roles(value, setdiff(dn, da_special_axes(x)))
   x@time_role <- val$time
   x@area_role <- val$area
   x@strata_roles <- val$strata
-  validate_poparray(x)
+  if (is(x, "poparray")) validate_poparray(x) else validate_demographic_array(x)
   x
 }
 
-#' Get source metadata from a poparray or cube file
+#' Get source metadata from a demographic array or cube file
 #'
-#' Returns source/provenance metadata from either an in-memory `poparray` or an
+#' Returns canonical provenance fields from an in-memory `demographic_array` or an
 #' HDF5 cube path.
 #'
-#' @param x A `poparray` or HDF5 cube path.
+#' @param x A `demographic_array` subclass or HDF5 cube path.
 #'
 #' @return Named list of source/provenance fields.
 #' @export
@@ -220,10 +219,10 @@ source_meta <- function(x) {
   if (is.character(x) && length(x) == 1L && nzchar(x)) {
     return(read_cube_source_impl(x))
   }
-  if (is(x, "poparray")) {
+  if (is(x, "demographic_array")) {
     return(normalize_cube_source(get_source(x)))
   }
-  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
 }
 
 #' @rdname source_meta
@@ -233,23 +232,26 @@ source_meta <- function(x) {
     write_cube_source_impl(x, value)
     return(x)
   }
-  if (!is(x, "poparray")) {
-    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  if (!is(x, "demographic_array")) {
+    cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
   }
-  x@source <- normalize_cube_source(value)
+  normalized <- normalize_cube_source(value)
+  x@source <- if (is(x, "poparray_projection"))
+    utils::modifyList(x@source, normalized) else normalized
+  validate_demographic_array(x)
   x
 }
 
 #' Get canonical cube metadata as one bundle
 #'
-#' Returns the canonical metadata bundle from either an in-memory `poparray` or
+#' Returns the canonical metadata bundle from an in-memory `demographic_array` or
 #' an HDF5 cube path.
 #' Optional dimension applicability travels within `dim_semantics`, not source
 #' provenance. Replacement validates schema boundaries, target levels, and
 #' coverage against current labels. Path-based updates write metadata only and
 #' do not rewrite the population dataset. See [dim_semantics()] for inspection.
 #'
-#' @param x A `poparray` or HDF5 cube path.
+#' @param x A `demographic_array` subclass or HDF5 cube path.
 #'
 #' @return Named list with `roles`, `source`, `data_col`, and `dim_semantics`.
 #' @export
@@ -257,7 +259,7 @@ cube_metadata <- function(x) {
   if (is.character(x) && length(x) == 1L && nzchar(x)) {
     return(read_cube_metadata_admin_impl(x))
   }
-  if (is(x, "poparray")) {
+  if (is(x, "demographic_array")) {
     return(list(
       roles = roles(x),
       source = source_meta(x),
@@ -265,7 +267,7 @@ cube_metadata <- function(x) {
       dim_semantics = dim_semantics(x)
     ))
   }
-  cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
 }
 
 #' @rdname cube_metadata
@@ -275,16 +277,20 @@ cube_metadata <- function(x) {
     write_cube_metadata_admin_impl(x, value)
     return(x)
   }
-  if (!is(x, "poparray")) {
-    cli::cli_abort("{.arg x} must be a {.cls poparray} or an HDF5 cube path.")
+  if (!is(x, "demographic_array")) {
+    cli::cli_abort("{.arg x} must be a {.cls demographic_array} or an HDF5 cube path.")
   }
   dn <- names(dimnames(x))
   bundled <- normalize_cube_metadata_bundle(value, dn, dimnames(x))
-  x <- `roles<-`(x, bundled$roles)
-  x@source <- bundled$source
+  bundled$roles <- normalize_cube_roles(value$roles, setdiff(dn, da_special_axes(x)))
+  x@time_role <- bundled$roles$time
+  x@area_role <- bundled$roles$area
+  x@strata_roles <- bundled$roles$strata
+  x@source <- if (is(x, "poparray_projection"))
+    utils::modifyList(x@source, bundled$source) else bundled$source
   x@data_col <- bundled$data_col
   x@dim_semantics <- bundled$dim_semantics
-  validate_poparray(x)
+  if (is(x, "poparray")) validate_poparray(x) else validate_demographic_array(x)
   x
 }
 

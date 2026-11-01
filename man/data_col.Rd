@@ -15,7 +15,7 @@ data_col(x) <- value
 \item{value}{New value-column name for replacement.}
 }
 \value{
-Character string.
+A character string when reading; replacement returns the updated object or path.
 }
 \description{
 Reads or updates the authoritative \code{data_col} slot on a demographic array.

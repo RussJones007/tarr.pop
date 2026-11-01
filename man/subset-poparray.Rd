@@ -5,6 +5,7 @@
 \alias{[,poparray-method}
 \alias{[,demographic_array-method}
 \alias{[,poparray_projection-method}
+\alias{[,demographic_array,ANY,ANY,ANY-method}
 \title{Subset a demographic array lazily}
 \arguments{
 \item{x}{A \code{demographic_array} subclass.}
@@ -14,12 +15,14 @@
 \item{drop}{Logical; passed to the backend \code{[} call. Defaults to \code{FALSE}.}
 }
 \value{
-A \code{poparray} when both role dimensions remain after subsetting; otherwise the underlying delayed subset.
+The reconstructed concrete subclass when its contract is retained;
+otherwise the underlying delayed result. Dropping a projection statistic
+can explicitly yield a count-only \code{poparray} as described below.
 }
 \description{
-Subsets a \code{poparray} while preserving dimension metadata and roles whenever the resulting object still contains both
-the time and area dimensions. The method defaults to \code{drop = FALSE}, so selecting a single time or area level does
-not silently strip the \code{poparray} class.
+Subsets a demographic array while preserving dimension metadata and its
+concrete class whenever the remaining axes satisfy the subclass contract.
+The default \code{drop = FALSE} retains singleton time and area dimensions.
 }
 \details{
 Named subscripts are supported and are matched against dimension names.

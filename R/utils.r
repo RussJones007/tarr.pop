@@ -480,9 +480,9 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
 
 #' Retrieve the poparray source
 #'
-#' Gets the list of information contained in the `source` attribute of `x`. Objects from poparray have source attributes
-#' as possibly other objects.
-#' @param x is the object with a source attribute, like a poparray.
+#' Reads the authoritative source slot of a demographic array, with an
+#' attribute fallback for legacy objects. No population values are read.
+#' @param obj A demographic_array subclass or an object with a source attribute.
 #' @return A named character list with entries such as `note`, `source`, and `updated`.
 #' @keywords internal
 #' @export

@@ -1105,7 +1105,7 @@ setMethod("da_reconstruct", "poparray_projection", function(x, backend, dimnames
       x@base_years, time_dim, area_dim, data_col = x@data_col,
       created = x@created, dim_semantics = dim_semantics))
   }
-  if (!identical(statistic, "projection")) return(backend)
+  if (!identical(statistic, "projection") || !is_hdf5_backed_delayed(backend)) return(backend)
   out <- new_poparray(backend, dimnames_list = dimnames_list,
     data_col = x@data_col, source = x@source, time_dim = time_dim,
     area_dim = area_dim, dim_semantics = dim_semantics)
@@ -1130,7 +1130,7 @@ da_projection_reduction_error <- function(x) {
 #' Extract a delayed statistic with [projection()] or [std_error()], or obtain
 #' count semantics explicitly with [as.poparray()]. Aggregating uncertainty
 #' requires assumptions about covariance that these methods do not supply.
-#' @param x A projection array.
+#' @param x,object A projection array.
 #' @param ... Additional arguments, unused.
 #' @param na.rm,y,use Standard reduction arguments, unused.
 #' @name projection-reductions
@@ -1152,3 +1152,7 @@ setMethod("var", "poparray_projection", function(x, y = NULL, na.rm = FALSE, use
 setMethod("sd", "poparray_projection", function(x, na.rm = FALSE) da_projection_reduction_error(x))
 #' @rdname projection-reductions
 setMethod("Summary", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))
+
+#' @rdname projection-reductions
+#' @exportS3Method summary poparray_projection
+summary.poparray_projection <- function(object, ...) da_projection_reduction_error(object)

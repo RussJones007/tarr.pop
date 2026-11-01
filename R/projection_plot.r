@@ -93,16 +93,14 @@
 #'
 #' arr <- array(
 #'   sample(100:500, prod(lengths(dn)), replace = TRUE),
-#'   dim = lengths(dn),
+#'   dim = unname(lengths(dn)),
 #'   dimnames = dn
 #' )
 #'
-#' parray <- new_poparray(
-#'   x = DelayedArray::DelayedArray(arr),
-#'   dimnames_list = dn,
-#'   data_col = "population",
-#'   source = "example"
-#' )
+#' parray <- as.poparray(arr, filepath = tempfile(fileext = ".h5"))
+#' semantics <- dim_semantics(parray)
+#' semantics$sex@partition_type <- "partition"
+#' dim_semantics(parray) <- semantics
 #'
 #' \dontrun{
 #'   pr <- project(parray, h = 3, method = "auto")

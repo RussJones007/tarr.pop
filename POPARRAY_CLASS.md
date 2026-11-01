@@ -57,8 +57,20 @@ The design of `poparray` is governed by the following principles:
 
 ## What a poparray object contains
 
-A `poparray` is an S4 object that extends `DelayedArray` around a multi-dimensional array (typically HDF5-backed) plus
-semantic metadata slots.
+A `poparray` is a concrete S4 subclass of virtual `demographic_array`, which extends `DelayedArray`.
+Its numeric backend is normally HDF5-backed. `poparray_projection` is a sibling class with a separate statistical
+contract; it does not inherit count reductions from `poparray`.
+
+The shared superclass owns time/area/strata roles, current dimension semantics, source provenance, and the value-column
+name. It provides structural validation, metadata access, and lazy transformation infrastructure. Population-count
+arrays add their HDF5-backed constructor contract, analysis grouping, dimension-label cache, count reductions, and
+cube persistence. The superclass itself does not impose HDF5 storage on future subclasses.
+
+Shared transformations reconstruct the concrete subclass. Population arrays retain their grouping; projections retain
+confidence level, method, base years, and creation provenance. Projection `select()` cannot aggregate omitted axes,
+and combined projection arrays reject ordinary scalar reductions until a statistic is explicitly extracted. See
+[projection class behavior](POPARRAY_PROJECTION_CLASS.md) and the
+[shared superclass contract](notes/demographic_array_design.md).
 
 ### Numeric data
 

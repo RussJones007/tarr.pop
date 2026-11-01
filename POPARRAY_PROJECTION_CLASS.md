@@ -1,225 +1,126 @@
 # poparray_projection: Class Purpose and Design Decisions
 
-## Overview
-
-`poparray_projection` is an S3 class for projected population outputs generated from a `poparray`. It is designed for large, multi-dimensional projection cubes and follows a lazy-first model using `DelayedArray` / `HDF5Array` backends.
-
-The class represents projection results as a **single cube** with a `stat` dimension, rather than multiple separate cubes.
-
-------------------------------------------------------------------------
-
-## Purpose
-
-The class exists to:
-
-1.  Store projected values and uncertainty in one coherent delayed array.
-2.  Preserve scalability for high-dimensional population projections.
-3.  Keep projection metadata (`method`, `level`, `base_years`, `source`) attached to the result.
-4.  Support explicit, role-aware interoperability with `poparray`.
-
-------------------------------------------------------------------------
-
-## Core Data Model
-
-A `poparray_projection` object is a list with:
-
--   `handle`: a `DelayedArray` (often `HDF5Array`) containing projected data.
-
-Attributes include:
-
--   `level`: confidence level used for uncertainty.
--   `method`: projection method (`ARIMA`, `ETS`, `CAGR`).
--   `source`: provenance string.
--   `base_years`: base years used for model fitting.
--   `dimroles`: list with `time`, `area`, and `strata`.
--   `data_col`: default value-column label used in tabular coercions.
--   `created`: timestamp.
-
-------------------------------------------------------------------------
-
-## Structural Invariants
-
-The wrapped `handle` must:
-
-1.  Be a `DelayedArray`.
-2.  Have named dimensions.
-3.  Include a named `stat` dimension.
-4.  Have `stat` labels that are a non-empty subset of:
-    -   `projection`
-    -   `std_error`
-5.  Retain valid role metadata where `dimroles$time` and `dimroles$area` are present in dimension names.
-
-Note: Full objects returned by `project()` are expected to include both `projection` and `std_error`. Subsetted projection objects may legitimately contain only one `stat` level.
-
-------------------------------------------------------------------------
-
-## Key Design Decisions
-
-### 1. One-cube design (selected)
-
-Decision:
-
--   Use one delayed cube with `stat` dimension (`projection`, `std_error`).
-
-Why:
-
--   Avoids synchronizing separate `projected/lower/upper` cubes.
--   Keeps all projection outputs aligned on the same dimensional index space.
--   Simplifies storage and I/O for HDF5-backed outputs.
-
-### 2. `handle` naming aligned with `poparray` (selected)
-
-Decision:
-
--   Use `handle` as the wrapped delayed-array member (same naming pattern as `poparray`).
-
-Why:
-
--   Reduces cognitive overhead and implementation divergence between classes.
--   Makes internal method logic and object inspection more consistent.
-
-### 3. Uncertainty representation via standard error (selected)
-
-Decision:
-
--   Store `std_error` in `stat` and derive lower/upper bounds on demand.
-
-Why:
-
--   Keeps storage compact and avoids redundant data.
--   Supports confidence interval recalculation for alternate levels in methods like `confint()`.
-
-### 4. Keep `handle` as delayed array, not embedded poparray (selected)
-
-Decision:
-
--   `poparray_projection` directly wraps `DelayedArray` in `handle`.
--   Provide `as.poparray.poparray_projection()` for explicit coercion when `poparray` behavior is needed.
-
-Why:
-
--   Keeps projection semantics explicit.
--   Avoids over-coupling projection class behavior to all `poparray` method semantics.
--   Still enables interoperability and method reuse through explicit conversion.
-
-### 5. Lazy-first operations (selected)
-
-Decision:
-
--   Preserve delayed behavior for indexing and most transformations.
--   Mark tabular coercion (`as.data.frame`, `as_tibble`) as eager operations.
-
-Why:
-
--   Projection cubes can be large and multi-dimensional.
--   Eager realization is expensive and should remain explicit.
-
-------------------------------------------------------------------------
-
-## Method Behavior Summary
-
-### Accessors
-
--   `projection(x)`: returns `stat = "projection"` slice (position-agnostic by named `stat` lookup).
--   `std_error(x)`: returns `stat = "std_error"` slice (position-agnostic).
-
-### Uncertainty
-
--   `confint(x, level=...)`: computes lower/upper from `projection` and `std_error`.
-
-### Subsetting
-
--   `[.poparray_projection` supports named/positional indexing.
--   If `stat` remains after subsetting, return `poparray_projection`.
--   If `stat` is removed and role requirements are still met, return `poparray`.
--   If role requirements are no longer met, return underlying delayed subset.
-
-### Coercion
-
--   `as.poparray.poparray_projection(x)`: returns `poparray` preserving `time`/`area` roles and keeping `stat`.
--   `as.data.frame.poparray_projection(x)`: eager long-to-wide coercion with `projection` and `std_error` columns.
--   `as_tibble.poparray_projection(x)`: tibble variant of tabular coercion.
-
-### Plotting
-
--   `plot.poparray_projection(type = "ts" | "pyramid")`:
-    -   `ts`: totals over time with uncertainty ribbon derived from standard error.
-    -   `pyramid`: uses projection slice and delegates to `plot.poparray` style logic.
-
-------------------------------------------------------------------------
-
-## HDF5 Writer Contract
-
-Projection writer output is expected to:
-
-1.  Create a single dataset with `stat` as the last dimension.
-2.  Preserve named dimnames on the delayed handle returned to class constructor.
-3.  Write projection and standard error by hyperslab without realizing full cube in memory.
-
-This contract is required for `new_poparray_projection()` validation to succeed.
-
-------------------------------------------------------------------------
-
-## Relationship to POPARRAY_CLASS.md
-
-`poparray_projection` follows the same storage and laziness philosophy as `poparray`, with one important extension:
-
--   `poparray_projection` adds a `stat` axis to represent projection outputs and uncertainty in one cube.
-
-`poparray` remains the base semantic population cube class; `poparray_projection` is a specialized result class for forecasted outputs with projection-specific metadata and methods.
-
-------------------------------------------------------------------------
-
-## Source Mapping (Design -\> Code)
-
-Use this section to trace design decisions to implementation points.
-
-### Class construction and validation
-
--   File: `R/projection_class.r`
--   Functions:
-    -   `new_poparray_projection()`
-    -   `validate_poparray_projection()`
-    -   `poparray_projection()`
-
-### Accessors and uncertainty semantics
-
--   File: `R/projection_class.r`
--   Functions:
-    -   `projection()`
-    -   `std_error()`
-    -   `confint.poparray_projection()`
-
-### Subsetting and coercion behavior
-
--   File: `R/projection_class.r`
--   Functions:
-    -   `[.poparray_projection`
-    -   `as.poparray.poparray_projection()`
-    -   `as.data.frame.poparray_projection()`
-    -   `as_tibble.poparray_projection()`
-
-### Projection engine orchestration and writer integration
-
--   File: `R/projection.r`
--   Functions:
-    -   `project()`
-    -   `project_cube()`
-    -   `run_projection_engine()`
-    -   `tp_projection_hdf5_writer()`
-
-### Plotting behavior
-
--   File: `R/projection_plot.r`
--   Functions:
-    -   `plot.poparray_projection()`
-    -   `plot_ts_pop_projection()`
-    -   `plot_pyramid_pop_projection()`
-
-### Poparray interoperability
-
--   File: `R/poparray_class.r`
--   Relevant APIs:
-    -   `new_poparray()`
-    -   `[.poparray`
-    -   role access patterns used by projection workflows (`dimroles`, time/area semantics)
+## Overview and hierarchy
+
+`poparray_projection` is a concrete S4 subclass of virtual `demographic_array`,
+which extends `DelayedArray`. It is a sibling of `poparray`, not its descendant.
+Both classes share dimensional structure and semantic metadata; projection
+uncertainty does not inherit population-count reduction rules.
+
+```text
+DelayedArray
+└── demographic_array (virtual)
+    ├── poparray
+    └── poparray_projection
+```
+
+## Data and metadata
+
+A projection contains one delayed array, usually HDF5-backed, with a special
+`stat` dimension. Its labels are a non-empty subset of `projection` and
+`std_error`. Full results from `project()` contain both. Standard errors retain
+precision while final population estimates are rounded by the projection engine.
+The `stat` dimension is a statistical axis, not a population stratum.
+
+The inherited slots are `time_role`, `area_role`, `strata_roles`,
+`dim_semantics`, `data_col`, and `source`. Projection-specific slots are
+`level`, `method`, `base_years`, and `created`. Source is a provenance list;
+it is not interchangeable with dimension semantics. Legacy S3 list shims remain
+for compatibility, but they are not the current S4 representation.
+
+Projection methods obtain the delayed backend through `pp_handle()`. This is
+an internal accessor, not a separate `handle` slot. There is no embedded
+`poparray` object and no duplication of count and error cubes.
+
+## Validation
+
+The shared superclass checks named axes, dimension extents, distinct existing
+time and area roles, semantic alignment, applicability, and the value-column
+name. Subclasses identify special axes that are excluded from `strata_roles`.
+
+Projection adds a required `stat` axis, a validated non-additive statistic
+contract, a supported forecasting method (`ARIMA`, `ETS`, or `CAGR`), a confidence
+level from 0.5 to 0.99, base years, and provenance fields. `stat` cannot be used
+as a time, area, or strata role, or renamed as an ordinary demographic axis.
+Its overlap declarations follow its retained statistic labels, but it remains
+a `set` even when only one statistic remains.
+
+## Shared structural transformations
+
+The superclass provides common subsetting and reconstruction infrastructure.
+Existing `filter()`, `slice()`, `slice_head()`, `slice_tail()`, `rename()`,
+`rename_with()`, and `relocate()` implementations also dispatch on
+`demographic_array`. They preserve the concrete class, projection fit settings,
+source metadata, and delayed backend. Dimension semantics and applicability
+follow the current labels and role names. Source cube files are not rewritten.
+
+`select()` can reorder and rename a projection's dimensions when all axes are
+retained. Omitting axes is rejected: population sums and uncertainty propagation
+need different numerical rules, and covariance assumptions cannot be inferred.
+For count-only selection and aggregation, explicitly use `as.poparray()` first.
+Analysis grouping and count summarisation remain `poparray` responsibilities.
+
+### Return classes when dropping dimensions
+
+- With `drop = FALSE`, required and singleton dimensions remain; a projection
+  remains a projection while its valid `stat` axis remains.
+- With `drop = TRUE`, removing a singleton `stat = "projection"` axis can return
+  a `poparray` if time, area, and required applicability controllers remain
+  and the backend satisfies the count class's HDF5 contract. An in-memory
+  projection instead returns its ordinary delayed result without forced I/O.
+  Forecasting method, confidence level, and base years are retained as
+  compatibility attributes on this count-only result.
+- Removing a singleton standard-error axis returns the underlying delayed
+  result, never a population-count array.
+- Removing time, area, or a required applicability controller returns the
+  underlying delayed result rather than an invalid demographic object.
+
+## Numerical operations and uncertainty
+
+`projection(x)` and `std_error(x)` return delayed statistic slices, retaining a
+singleton `stat` axis. `confint(x, level = ...)` derives delayed lower and upper
+bounds from the estimates and errors. Both statistics must be available to
+calculate intervals. `as.poparray(x)` explicitly extracts projected counts and
+removes only `stat`, preserving other singleton axes and population semantics.
+An uncertainty-only object cannot be converted to population counts.
+
+Combined projection objects reject ordinary scalar numerical reductions,
+including sum, mean, variance, standard deviation, and extrema. Extract a
+statistic explicitly first. Count reductions then use the existing population
+semantic guards. Aggregating standard errors requires a covariance model;
+neither summation nor a zero-covariance assumption is silently introduced by
+this inheritance migration. Existing plotting methods remain separate and are
+not a general uncertainty aggregation interface.
+
+Tabular coercions (`as.data.frame()` and `as_tibble()`) are **EAGER**: subset to a
+manageable result first. They provide separate projection and standard-error
+columns. Structural transformations remain lazy and do not extract numeric
+payloads.
+
+## Persistence and compatibility
+
+The projection engine writes one HDF5 dataset, with `stat` last in newly
+written output, using series/hyperslab processing. Methods locate axes by name,
+so transformed objects need not retain that order. `read_poparray_projection()`
+restores labels, semantic contracts, roles, and forecasting metadata without
+reading the numeric payload. The inheritance migration does not change the
+HDF5 schema. `save_poparray()` continues to accept count arrays only.
+
+Persisted HDF5 cubes can be reopened through their existing constructors.
+Serialized in-memory S4 objects created before the hierarchy change should be
+recreated through constructors or reopened from their HDF5 files; they are not
+a replacement for the storage schema.
+
+## Implementation map
+
+| Responsibility | Source |
+|---|---|
+| Shared class, accessors, subsetting, reconstruction generic | `R/demographic_array.R` |
+| Count class and count reconstruction | `R/poparray_class.r` |
+| Projection class, validation, reconstruction, numerical boundaries | `R/projection_class.r` |
+| Shared structural S3 verbs | `R/filter.R`, `R/slice.R`, `R/rename.R`, `R/relocate.R`, `R/select.R` |
+| Forecast orchestration and writer | `R/projection.r` |
+| Projection plotting | `R/projection_plot.r` |
+
+See [the shared contract](notes/demographic_array_design.md) and
+[the population class description](POPARRAY_CLASS.md).

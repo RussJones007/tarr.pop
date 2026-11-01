@@ -10,6 +10,7 @@
 \alias{var,poparray_projection-method}
 \alias{sd,poparray_projection-method}
 \alias{Summary,poparray_projection-method}
+\alias{summary.poparray_projection}
 \title{Projection numerical boundaries}
 \usage{
 \S4method{sum}{poparray_projection}(x, ..., na.rm = FALSE)
@@ -27,9 +28,11 @@
 \S4method{sd}{poparray_projection}(x, na.rm = FALSE)
 
 \S4method{Summary}{poparray_projection}(x, ..., na.rm = FALSE)
+
+\method{summary}{poparray_projection}(object, ...)
 }
 \arguments{
-\item{x}{A projection array.}
+\item{x, object}{A projection array.}
 
 \item{...}{Additional arguments, unused.}
 
