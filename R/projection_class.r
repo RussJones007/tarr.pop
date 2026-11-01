@@ -49,20 +49,16 @@ NULL
 
 setClass(
   "poparray_projection",
-  contains = "DelayedArray",
+  contains = "demographic_array",
   slots = c(
-    time_role = "character",
-    area_role = "character",
-    strata_roles = "character",
-    dim_semantics = "list",
     level = "numeric",
     method = "character",
-    source = "list",
     base_years = "vector",
-    data_col = "character",
     created = "POSIXct"
   )
 )
+
+setMethod("da_special_axes", "poparray_projection", function(x) "stat")
 
 setValidity("poparray_projection", function(object) {
   dn <- dimnames(object)
@@ -76,27 +72,8 @@ setValidity("poparray_projection", function(object) {
     return("The 'stat' dimension must contain a non-empty subset of: projection, std_error.")
   }
 
-  if (length(object@time_role) != 1L || !nzchar(object@time_role)) {
-    return("slot 'time_role' must be a single non-empty character string.")
-  }
-  if (length(object@area_role) != 1L || !nzchar(object@area_role)) {
-    return("slot 'area_role' must be a single non-empty character string.")
-  }
-  if (identical(object@time_role, object@area_role)) {
-    return("time_role and area_role must be different.")
-  }
-  if (!object@time_role %in% names(dn) || !object@area_role %in% names(dn)) {
-    return("time_role and area_role must exist in projection dimnames.")
-  }
   if ("stat" %in% c(object@time_role, object@area_role, object@strata_roles)) {
     return("'stat' cannot be assigned as time, area, or strata role.")
-  }
-  if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
-    return("time/area/strata roles cannot contain duplicates.")
-  }
-  if (!identical(object@strata_roles,
-                 setdiff(names(dn), c(object@time_role, object@area_role, "stat")))) {
-    return("strata_roles must match the non-time/non-area/non-stat dimensions.")
   }
   semantic_error <- tryCatch({
     validate_dim_semantics(object@dim_semantics, names(dn),
@@ -114,10 +91,6 @@ setValidity("poparray_projection", function(object) {
   method_choices <- c("ARIMA", "ETS", "CAGR")
   if (length(object@method) != 1L || is.na(object@method) || !(toupper(object@method) %in% method_choices)) {
     return("slot 'method' must be one of: ARIMA, ETS, CAGR.")
-  }
-
-  if (length(object@data_col) != 1L || is.na(object@data_col) || !nzchar(object@data_col)) {
-    return("slot 'data_col' must be a single non-empty character string.")
   }
 
   req_source <- c("note", "source", "updated")

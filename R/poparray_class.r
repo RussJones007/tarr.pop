@@ -16,15 +16,9 @@
 
 setClass(
   "poparray",
-  contains = "DelayedArray",
+  contains = "demographic_array",
   slots = c(
-    time_role     = "character",
-    area_role     = "character",
-    strata_roles  = "character",
-    dim_semantics = "list",
-    data_col      = "character",
     group_vars    = "character",
-    source        = "list",
     dn_cache      = "list"   # dimension name cache
   )
 )
@@ -310,54 +304,6 @@ setValidity("poparray", function(object) {
   groups <- object@group_vars
   if (anyNA(groups) || anyDuplicated(groups) || any(!groups %in% names(dn))) {
     return("group_vars must contain unique, non-missing current dimension names.")
-  }
-  if (length(object@time_role) != 1L || !nzchar(object@time_role)) {
-    return("slot 'time_role' must be a single non-empty character string.")
-  }
-  if (length(object@area_role) != 1L || !nzchar(object@area_role)) {
-    return("slot 'area_role' must be a single non-empty character string.")
-  }
-  if (identical(object@time_role, object@area_role)) {
-    return("time_role and area_role must be different.")
-  }
-  if (!object@time_role %in% names(dn)) {
-    return("time_role must match a dimension name.")
-  }
-  if (!object@area_role %in% names(dn)) {
-    return("area_role must match a dimension name.")
-  }
-  if (anyDuplicated(c(object@time_role, object@area_role, object@strata_roles)) > 0) {
-    return("Roles cannot contain duplicates.")
-  }
-  if (is.null(object@dim_semantics) || !is.list(object@dim_semantics) || is.null(names(object@dim_semantics))) {
-    return("slot 'dim_semantics' must be a named list.")
-  }
-  if (!identical(names(object@dim_semantics), names(dn))) {
-    return("slot 'dim_semantics' names must exactly match dimension names.")
-  }
-  for (nm in names(dn)) {
-    ent <- object@dim_semantics[[nm]]
-    if (!S7::S7_inherits(ent, DimSemantics)) {
-      return("slot 'dim_semantics' entries must inherit from DimSemantics.")
-    }
-    if (!identical(ent@dim_name, nm)) {
-      return("each dim_semantics entry must have @dim_name matching its dimension name.")
-    }
-  }
-  applicability_check <- tryCatch(
-    pa_validate_applicability(object@dim_semantics, dn),
-    error = function(e) conditionMessage(e)
-  )
-  if (!isTRUE(applicability_check)) return(applicability_check)
-  d <- lengths(dn)
-  if (length(dn) != length(d)) {
-    return("dimnames must align with dimensions.")
-  }
-  for (k in seq_along(d)) {
-    lbl <- dn[[k]]
-    if (is.null(lbl) || length(lbl) != d[[k]]) {
-      return("Each dimnames entry must have length matching the dimension extent.")
-    }
   }
   h5_meta_chk <- validate_hdf5_metadata_shape(object)
   if (!isTRUE(h5_meta_chk)) return(h5_meta_chk)
