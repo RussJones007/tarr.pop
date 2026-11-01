@@ -1,32 +1,18 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection.r
-# 
-# Projection API + engine interface 
+# Description:
+#   Projection fits one time series per non-time coordinate and writes estimates and standard errors to
+#   HDF5-backed output, preserving named roles without realizing the full source cube at once.
 #
-# This file defines:
-#   - project(): user-facing entry point
-#   - project_cube(): applies a 1D time sries fitting engine across a poparray cube
-#   - run_projection_engine(): dispatcher
-#   - engine_*(): per-series forecasting engines (placeholders here)
-#
-# Requirements:
-#   - Calculates the projected population and std_error (standard_error) for each series
-#   - preserve input schema (works for 3D, 5D, 6D, ...)
-#   - no silent full realization (only per-series vectors are realized)
-#   - interactive guard for large unfiltered cubes
-# ------------------------------------------------------------------------------
-# NOTE: normalize_level(), check_projection_scale(), and new_poparray_projection()
-# are defined in projection_class.r
+#   project() is the public entry point; project_cube() orchestrates fitting and run_projection_engine()
+#   dispatches ARIMA, ETS, and CAGR engines. Helpers extract series, validate engine results, construct
+#   future labels, and write results. Projection class construction and scale checks live in
+#   projection_class.r.
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 14, 2026
-# Revised:  Re-factored January 19, 2026
-# The projection class stores one delayed cube in `handle`, indexed by stat levels
-# `projection` and `std_error`.
 # -------------------------------------------------------------------------------------->
-
-# ---- helpers -----------------------------------------------------------------
 
 is_numeric_year_labels <- function(years_chr) {
   y <- suppressWarnings(as.integer(as.character(years_chr)))

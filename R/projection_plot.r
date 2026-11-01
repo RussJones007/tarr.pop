@@ -1,16 +1,17 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_plot.r
 # Description:
-#   the plot() function for class poparray_projection 
+#   Projection plots aggregate selected dimensions and realize the data needed for display; they are not
+#   metadata-only transformations.
+#
+#   plot.poparray_projection() dispatches time-series and population-pyramid plots with uncertainty
+#   displays. Helpers calculate time totals, subset named dimensions, and build the corresponding plot
+#   layouts.
 #
 # -------------------------------------------------------------------------------------->
-# Author: Russ Jones with assistance from 
-# AI:  chatGPT 5.2 poparray project
+# Author: Russ Jones with assistance from ChatGPT 5.2 (poparray project)
 # Created: January 19, 2026
-# Revised:
 # -------------------------------------------------------------------------------------->
-
-# ---- plotting ---------------------------------------------------------------
 
 #' Plot a population projection
 #'

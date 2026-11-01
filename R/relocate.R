@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: relocate.R
+# Description:
+#   Dimension relocation is a delayed permutation, not physical HDF5 reordering or rechunking; semantic
+#   entries and roles follow their named dimensions.
+#
+#   Implements relocate.poparray() with tidyselect dimension selectors and before/after destinations while
+#   preserving labels, provenance, and grouping.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-13 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Relocate poparray dimensions lazily
 #'
 #' `dplyr::relocate()` changes dimension order using tidy-select expressions.

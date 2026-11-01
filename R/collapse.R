@@ -1,13 +1,15 @@
 # -------------------------------------------------------------------------------------->
 # Script: collapse.R
 # Description:
-#   Implements collapse_dim() generic + poparray method.
-#   collapse_dim() groups labels within a selected dimension and sums values by group.
+#   Population reductions use bounded source blocks and temporary HDF5 output, with overlap and
+#   applicability guards before aggregation.
+#
+#   Implements the collapse_dim() generic and poparray method, plus collapse_all(). Helpers normalize group
+#   mappings, validate semantic safety, and plan block traversal.
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 11, 2026
-# Revised: February 16, 2026
 # -------------------------------------------------------------------------------------->
 
 #' Collapse a dimension of a poparray cube

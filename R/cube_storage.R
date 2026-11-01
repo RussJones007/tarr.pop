@@ -1,7 +1,15 @@
 # -------------------------------------------------------------------------------------->
-# Script: cube_storage.r
+# Script: cube_storage.R
 # Description:
-#   Persistent storage helpers for HDF5-backed population cubes.
+#   Population storage is external to the package, with configured roots separating base cubes, caches, and
+#   saved view definitions.
+#
+#   cube_path(), set_cube_path(), and init_cubes() manage configuration and storage setup. Helpers resolve
+#   directories, read and write configuration, discover files, and copy bundled cubes when needed.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-03-25 (first recorded Git commit)
 # -------------------------------------------------------------------------------------->
 
 tarr_pop_config_dir <- function() {

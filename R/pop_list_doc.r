@@ -1,17 +1,17 @@
-# ------------------------------------------------------------------------------------------------------------------->
-# Script:  pop_list_doc.r
+# -------------------------------------------------------------------------------------->
+# Script: pop_list_doc.r
 # Description:
-#   Describes the population arrays
+#   The population catalog identifies externally stored cubes by registered series ID rather than embedding
+#   full numeric cubes in this documentation file.
 #
-# ------------------------------------------------------------------------------------------------------------------->
+#   Provides the population help topic, describing source agencies, available series, dimensional
+#   conventions, and workflows for opening and safely transforming population arrays.
+#
+# -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: Feb 7, 2025
-# Revised: June 5, 2025 - updated to the population list of functions for getting the population tables.
-# Revised: August 5, 2025 - updated using census estimates through 2024.  Cleaned language for clarity
-# Further revisions updates are found in git and pushed to github.
-# ------------------------------------------------------------------------------------------------------------------->
-#
-# Population table/array documentation ====
+# -------------------------------------------------------------------------------------->
+
 #' Population Tables/Arrays
 #'
 #' `population` is a list containing a named catalog of the population cubes currently available. 

@@ -1,9 +1,17 @@
-# utils.r
+# -------------------------------------------------------------------------------------->
+# Script: utils.r
+# Description:
+#   Table-to-array conversion requires unique, complete Cartesian coordinates; these ordinary R conversions
+#   are eager, unlike delayed cube subsetting.
 #
-# Utility functions for this package
-# Functions to make an array from a data frame and vice-versa
-# -----------------------------------------------------------------------------------------------------------------
-
+#   Provides df_2_array(), array_2_df(), age interval conversion, dimension-label inspection and assignment,
+#   and source metadata utilities. Helpers check numeric labels, build label functions, and recognize
+#   missing arguments.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-01 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
 
 #' Data Frame to Array
 #'

@@ -1,5 +1,17 @@
-# Internal schema-specific reduction plans. All plans contain labels/indices,
-# never population values; numerical extraction remains in collapse's blocks.
+# -------------------------------------------------------------------------------------->
+# Script: collapse_applicability.R
+# Description:
+#   Schema-specific grouping plans contain labels and indices, not population values; extraction remains
+#   inside the collapse block kernel.
+#
+#   Internal helpers resolve applicable contributors, derive output applicability, and sum each schema's
+#   contributions within a source block.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-06 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Build schema-specific grouping membership from current metadata
 #' @param x A poparray.
 #' @param dim_nm Target dimension name.

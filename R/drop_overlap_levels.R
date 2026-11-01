@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: drop_overlap_levels.R
+# Description:
+#   Removing declared overlap labels is lazy dimension subsetting and does not infer how to reconcile
+#   overlapping age intervals or unknown categories.
+#
+#   drop_overlap_levels() removes active declared labels from selected dimensions through the existing
+#   subsetting method, which updates semantic metadata and retains aggregation guards.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-10 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Remove declared overlap-causing dimension levels
 #'
 #' Lazily subsets a population cube, removing active labels declared in each

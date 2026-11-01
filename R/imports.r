@@ -1,4 +1,15 @@
-# imports.r
+# -------------------------------------------------------------------------------------->
+# Script: imports.r
+# Description:
+#   Centralized roxygen import declarations generate package namespace dependencies; this file does not
+#   execute population transformations.
+#
+#   Declares package and function imports within the usethis namespace markers.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-01 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
 
 ## usethis namespace: start
 #' @import assertthat

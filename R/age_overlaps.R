@@ -1,3 +1,16 @@
+# -------------------------------------------------------------------------------------->
+# Script: age_overlaps.R
+# Description:
+#   Age selection uses interval overlap on labels only, without reading population values or splitting
+#   source categories.
+#
+#   age_overlaps() returns logical indices for inclusive whole-year bounds, including open-ended age groups.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-11 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Select age categories overlapping an inclusive age range
 #'
 #' Returns a logical index for dimension subsetting. Only age labels are

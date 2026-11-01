@@ -1,9 +1,16 @@
 # -------------------------------------------------------------------------------------->
 # Script: cube_io.R
 # Description:
-#   Shared I/O utilities for writing poparray cubes to the canonical HDF5 schema:
-#   - cube/population
-#   - cube/metadata/*
+#   The canonical HDF5 layout separates cube/population values from cube/metadata roles, labels, semantics,
+#   and provenance.
+#
+#   save_poparray() and create_poparray() persist cubes with their current metadata. Shared helpers choose
+#   chunks, normalize fields, and write numeric data and fieldwise semantic metadata, including
+#   applicability.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-21 (first recorded Git commit)
 # -------------------------------------------------------------------------------------->
 
 pa_bytes_per_cell <- function(type = "double") {

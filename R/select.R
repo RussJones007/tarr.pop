@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: select.R
+# Description:
+#   Selecting dimensions aggregates omitted axes through guarded blockwise HDF5 reductions; it does not
+#   discard their population counts. Required time and area roles remain as singleton axes when omitted.
+#
+#   Implements select.poparray() with tidyselect names, ordering, and renaming. It composes collapse,
+#   relocation, and metadata-aware renaming, then validates the result; pure reorder and rename selections
+#   remain lazy.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-29 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Select, reorder, and rename poparray dimensions
 #'
 #' Select dimensions using tidyselect names, ranges, negative selections, and name-based helpers. Predicate helpers such

@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: slice.R
+# Description:
+#   Position slicing operates on one explicitly named dimension of a delayed cube, preserving dimensions and
+#   updating applicability through existing subsetting rather than treating the array as table rows.
+#
+#   Implements slice(), slice_head(), and slice_tail() poparray methods. Helpers validate position
+#   selections and resolve first or last indices without reading population values.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-13 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Slice positions within a poparray dimension
 #'
 #' `dplyr::slice()` selects integer positions along one explicitly named

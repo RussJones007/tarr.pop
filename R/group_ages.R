@@ -1,8 +1,17 @@
-# ------------------------------------------------------------------------------------------------------------------->
+# -------------------------------------------------------------------------------------->
 # Script: group_ages.R
 # Description:
-#   Age-group helpers built on top of collapse_dim().
-# ------------------------------------------------------------------------------------------------------------------->
+#   Age grouping uses interval semantics and the guarded blockwise collapse backend. Applicability-aware
+#   grouping requires whole source intervals that exactly cover each target within a schema.
+#
+#   group_ages() builds age mappings; helpers resolve schema-specific contributors and route explicit level
+#   mappings through collapse_dim(). Non-derivable schema targets remain missing rather than splitting
+#   population counts.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-01 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
 
 #' Collapse age labels into coarser groups
 #'

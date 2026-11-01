@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: summarise.R
+# Description:
+#   Summarisation is a bounded-computation boundary: ungrouped dimensions are reduced into temporary HDF5
+#   output under overlap and applicability guards, without full-cube realization.
+#
+#   Implements summarise.poparray() for one named population sum using group_by() metadata or .by
+#   dimensions. Helpers parse the supported expression, propagate missingness, and preserve structural
+#   applicability in the returned cube.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-13 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Summarise a population cube over ungrouped dimensions
 #'
 #' Reduce dimensions not selected by `group_by()` or `.by`, retaining every

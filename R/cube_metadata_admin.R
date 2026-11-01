@@ -1,7 +1,15 @@
 # -------------------------------------------------------------------------------------->
 # Script: cube_metadata_admin.R
 # Description:
-#   Controlled metadata-admin helpers for cube metadata editing.
+#   Metadata edits require an editor or admin role and preserve the population dataset; tracked updates
+#   delegate to the revision machinery.
+#
+#   Provides file-backed roles(), source_meta(), cube_metadata(), and associated replacement interfaces.
+#   Helpers validate and normalize role, provenance, value-column, and semantic metadata before writing.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-04-02 (first recorded Git commit)
 # -------------------------------------------------------------------------------------->
 
 tarr_pop_metadata_role <- function() {

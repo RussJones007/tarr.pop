@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: measure_bundle.R
+# Description:
+#   Linked measures require exact coordinate, role, and semantic alignment plus explicit statistical
+#   compatibility; matching array shapes alone are insufficient.
+#
+#   poparray_measures(), select_measures(), save_measures(), and open_measures() manage aligned measures and
+#   shared HDF5 persistence. A collapse_dim() method coordinates count sums and compatible ACS margin-of-
+#   error reductions using the common guarded blockwise kernel.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-18 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Aligned numeric measures with explicit statistical contracts
 #'
 #' Coordinates, roles and dimension semantics must match exactly. Compatibility

@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: dim_applicability.R
+# Description:
+#   Applicability is label-based semantic metadata: schemas describe simultaneous levels over ordered
+#   controller labels without reading population values.
+#
+#   Internal helpers validate references and coverage, resolve schema indices, compress adjacent identical
+#   schemas, and trim applicability after subsetting.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-06 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Read optional dimension applicability, including older semantic objects
 #' @param sem A DimSemantics object.
 #' @return An applicability list or NULL.

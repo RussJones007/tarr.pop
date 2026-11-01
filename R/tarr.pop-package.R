@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: tarr.pop-package.R
+# Description:
+#   Package startup registers S7 methods and initializes configured external cube storage when appropriate;
+#   setup can be disabled for noninteractive or controlled workflows.
+#
+#   Provides package-level documentation and the .onLoad() hook. Helpers interpret the setup-skip
+#   environment flag and resolve interactive storage initialization.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-01 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' tarr.pop-package.R
 #'
 #' @description

@@ -1,4 +1,16 @@
-# Ingestion helpers for building population cubes from tabular source data.
+# -------------------------------------------------------------------------------------->
+# Script: ingestion.R
+# Description:
+#   Tabular source data are validated against explicit dimension contracts and completion policies before
+#   constructing or updating HDF5 population cubes.
+#
+#   ingest_population() builds cubes and add_population_data() updates them. Helpers remove aggregate rows,
+#   check keys and missing combinations, align dimension labels, and write delayed data in blocks.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-04-05 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
 
 #' Prepare a population table for ingestion
 #'

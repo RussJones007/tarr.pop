@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: cube_history.R
+# Description:
+#   Metadata revisions and recovery snapshots live inside HDF5 cubes without copying historical population
+#   arrays.
+#
+#   cube_version(), cube_history(), and cube_metadata_at() inspect versions and snapshots.
+#   update_cube_metadata(), restore_cube_metadata(), and recover_cube_metadata() manage tracked changes and
+#   interrupted replacements. Helpers stage metadata groups and commit revision records.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-11 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Inspect cube schema and metadata revisions
 #'
 #' Reads metadata only, without reading population values. Schema versions

@@ -1,3 +1,19 @@
+# -------------------------------------------------------------------------------------->
+# Script: poparray_view.R
+# Description:
+#   Persistent views are versioned plain-data recipes for one registered source series, not numeric
+#   snapshots or serialized delayed trees. Opening validates source compatibility and replays existing
+#   guarded operations.
+#
+#   Defines the S7 poparray_view class and construction, recording, save, read, and replay interfaces.
+#   Helpers validate recipe structure and arguments, capture the source contract, remove captured
+#   environments, and dispatch allowed operations.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-30 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Persistent population view definitions (proof of concept)
 #'
 #' A view records transformations of one registered source series. It contains

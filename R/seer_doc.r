@@ -1,13 +1,16 @@
-# ------------------------------------------------------------------------------------------------------------------->
-# seer_doc.r
+# -------------------------------------------------------------------------------------->
+# Script: seer_doc.r
 # Description:
-#   Describes the SEER  population arrays in seer.
+#   SEER population series are documented as registered external cubes rather than numeric arrays defined in
+#   this script.
 #
-# ------------------------------------------------------------------------------------------------------------------->
+#   Provides the seer help topic for Texas county estimates, source-specific age and race/ethnicity
+#   conventions, series identifiers, and opening and analysis workflows.
+#
+# -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: March 1, 2025
-# Revised:
-# -----------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------->
 
 #' @name seer
 #' 

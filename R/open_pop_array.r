@@ -1,9 +1,16 @@
 # -------------------------------------------------------------------------------------->
 # Script: open_pop_array.r
 # Description:
-#   Open poparray cubes using metadata stored inside each HDF5 file under:
-#   - cube/population
-#   - cube/metadata/*
+#   Each HDF5 cube's embedded metadata is authoritative; registries and metadata caches support discovery
+#   without replacing the stored contract.
+#
+#   open_poparray() opens a registered series or explicit file as a delayed cube, with optional checkout.
+#   Registry APIs build or refresh discovery data; helpers read and validate labels, roles, semantics,
+#   applicability, and provenance. open_tarr_pop() provides the compatibility entry point.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-01 (first recorded Git commit)
 # -------------------------------------------------------------------------------------->
 
 #' Resolve extdata directory for this package

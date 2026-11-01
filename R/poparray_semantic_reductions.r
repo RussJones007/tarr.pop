@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: poparray_semantic_reductions.r
+# Description:
+#   Reduction safety is derived from current labels, semantic declarations, and simultaneous applicability
+#   schemas; unresolved overlap is guarded conservatively.
+#
+#   Implements guarded sum() for poparray objects. Internal helpers detect interval overlap and evaluate
+#   dimension risk, with explicit strict and allow_overlap controls.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-23 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' @keywords internal
 #' @noRd
 pa_has_interval_overlap <- function(labels) {

@@ -1,14 +1,17 @@
 # -------------------------------------------------------------------------------------->
-# Script: poparray_classr
+# Script: poparray_class.r
 # Description:
-#   Constrcotr and methods for generics for the poparray class.  This is a refactoring of the older tarr_pop class
-#   with more specific contracted behavior enforing a time and area dimesions allowing for other dimseions
-#   to be added to an array as options. 
+#   poparray extends S4 DelayedArray with required time and area roles, current dimension semantics,
+#   provenance, and analysis grouping metadata. Subsetting stays lazy and updates semantics without
+#   rewriting the source cube.
+#
+#   Defines constructors, validation, role and metadata accessors, array methods, splitting, and coercions.
+#   Helpers resolve indices and maintain labels, applicability, and overlap declarations. Ordinary array and
+#   tabular coercions realize the selected values.
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
-# Created: `Feb 3, 2026
-# Revised: Feb 16, 2026 - multiple bug fixes nd term updates
+# Created: February 3, 2026
 # -------------------------------------------------------------------------------------->
 
 setClass(

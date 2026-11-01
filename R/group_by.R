@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: group_by.R
+# Description:
+#   Analysis grouping is in-memory metadata on a poparray, distinct from combining category labels or
+#   persisting cube semantics; no population values are read.
+#
+#   Implements group_by(), ungroup(), group_vars(), and groups() methods. Helpers select existing dimension
+#   names and maintain validated grouping metadata.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-13 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Group a poparray by dimensions
 #'
 #' `group_by()` records the dimensions whose coordinate combinations will remain

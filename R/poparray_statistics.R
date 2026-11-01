@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: poparray_statistics.R
+# Description:
+#   Cell-count statistics scan bounded backend blocks and exclude structurally inapplicable cells; small
+#   numeric results are realized without loading the full cube at once.
+#
+#   Implements mean(), var(), sd(), min(), max(), and range() methods. Helpers plan applicability masks,
+#   enforce overlap safety where required, and accumulate stable moments and extrema. These describe cell
+#   counts, not individual residents' ages.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-11 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Check overlap safety for cell-distribution statistics
 #' @param x A poparray.
 #' @param strict Whether to error rather than warn.

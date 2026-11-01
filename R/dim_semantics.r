@@ -1,6 +1,17 @@
-# DimSemantics stores the owning array's semantic contract. Current overlap presence is computed by poparray methods
-# from current labels. Subsetting prunes overlap_levels to retained labels. Interval overlap
-# is determined from label parsing (outside S7 object), not by overlap_levels.
+# -------------------------------------------------------------------------------------->
+# Script: dim_semantics.r
+# Description:
+#   DimSemantics is an S7 contract for the owning array's dimensions; current overlap risk is derived from
+#   active labels rather than a stored overlap flag.
+#
+#   Defines semantic properties, validation, construction, and update helpers. Applicability records
+#   simultaneous categories; subsetting prunes absent overlap declarations and marks confirmed safe subsets
+#   as partitions.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-02-27 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
 
 #' DimSemantics S7 Class
 #'

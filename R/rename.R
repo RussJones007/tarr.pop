@@ -1,3 +1,17 @@
+# -------------------------------------------------------------------------------------->
+# Script: rename.R
+# Description:
+#   Renaming is a lazy metadata operation: semantic dimension names, applicability controller references,
+#   roles, and grouping change together while semantic domains and source data remain intact.
+#
+#   Implements rename.poparray() and rename_with.poparray(). The shared helper validates names and
+#   reconstructs a consistent delayed poparray without rewriting its backing file.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-11 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Rename poparray dimensions
 #'
 #' Rename dimensions using `dplyr::rename()` syntax, `new_name = old_name`.

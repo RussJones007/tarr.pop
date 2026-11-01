@@ -1,15 +1,16 @@
-# ------------------------------------------------------------------------------------------------------------------->
+# -------------------------------------------------------------------------------------->
 # Script: filter.R
 # Description:
-#   Implements the filter() method for class poparray.
-#   The internal helper prefix `tp_` is legacy naming and does not indicate class type.
-# 
-# ------------------------------------------------------------------------------------------------------------------->
+#   Filtering slices named dimensions lazily using label predicates; it does not filter table rows or read
+#   population values. Semantic updates use the poparray subsetting method.
+#
+#   Implements filter.poparray() and the %between% helper. Internal tp_ helpers parse and evaluate single-
+#   dimension predicates, ordered labels, text matches, and age intervals; the prefix is legacy naming.
+#
+# -------------------------------------------------------------------------------------->
 # Author: Russ Jones
 # Created: January 5, 2026
-# Revised: February 16, 2026 for role-aware ordered filtering and predicate parser fixes
-# ------------------------------------------------------------------------------------------------------------------->
-
+# -------------------------------------------------------------------------------------->
 
 #' Filter a `poparray` array/cube by restricting dimension labels 
 #'

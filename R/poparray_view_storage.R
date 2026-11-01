@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: poparray_view_storage.R
+# Description:
+#   Saved recipe definitions are authoritative; the separate relative-path view registry is rebuildable
+#   without opening population cubes. File replacement is staged beside its destination.
+#
+#   list_poparray_views() discovers definitions, update_poparray_view_metadata() edits descriptive fields,
+#   and printing inspects steps without replay. Helpers validate managed names, resolve paths, and install
+#   staged RDS files.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-30 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' List saved population views
 #'
 #' Reads and validates plain recipe definitions in `views/`, then refreshes

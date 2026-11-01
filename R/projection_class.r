@@ -1,17 +1,17 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_class.r
 # Description:
-#   Defines the poparray_projection class, constructor, validator, coercion, subsetting, and
-#   print methods.  The plot method is defined in projection_plot.r script as it is quite long. 
+#   poparray_projection is an S4 wrapper around one delayed handle whose stat dimension holds projection and
+#   std_error values, with roles and uncertainty metadata kept explicit.
+#
+#   Defines constructors, validation, metadata accessors, subsetting, confidence intervals, printing,
+#   reading, and coercions. Helpers normalize roles and metadata and validate scale; plotting is implemented
+#   separately in projection_plot.r.
 #
 # -------------------------------------------------------------------------------------->
 # Author: Russ Jones
-# Created: January 18, 2026 
-# Revised: Februay 10, 2026, renamed class to poparray_projection
+# Created: January 18, 2026
 # -------------------------------------------------------------------------------------->
-
-
-# poparray_projection class -------------------------------------------------------------------------------------------
 
 #' Projection class
 #'

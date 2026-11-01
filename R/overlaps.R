@@ -1,3 +1,18 @@
+# -------------------------------------------------------------------------------------->
+# Script: overlaps.R
+# Description:
+#   Overlap inspection reads metadata only and uses the same interval and simultaneous-applicability risk
+#   checks as guarded reductions.
+#
+#   Defines the overlaps() generic and poparray method, reporting declarations, retained declared labels,
+#   and current risk for each dimension. The compatibility field original_levels reflects the current
+#   object's declarations, not an archived source contract.
+#
+# -------------------------------------------------------------------------------------->
+# Author: Russ Jones
+# Created: 2026-10-10 (first recorded Git commit)
+# -------------------------------------------------------------------------------------->
+
 #' Inspect declared and current overlap in a population cube
 #'
 #' Reports overlap metadata for every dimension without reading population
