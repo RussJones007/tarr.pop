@@ -2,9 +2,12 @@
 % Please edit documentation in R/relocate.R
 \name{relocate.poparray}
 \alias{relocate.poparray}
+\alias{relocate.demographic_array}
 \title{Relocate poparray dimensions lazily}
 \usage{
 \method{relocate}{poparray}(.data, ..., .before = NULL, .after = NULL)
+
+\method{relocate}{demographic_array}(.data, ..., .before = NULL, .after = NULL)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}
@@ -21,12 +24,16 @@ An HDF5-backed, delayed \code{poparray} with reordered dimensions and
 semantic metadata. No population values are extracted or files rewritten.
 }
 \description{
+The structural implementation is also available to \code{demographic_array}
+subclasses. Reconstruction preserves their concrete class and metadata;
+projection statistical axes retain their additional restrictions.
+}
+\details{
 \code{dplyr::relocate()} changes dimension order using tidy-select expressions.
 Population values remain in their original HDF5 dataset; a delayed
 permutation changes the view. All dimension labels and semantic contracts
 follow their named dimensions, including time/area roles and applicability.
-}
-\details{
+
 R arrays use column-major order: the first subscript varies fastest.
 This describes logical traversal, not a rule that moving a frequently used
 dimension first always improves HDF5 access. Chunk geometry, access patterns,

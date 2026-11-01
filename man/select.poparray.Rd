@@ -2,9 +2,12 @@
 % Please edit documentation in R/select.R
 \name{select.poparray}
 \alias{select.poparray}
+\alias{select.demographic_array}
 \title{Select, reorder, and rename poparray dimensions}
 \usage{
 \method{select}{poparray}(.data, ...)
+
+\method{select}{demographic_array}(.data, ...)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}
@@ -16,12 +19,16 @@ A HDF5-backed \code{poparray} with selected dimensions followed by any omitted r
 unsafe collapses throw an error.
 }
 \description{
+The structural implementation is also available to \code{demographic_array}
+subclasses. Reconstruction preserves their concrete class and metadata;
+projection statistical axes retain their additional restrictions.
+}
+\details{
 Select dimensions using tidyselect names, ranges, negative selections, and name-based helpers. Predicate helpers such
 as \code{where()} are not supported. Unlike selection of data-frame columns, omitting a dimension aggregates its levels
 with \code{\link[=collapse_all]{collapse_all()}} so that counts are preserved. Omitted dimensions are collapsed in their original array order,
 independently of the requested output order.
-}
-\details{
+
 Omitted dimensions are dropped except for the required time and area roles, which remain as singleton dimensions and
 are appended in their original relative order. An empty selection collapses every dimension and retains these two
 roles. Existing overlap and applicability guards apply to ensure data integrity, including restrictions on collapsing

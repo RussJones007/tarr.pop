@@ -2,9 +2,12 @@
 % Please edit documentation in R/slice.R
 \name{slice.poparray}
 \alias{slice.poparray}
+\alias{slice.demographic_array}
 \title{Slice positions within a poparray dimension}
 \usage{
 \method{slice}{poparray}(.data, ..., .by = NULL, .preserve = FALSE, .dimension)
+
+\method{slice}{demographic_array}(.data, ..., .by = NULL, .preserve = FALSE, .dimension)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}
@@ -27,11 +30,15 @@ applicability metadata. Roles, provenance, and value-column metadata remain
 intact. No population values are extracted or backing files modified.
 }
 \description{
+The structural implementation is also available to \code{demographic_array}
+subclasses. Reconstruction preserves their concrete class and metadata;
+projection statistical axes retain their additional restrictions.
+}
+\details{
 \code{dplyr::slice()} selects integer positions along one explicitly named
 dimension, rather than rows of a table. Selection is lazy and retains all
 dimensions, even when a dimension has zero or one selected labels.
-}
-\details{
+
 Positions refer to the current dimension after any earlier filtering
 or relocation. Labels are not evaluated as table columns; the helper
 \code{dplyr::n()} is not supported here. Use \code{\link[=slice_head.poparray]{slice_head.poparray()}} and

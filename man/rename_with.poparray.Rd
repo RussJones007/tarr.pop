@@ -2,9 +2,12 @@
 % Please edit documentation in R/rename.R
 \name{rename_with.poparray}
 \alias{rename_with.poparray}
+\alias{rename_with.demographic_array}
 \title{Rename poparray dimensions with a function}
 \usage{
 \method{rename_with}{poparray}(.data, .fn, .cols = dplyr::everything(), ...)
+
+\method{rename_with}{demographic_array}(.data, .fn, .cols = dplyr::everything(), ...)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}

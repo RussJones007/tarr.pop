@@ -3,11 +3,14 @@
 \name{slice_head.poparray}
 \alias{slice_head.poparray}
 \alias{slice_tail.poparray}
+\alias{slice_head.demographic_array}
 \title{Select the first or last coordinates of a poparray dimension}
 \usage{
 \method{slice_head}{poparray}(.data, ..., n, prop, by = NULL, .dimension)
 
 \method{slice_tail}{poparray}(.data, ..., n, prop, by = NULL, .dimension)
+
+\method{slice_head}{demographic_array}(.data, ..., n, prop, by = NULL, .dimension)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}

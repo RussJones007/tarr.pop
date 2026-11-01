@@ -14,6 +14,10 @@
 
 #' Slice positions within a poparray dimension
 #'
+#' The structural implementation is also available to `demographic_array`
+#' subclasses. Reconstruction preserves their concrete class and metadata;
+#' projection statistical axes retain their additional restrictions.
+#'
 #' `dplyr::slice()` selects integer positions along one explicitly named
 #' dimension, rather than rows of a table. Selection is lazy and retains all
 #' dimensions, even when a dimension has zero or one selected labels.
@@ -54,7 +58,7 @@
 #' areas(without_first)
 slice.poparray <- function(.data, ..., .by = NULL, .preserve = FALSE,
                            .dimension) {
-  validate_poparray(.data)
+  validate_demographic_array(.data)
   if (!rlang::quo_is_null(rlang::enquo(.by)) || !identical(.preserve, FALSE)) {
     cli::cli_abort("Grouped slicing with {.arg .by} or {.arg .preserve} is not supported for a poparray.")
   }
@@ -161,7 +165,7 @@ slice_tail.poparray <- function(.data, ..., n, prop, by = NULL, .dimension) {
 #' @return A lazy subset; only a coordinate-sized position vector is allocated.
 #' @noRd
 pa_slice_edge <- function(x, dimension, sizes, verb) {
-  validate_poparray(x)
+  validate_demographic_array(x)
   checkmate::assert_string(dimension, min.chars = 1)
   dn <- dimnames(x)
   if (!dimension %in% names(dn)) {
@@ -172,3 +176,15 @@ pa_slice_edge <- function(x, dimension, sizes, verb) {
   selected <- do.call(verb, c(list(positions), sizes))$position
   slice.poparray(x, selected, .dimension = dimension)
 }
+
+#' @rdname slice.poparray
+#' @exportS3Method slice demographic_array
+slice.demographic_array <- slice.poparray
+
+#' @rdname slice_head.poparray
+#' @exportS3Method slice_head demographic_array
+slice_head.demographic_array <- slice_head.poparray
+
+#' @rdname slice_tail.poparray
+#' @exportS3Method slice_tail demographic_array
+slice_tail.demographic_array <- slice_tail.poparray

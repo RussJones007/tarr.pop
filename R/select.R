@@ -15,6 +15,10 @@
 
 #' Select, reorder, and rename poparray dimensions
 #'
+#' The structural implementation is also available to `demographic_array`
+#' subclasses. Reconstruction preserves their concrete class and metadata;
+#' projection statistical axes retain their additional restrictions.
+#'
 #' Select dimensions using tidyselect names, ranges, negative selections, and name-based helpers. Predicate helpers such
 #' as `where()` are not supported. Unlike selection of data-frame columns, omitting a dimension aggregates its levels
 #' with [collapse_all()] so that counts are preserved. Omitted dimensions are collapsed in their original array order,
@@ -42,7 +46,7 @@
 #' pop |> dplyr::select(-sex)
 #' }
 select.poparray <- function(.data, ...) {
-  validate_poparray(.data)
+  validate_demographic_array(.data)
   original_names <- names(dimnames(.data))
   selection <- tidyselect::eval_select(
     rlang::expr(c(...)),
@@ -54,6 +58,10 @@ select.poparray <- function(.data, ...) {
   }
   selected_names <- original_names[unname(selection)]
   omitted <- setdiff(original_names, selected_names)
+  if (!is(.data, "poparray") && length(omitted)) {
+    cli::cli_abort(c("Omitting dimensions requires a subclass-specific reduction rule.",
+      "i" = "Projection uncertainty cannot be aggregated by select(); use as.poparray() for count-only reductions."))
+  }
   required <- c(time_role(.data), area_role(.data))
   retained <- omitted[omitted %in% required]
   output_names <- c(names(selection), retained)
@@ -72,6 +80,10 @@ select.poparray <- function(.data, ...) {
   if (!identical(output_names, ordered_names)) {
     out <- pa_rename_dimensions(out, output_names)
   }
-  validate_poparray(out)
+  validate_demographic_array(out)
   out
 }
+
+#' @rdname select.poparray
+#' @exportS3Method select demographic_array
+select.demographic_array <- select.poparray

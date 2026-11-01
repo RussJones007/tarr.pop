@@ -12,7 +12,7 @@ make_overlap_drop_fixture <- function() {
   x
 }
 
-test_that("declared overlap removal is lazy and preserves semantic contracts", {
+test_that("declared overlap removal is lazy and updates current semantic contracts", {
   x <- make_overlap_drop_fixture()
   expect_error(sum(x), "Unsafe reduction")
   out <- drop_overlap_levels(x, c("race", "age.char"))
@@ -20,7 +20,11 @@ test_that("declared overlap removal is lazy and preserves semantic contracts", {
   expect_equal(dimnames(out)$age.char, c("0-4", "5-9"))
   expect_equal(dim(out), c(2L, 1L, 2L, 2L))
   expect_true(is_hdf5_backed_delayed(out))
-  expect_equal(dim_semantics(out), dim_semantics(x))
+  expect_identical(dim_semantics(out)$race@overlap_levels, character())
+  expect_identical(dim_semantics(out)$age.char@overlap_levels, character())
+  expect_identical(dim_semantics(out)$race@partition_type, "partition")
+  expect_identical(dim_semantics(out)$age.char@partition_type, "partition")
+  expect_identical(dim_semantics(x)$race@overlap_levels, "White in combination")
   expect_equal(get_source(out), get_source(x))
   expect_equal(time_role(out), time_role(x))
   expect_equal(area_role(out), area_role(x))
@@ -89,7 +93,7 @@ test_that("overlap removal trims applicability and compressed metadata persists"
   dim_semantics(x) <- sem
   out <- drop_overlap_levels(x, "race")
   expect_equal(out@dim_semantics$race@applicability$schemas[[1]]$levels, c("White", "Black"))
-  expect_equal(out@dim_semantics$race@overlap_levels, "White in combination")
+  expect_identical(out@dim_semantics$race@overlap_levels, character())
   path <- tempfile(fileext = ".h5")
   on.exit(unlink(path))
   save_poparray(out, filepath = path, series_id = "compressed-fixture")

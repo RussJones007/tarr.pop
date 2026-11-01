@@ -2,9 +2,12 @@
 % Please edit documentation in R/rename.R
 \name{rename.poparray}
 \alias{rename.poparray}
+\alias{rename.demographic_array}
 \title{Rename poparray dimensions}
 \usage{
 \method{rename}{poparray}(.data, ...)
+
+\method{rename}{demographic_array}(.data, ...)
 }
 \arguments{
 \item{.data}{A \code{poparray}.}
@@ -15,6 +18,11 @@
 A \code{poparray} with renamed dimensions and consistent metadata.
 }
 \description{
+The structural implementation is also available to \code{demographic_array}
+subclasses. Reconstruction preserves their concrete class and metadata;
+projection statistical axes retain their additional restrictions.
+}
+\details{
 Rename dimensions using \code{dplyr::rename()} syntax, \code{new_name = old_name}.
 Category labels, dimension order, population values, and provenance are
 preserved. This is a lazy metadata operation: no population values are read

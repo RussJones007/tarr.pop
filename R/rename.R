@@ -14,6 +14,10 @@
 
 #' Rename poparray dimensions
 #'
+#' The structural implementation is also available to `demographic_array`
+#' subclasses. Reconstruction preserves their concrete class and metadata;
+#' projection statistical axes retain their additional restrictions.
+#'
 #' Rename dimensions using `dplyr::rename()` syntax, `new_name = old_name`.
 #' Category labels, dimension order, population values, and provenance are
 #' preserved. This is a lazy metadata operation: no population values are read
@@ -68,7 +72,7 @@ rename.poparray <- function(.data, ...) {
 #' names(dimnames(renamed))
 #' time_role(renamed)
 rename_with.poparray <- function(.data, .fn, .cols = dplyr::everything(), ...) {
-  validate_poparray(.data)
+  validate_demographic_array(.data)
   old_names <- names(dimnames(.data))
   selection <- tidyselect::eval_select(
     rlang::enquo(.cols),
@@ -102,6 +106,10 @@ pa_rename_dimensions <- function(.data, new_names) {
     cli::cli_abort("Renaming must leave unique dimension names.")
   }
   lookup <- stats::setNames(new_names, old_names)
+  special <- da_special_axes(.data)
+  if (any(unname(lookup[special]) != special)) {
+    cli::cli_abort("Special statistical axes cannot be renamed: {.val {special}}.")
+  }
   semantics <- dim_semantics(.data) |>
     purrr::imap(function(sem, name) {
       app <- pa_dim_applicability(sem)
@@ -113,10 +121,17 @@ pa_rename_dimensions <- function(.data, new_names) {
   names(dn) <- new_names
   dx <- methods::as(.data, "DelayedArray")
   dimnames(dx) <- dn
-  new_poparray(dx, dimnames_list = dn, data_col = data_col(.data),
-               source = get_source(.data),
+  da_reconstruct(.data, dx, dimnames_list = dn,
                time_dim = unname(lookup[time_role(.data)]),
                area_dim = unname(lookup[area_role(.data)]),
                dim_semantics = semantics,
-               group_vars = unname(lookup[.data@group_vars]))
+               group_vars = if (is(.data, "poparray")) unname(lookup[.data@group_vars]) else character())
 }
+
+#' @rdname rename.poparray
+#' @exportS3Method rename demographic_array
+rename.demographic_array <- rename.poparray
+
+#' @rdname rename_with.poparray
+#' @exportS3Method rename_with demographic_array
+rename_with.demographic_array <- rename_with.poparray

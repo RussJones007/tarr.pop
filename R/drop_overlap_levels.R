@@ -15,9 +15,10 @@
 #' Remove declared overlap-causing dimension levels
 #'
 #' Lazily subsets a population cube, removing active labels declared in each
-#' selected dimension's `overlap_levels`. Dimensions, roles, source metadata,
-#' and the intrinsic overlap declarations are retained. Applicability is trimmed
-#' by the existing subsetting method. No population values are read.
+#' selected dimension's `overlap_levels`. Dimensions, roles, and source metadata
+#' are retained. The existing subsetting method prunes absent overlap declarations,
+#' updates confirmed safe subsets to partitions, and trims applicability.
+#' No population values are read.
 #'
 #' This removes declared labels only: it does not choose among overlapping age
 #' intervals or resolve period-specific overlap. An empty declaration can mean

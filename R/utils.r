@@ -471,7 +471,7 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
     source = url,
     updated = as.character(today())
   )
-  if (is(obj, "poparray")) obj@source <- as.list(src)
+  if (is(obj, "demographic_array")) obj@source <- as.list(src)
   attr(obj, "source") <- src
   obj
 }
@@ -487,7 +487,7 @@ set_source_url <- function(obj, nm, url, pop_type = NULL) {
 #' @keywords internal
 #' @export
 get_source <- function(obj){
-  ret <- if (is(obj, "poparray")) obj@source else attr(obj, which = "source", exact = TRUE)
+  ret <- if (is(obj, "demographic_array")) obj@source else attr(obj, which = "source", exact = TRUE)
   if(is.null(ret)) ret <- c(note = "", source = "Not given", updated = "Unknown", population_type = "Unknown")
   ret
 }

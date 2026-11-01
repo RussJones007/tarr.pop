@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------->
 # Script: projection_class.r
 # Description:
-#   poparray_projection is an S4 wrapper around one delayed handle whose stat dimension holds projection and
+#   poparray_projection extends demographic_array around one delayed backend whose stat dimension holds projection and
 #   std_error values, with roles and uncertainty metadata kept explicit.
 #
 #   Defines constructors, validation, metadata accessors, subsetting, confidence intervals, printing,
@@ -17,13 +17,14 @@
 #'
 #' @description
 #' An S4 class representing a time-based projection. The class extends
-#' `DelayedArray` and stores uncertainty as a named `stat` dimension with levels
+#' [demographic_array-class] (and therefore `DelayedArray`) and stores uncertainty as a named `stat` dimension with levels
 #' `projection` and `std_error`. Objects are typically created by [project()],
 #' which rounds final population estimates to whole persons using `round()`
 #' while standard errors retain their calculated precision.
 #' 
 #' @section Structure:
-#' A `poparray_projection` object is an S4 subclass of `DelayedArray`.
+#' A `poparray_projection` is an S4 subclass of virtual `demographic_array`,
+#' sharing structural metadata with `poparray` without inheriting its reductions.
 #' The cube includes time/area/strata dimensions plus `stat`.
 #'
 #' Slots included:
@@ -161,7 +162,7 @@ pp_handle <- function(x) {
 
 pp_roles <- function(x) {
   if (isS4(x) && is(x, "poparray_projection")) {
-    return(list(time = x@time_role, area = x@area_role, strata = x@strata_roles))
+    return(list(time = time_role(x), area = area_role(x), strata = x@strata_roles))
   }
   attr(x, "dimroles", exact = TRUE)
 }
@@ -177,7 +178,7 @@ pp_method <- function(x) {
 }
 
 pp_source <- function(x) {
-  if (isS4(x) && is(x, "poparray_projection")) return(x@source)
+  if (isS4(x) && is(x, "poparray_projection")) return(get_source(x))
   attr(x, "source", exact = TRUE)
 }
 
@@ -187,7 +188,7 @@ pp_base_years <- function(x) {
 }
 
 pp_data_col <- function(x) {
-  if (isS4(x) && is(x, "poparray_projection")) return(x@data_col)
+  if (isS4(x) && is(x, "poparray_projection")) return(data_col(x))
   attr(x, "data_col", exact = TRUE)
 }
 
@@ -211,7 +212,7 @@ pp_prepare_dim_semantics <- function(dim_semantics, dn, time_dim, area_dim) {
   if (identical(names(dim_semantics), population_names)) {
     dim_semantics$stat <- new_dim_semantics(
       "stat", "statistic", "nominal", "set", validated = TRUE,
-      overlap_levels = c("projection", "std_error"),
+      overlap_levels = intersect(c("projection", "std_error"), dn$stat),
       notes = "Estimates and standard errors are distinct statistics, not additive population groups."
     )
     dim_semantics <- dim_semantics[names(dn)]
@@ -221,7 +222,7 @@ pp_prepare_dim_semantics <- function(dim_semantics, dn, time_dim, area_dim) {
   if (!identical(stat@domain, "statistic") || !identical(stat@scale_type, "nominal") ||
       !identical(stat@partition_type, "set") ||
       !isTRUE(stat@validated) ||
-      !identical(stat@overlap_levels, c("projection", "std_error")) ||
+      !identical(stat@overlap_levels, intersect(c("projection", "std_error"), dn$stat)) ||
       !is.null(pa_dim_applicability(stat))) {
     cli::cli_abort("The stat dimension must describe non-additive projection and standard-error statistics.")
   }
@@ -829,74 +830,6 @@ print.poparray_projection <- function(x, ...) {
 
 # ---- subsetting --------------------------------------------------------------
 
-setMethod(
-  "[",
-  signature(x = "poparray_projection"),
-  function(x, ..., drop = FALSE) {
-    dn0 <- dimnames(x)
-    dnm <- names(dn0)
-    nd <- length(dn0)
-
-    dots <- as.list(substitute(list(...)))[-1L]
-    idx <- lapply(dots, \(e) {
-      if (identical(e, quote(expr = ))) TRUE else eval(e, parent.frame())
-    })
-
-    ndx <- rep(list(TRUE), nd)
-    idx_names <- names(idx)
-    if (is.null(idx_names)) idx_names <- character(0)
-
-    if (length(idx_names) > 0) {
-      bad <- setdiff(idx_names, dnm)
-      if (length(bad) > 0) {
-        cli::cli_abort(c(
-          "Unknown dimension name(s) in subset: {paste(bad, collapse = ', ')}.",
-          "i" = "Valid dimensions are: {paste(dnm, collapse = ', ')}."
-        ))
-      }
-      ndx[match(idx_names, dnm)] <- idx
-    } else {
-      if (length(idx) > nd) cli::cli_abort("Too many indices for projection object.")
-      ndx[seq_along(idx)] <- idx
-    }
-
-    subset_data <- do.call(`[`, c(list(methods::as(x, "DelayedArray")), ndx, list(drop = drop)))
-    dn <- dimnames(subset_data)
-
-    if (!is.null(dn) && !is.null(names(dn)) && "stat" %in% names(dn)) {
-      return(
-        new_poparray_projection_s4(
-          x = subset_data,
-          level = x@level,
-          method = x@method,
-          source = x@source,
-          base_years = x@base_years,
-          time_dim = x@time_role,
-          area_dim = x@area_role,
-          data_col = x@data_col,
-          created = x@created,
-          dim_semantics = subset_dim_semantics(x@dim_semantics, dn0, dn)
-        )
-      )
-    }
-
-    if (is.null(dn) || is.null(names(dn)) ||
-        !x@time_role %in% names(dn) || !x@area_role %in% names(dn)) {
-      return(subset_data)
-    }
-
-    new_poparray(
-      x = subset_data,
-      dimnames_list = dn,
-      data_col = x@data_col %||% "population",
-      source = x@source,
-      time_dim = x@time_role,
-      area_dim = x@area_role,
-      dim_semantics = subset_dim_semantics(x@dim_semantics, dn0, dn)
-    )
-  }
-)
-
 #' @export
 `[.poparray_projection` <- function(x, ..., drop = FALSE) {
   if (isS4(x) && is(x, "poparray_projection")) {
@@ -1159,3 +1092,63 @@ as_tibble.poparray_projection <- function(x,
 
 
   
+
+#' Rebuild a projection without losing fit metadata or misclassifying errors
+#' @inheritParams da_reconstruct
+#' @return A projection, a count-only poparray, or the raw delayed result.
+#' @noRd
+setMethod("da_reconstruct", "poparray_projection", function(x, backend, dimnames_list,
+    dim_semantics, time_dim = x@time_role, area_dim = x@area_role,
+    group_vars = character(), statistic = NULL) {
+  if ("stat" %in% names(dimnames_list)) {
+    return(new_poparray_projection_s4(backend, x@level, x@method, x@source,
+      x@base_years, time_dim, area_dim, data_col = x@data_col,
+      created = x@created, dim_semantics = dim_semantics))
+  }
+  if (!identical(statistic, "projection")) return(backend)
+  out <- new_poparray(backend, dimnames_list = dimnames_list,
+    data_col = x@data_col, source = x@source, time_dim = time_dim,
+    area_dim = area_dim, dim_semantics = dim_semantics)
+  attr(out, "projection_level") <- x@level
+  attr(out, "projection_method") <- x@method
+  attr(out, "projection_base_years") <- x@base_years
+  out
+})
+
+#' Reject reductions without projection uncertainty rules
+#' @param x A projection array.
+#' @return Always raises an informative error.
+#' @noRd
+da_projection_reduction_error <- function(x) {
+  cli::cli_abort(c("Projection arrays require statistic-specific numerical operations.",
+    "i" = "Extract a statistic with projection() or std_error(), or use as.poparray() for population-count reductions."))
+}
+
+#' Projection numerical boundaries
+#'
+#' Combined projection and standard-error arrays cannot use count reductions.
+#' Extract a delayed statistic with [projection()] or [std_error()], or obtain
+#' count semantics explicitly with [as.poparray()]. Aggregating uncertainty
+#' requires assumptions about covariance that these methods do not supply.
+#' @param x A projection array.
+#' @param ... Additional arguments, unused.
+#' @param na.rm,y,use Standard reduction arguments, unused.
+#' @name projection-reductions
+NULL
+
+#' @rdname projection-reductions
+setMethod("sum", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("mean", "poparray_projection", function(x, ...) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("min", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("max", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("range", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("var", "poparray_projection", function(x, y = NULL, na.rm = FALSE, use) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("sd", "poparray_projection", function(x, na.rm = FALSE) da_projection_reduction_error(x))
+#' @rdname projection-reductions
+setMethod("Summary", "poparray_projection", function(x, ..., na.rm = FALSE) da_projection_reduction_error(x))

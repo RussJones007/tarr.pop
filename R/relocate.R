@@ -14,6 +14,10 @@
 
 #' Relocate poparray dimensions lazily
 #'
+#' The structural implementation is also available to `demographic_array`
+#' subclasses. Reconstruction preserves their concrete class and metadata;
+#' projection statistical axes retain their additional restrictions.
+#'
 #' `dplyr::relocate()` changes dimension order using tidy-select expressions.
 #' Population values remain in their original HDF5 dataset; a delayed
 #' permutation changes the view. All dimension labels and semantic contracts
@@ -49,7 +53,7 @@
 #' area_last <- dplyr::relocate(pop, area.name, .after = dplyr::last_col())
 #' names(dimnames(area_last))
 relocate.poparray <- function(.data, ..., .before = NULL, .after = NULL) {
-  validate_poparray(.data)
+  validate_demographic_array(.data)
   dn <- dimnames(.data)
   dimension_names <- names(dn)
   selector_data <- stats::setNames(seq_along(dn), dimension_names)
@@ -82,9 +86,12 @@ relocate.poparray <- function(.data, ..., .before = NULL, .after = NULL) {
   dx <- methods::as(.data, "DelayedArray")
   out <- DelayedArray::aperm(dx, perm = permutation)
   dimnames(out) <- dn[permutation]
-  new_poparray(out, dimnames_list = dn[permutation],
-               data_col = data_col(.data), source = get_source(.data),
+  da_reconstruct(.data, out, dimnames_list = dn[permutation],
                time_dim = time_role(.data), area_dim = area_role(.data),
                dim_semantics = dim_semantics(.data)[reordered_names],
-               group_vars = .data@group_vars)
+               group_vars = if (is(.data, "poparray")) .data@group_vars else character())
 }
+
+#' @rdname relocate.poparray
+#' @exportS3Method relocate demographic_array
+relocate.demographic_array <- relocate.poparray

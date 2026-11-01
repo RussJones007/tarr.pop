@@ -14,6 +14,10 @@
 
 #' Filter a `poparray` array/cube by restricting dimension labels 
 #'
+#' The structural implementation is also available to `demographic_array`
+#' subclasses. Reconstruction preserves their concrete class and metadata;
+#' projection statistical axes retain their additional restrictions.
+#'
 #' @description `filter.poparray()` restricts a `poparray` object along one or more named dimensions using **label-based
 #' predicates**, returning a delayed `poparray` (or view) without materializing the data.
 #'
@@ -562,3 +566,7 @@ tp_suggest_labels <- function(bad, available, n = 3) {
   }
   x >= lo & x <= hi
 }
+
+#' @rdname filter.poparray
+#' @exportS3Method filter demographic_array
+filter.demographic_array <- filter.poparray

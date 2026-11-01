@@ -2,9 +2,12 @@
 % Please edit documentation in R/filter.R
 \name{filter.poparray}
 \alias{filter.poparray}
+\alias{filter.demographic_array}
 \title{Filter a \code{poparray} array/cube by restricting dimension labels}
 \usage{
 \method{filter}{poparray}(.data, ..., .strict = TRUE)
+
+\method{filter}{demographic_array}(.data, ..., .strict = TRUE)
 }
 \arguments{
 \item{.data}{A \code{poparray} object.}
@@ -26,6 +29,9 @@ This is \strong{not} row filtering. It is \strong{dimension slicing} intended fo
 HDF5/DelayedArray-backed population cubes.
 }
 \details{
+The structural implementation is also available to \code{demographic_array}
+subclasses. Reconstruction preserves their concrete class and metadata;
+projection statistical axes retain their additional restrictions.
 \subsection{What this method does \code{filter()} for \code{poparray} builds or updates a subset plan that restricts dimension}{
 
 labels (e.g., years, counties, ages). The returned object remains delayed; realization happens later via \code{collect()},

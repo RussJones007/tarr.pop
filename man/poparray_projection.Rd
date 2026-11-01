@@ -44,14 +44,15 @@ A poparray_projection object
 }
 \description{
 An S4 class representing a time-based projection. The class extends
-\code{DelayedArray} and stores uncertainty as a named \code{stat} dimension with levels
+\link[=demographic_array-class]{demographic_array} (and therefore \code{DelayedArray}) and stores uncertainty as a named \code{stat} dimension with levels
 \code{projection} and \code{std_error}. Objects are typically created by \code{\link[=project]{project()}},
 which rounds final population estimates to whole persons using \code{round()}
 while standard errors retain their calculated precision.
 }
 \section{Structure}{
 
-A \code{poparray_projection} object is an S4 subclass of \code{DelayedArray}.
+A \code{poparray_projection} is an S4 subclass of virtual \code{demographic_array},
+sharing structural metadata with \code{poparray} without inheriting its reductions.
 The cube includes time/area/strata dimensions plus \code{stat}.
 
 Slots included:
