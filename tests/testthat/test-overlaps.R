@@ -10,7 +10,7 @@ make_overlap_report_fixture <- function(age_labels = c("0-4", "5-9")) {
   x
 }
 
-test_that("overlaps reports original declarations and current status after filtering", {
+test_that("overlaps reports updated declarations and current status after filtering", {
   x <- make_overlap_report_fixture()
   before <- dim_semantics(x)
   result <- overlaps(x)
@@ -20,7 +20,7 @@ test_that("overlaps reports original declarations and current status after filte
   expect_equal(result$area.name, list(original_levels = character(),
     current_levels = character(), has_overlap = FALSE))
   clean <- drop_overlap_levels(x, "race")
-  expect_equal(overlaps(clean)$race, list(original_levels = "White in combination",
+  expect_equal(overlaps(clean)$race, list(original_levels = character(),
     current_levels = character(), has_overlap = FALSE))
   single <- x[, , "White in combination", , drop = FALSE]
   expect_equal(overlaps(single)$race$current_levels, "White in combination")

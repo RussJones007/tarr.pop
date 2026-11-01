@@ -1,15 +1,17 @@
-# DimSemantics stores intrinsic semantic descriptors only. Current overlap presence is computed by poparray methods from
-# current labels. overlap_levels is a list of known overlap-causing levels (may be empty if unknown). Interval overlap
+# DimSemantics stores the owning array's semantic contract. Current overlap presence is computed by poparray methods
+# from current labels. Subsetting prunes overlap_levels to retained labels. Interval overlap
 # is determined from label parsing (outside S7 object), not by overlap_levels.
 
 #' DimSemantics S7 Class
 #'
 #' Declarative semantic contract for a single array dimension.
 #'
-#' `DimSemantics` stores intrinsic semantics only and must not store current-state facts such as whether overlaps are
-#' currently present in a filtered cube. The object describes the dimension contract and its known overlap-causing
+#' `DimSemantics` describes the owning array's semantic contract. It does not store a mutable flag indicating whether
+#' overlaps are currently present in a filtered cube. The contract includes its known overlap-causing
 #' levels, while overlap status for any realized or filtered cube is computed from the active labels at that point in
-#' the workflow.
+#' the workflow. Subsetting removes absent `overlap_levels`; when all declared
+#' overlap levels are removed and the existing guard confirms a safe subset,
+#' the returned dimension is marked as a partition of its retained categories.
 #'
 #' @section Fields:
 #' - `dim_name`: Character scalar. Dimension name in the array (e.g., `"race"`).

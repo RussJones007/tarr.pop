@@ -2,6 +2,12 @@
 
 Changes since development version 0.0.0.9226.
 
+* Filtering and subsetting now remove absent labels from `overlap_levels`.
+  When all declared overlaps are removed and the retained labels pass the
+  existing overlap guard, the returned dimension is marked as a partition.
+  Unknown relationships and remaining interval overlaps retain their guards;
+  source cube metadata on disk is unchanged.
+
 * Added an experimental S7 `poparray_view` recipe with plain-data RDS
   persistence, fixed operation replay, minimal source compatibility checks,
   and source checkout support. Views record transformations without saving

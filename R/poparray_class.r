@@ -217,6 +217,20 @@ subset_dim_semantics <- function(dim_semantics, before_dimnames, after_dimnames)
   }
   out <- lapply(out, pa_subset_applicability,
                 before_dimnames = before_dimnames, after_dimnames = after_dimnames)
+  out <- lapply(out, function(sem) {
+    labels <- after_dimnames[[sem@dim_name]]
+    declared <- sem@overlap_levels
+    retained <- intersect(declared, labels)
+    if (identical(declared, retained)) return(sem)
+    # Only infer disjointness for a true subset, using the original declaration
+    # before an empty overlap list would acquire the meaning "unknown".
+    safe_subset <- !length(retained) &&
+      all(labels %in% before_dimnames[[sem@dim_name]]) &&
+      !pa_dim_has_overlap_risk(sem, labels, after_dimnames)
+    pa_update_dim_semantics(sem,
+      overlap_levels = retained,
+      partition_type = if (safe_subset) "partition" else sem@partition_type)
+  })
   out
 }
 

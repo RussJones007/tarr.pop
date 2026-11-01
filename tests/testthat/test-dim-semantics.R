@@ -169,7 +169,16 @@ test_that("sum allows multiple active set levels after named overlaps are remove
   expect_error(sum(pa), "Unsafe reduction blocked")
 
   filtered <- pa[, , c("Asian", "Black", "White"), drop = FALSE]
-  expect_identical(dim_semantics(filtered)$race.eth@overlap_levels, "All races")
+  expect_identical(dim_semantics(filtered)$race.eth@overlap_levels, character())
+  expect_identical(dim_semantics(filtered)$race.eth@partition_type, "partition")
+  expect_identical(dim_semantics(pa)$race.eth@overlap_levels, "All races")
+  by_filter <- dplyr::filter(pa, race.eth != "All races")
+  expect_identical(dim_semantics(by_filter), dim_semantics(filtered))
+  expect_identical(dim_semantics(open_poparray(filepath = fp))$race.eth@overlap_levels,
+                   "All races")
+  saved <- tempfile(fileext = ".h5")
+  save_poparray(filtered, filepath = saved)
+  expect_identical(dim_semantics(open_poparray(filepath = saved)), dim_semantics(filtered))
   expect_silent(sum(filtered))
   expect_equal(sum(filtered), sum(as.array(filtered)))
 })
@@ -502,4 +511,29 @@ test_that("live cubes expose interval semantics for age.char", {
     x <- open_poparray(id)
     expect_identical(dim_semantics(x)$age.char@scale_type, "interval", info = id)
   }
+})
+
+
+test_that("subset prunes only absent overlap declarations without population reads", {
+  dn <- list(year = "2020", area.name = "A", race = c("A", "B", "AB", "Total"))
+  sem <- default_dim_semantics(names(dn), "year", "area.name")
+  sem$race <- pa_update_dim_semantics(sem$race, overlap_levels = c("AB", "Total"))
+  partial <- subset_dim_semantics(sem, dn, within(dn, race <- c("A", "B", "AB")))
+  expect_identical(partial$race@overlap_levels, "AB")
+  expect_identical(partial$race@partition_type, "set")
+  expect_true(pa_dim_has_overlap_risk(partial$race, c("A", "B", "AB")))
+  unknown <- sem
+  unknown$race <- pa_update_dim_semantics(unknown$race, overlap_levels = character())
+  result <- subset_dim_semantics(unknown, dn, within(dn, race <- c("A", "B")))
+  expect_identical(result$race@partition_type, "set")
+  expect_true(pa_dim_has_overlap_risk(result$race, c("A", "B")))
+  intervals <- sem
+  intervals$race <- pa_update_dim_semantics(intervals$race, scale_type = "interval",
+    overlap_levels = "Total")
+  before <- within(dn, race <- c("0-9", "5-14", "Total"))
+  after <- within(before, race <- c("0-9", "5-14"))
+  result <- subset_dim_semantics(intervals, before, after)
+  expect_identical(result$race@overlap_levels, character())
+  expect_identical(result$race@partition_type, "set")
+  expect_true(pa_dim_has_overlap_risk(result$race, after$race))
 })

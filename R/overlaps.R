@@ -6,9 +6,9 @@
 #'
 #' @param x A `poparray` object.
 #' @return A list named by dimension, in array order. Each entry contains:
-#'   * `original_levels`: The intrinsic `DimSemantics@overlap_levels`
-#'     declaration, retained after filtering. These are known overlap-causing
-#'     labels, not a complete history of the original cube's labels or overlaps.
+#'   * `original_levels`: The current object's `DimSemantics@overlap_levels`
+#'     declaration. The field name is retained for compatibility; filtering
+#'     removes absent labels, so this is not the original source cube's history.
 #'   * `current_levels`: Declared overlap-causing labels still present in the
 #'     current dimension's labels. Presence does not establish simultaneous
 #'     applicability or overlap when only one level remains.

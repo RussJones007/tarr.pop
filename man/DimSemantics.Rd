@@ -8,10 +8,12 @@
 Declarative semantic contract for a single array dimension.
 }
 \details{
-\code{DimSemantics} stores intrinsic semantics only and must not store current-state facts such as whether overlaps are
-currently present in a filtered cube. The object describes the dimension contract and its known overlap-causing
+\code{DimSemantics} describes the owning array's semantic contract. It does not store a mutable flag indicating whether
+overlaps are currently present in a filtered cube. The contract includes its known overlap-causing
 levels, while overlap status for any realized or filtered cube is computed from the active labels at that point in
-the workflow.
+the workflow. Subsetting removes absent \code{overlap_levels}; when all declared
+overlap levels are removed and the existing guard confirms a safe subset,
+the returned dimension is marked as a partition of its retained categories.
 }
 \section{Fields}{
 
