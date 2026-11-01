@@ -1,12 +1,31 @@
-# tarr.pop 0.0.0.9227 (development version)
+# tarr.pop 0.0.0.9228 (development version)
 
-Changes since development version 0.0.0.9226.
+Changes since development version 0.0.0.9227.
 
 * Filtering and subsetting now remove absent labels from `overlap_levels`.
   When all declared overlaps are removed and the retained labels pass the
   existing overlap guard, the returned dimension is marked as a partition.
   Unknown relationships and remaining interval overlaps retain their guards;
   source cube metadata on disk is unchanged.
+
+* Updated `POPARRAY_CLASS.md` to describe current semantic updates,
+  applicability, guarded selection and aggregation, blockwise statistics,
+  persistence, and experimental saved view recipes. Clarified that transformed
+  objects can have different semantics while source cube metadata is preserved.
+* Standardized headers across all 36 R scripts, describing architectural
+  decisions, public interfaces, and helpers. Preserved authorship and existing
+  creation dates, identified dates inferred from Git, and removed revision
+  histories without changing executable code or roxygen documentation.
+* Clarified `select.poparray()` documentation and registered its S3 method
+  in the namespace.
+* Declared missing direct dependencies on IRanges, S4Arrays, graphics,
+  grDevices, tools, and utils in `DESCRIPTION`.
+* Removed generated vignette caches and local build artifacts, and expanded
+  vignette artifact exclusions in `.Rbuildignore`.
+
+# tarr.pop 0.0.0.9227
+
+Changes since development version 0.0.0.9226.
 
 * Added an experimental S7 `poparray_view` recipe with plain-data RDS
   persistence, fixed operation replay, minimal source compatibility checks,
