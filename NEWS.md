@@ -2,6 +2,12 @@
 
 Changes since development version 0.0.0.9228.
 
+* Added a reproducible February 2026 SEER rebuild script for the 1990-2024
+  Texas county estimates. It streams annual buffers, reconciles single and
+  grouped ages, excludes the Texas aggregate, and writes current-schema cubes
+  with validated partitions, fixed-schema applicability, and revision history.
+  The grouped cube now supports 20 age groups ending in 85-89 and 90+.
+
 * Renamed the public `project()` input argument from `parray` to `x` for
   consistency with other array functions. Named calls should use `x =`;
   positional calls are unchanged.
