@@ -1,6 +1,6 @@
-# tarr.pop 0.0.0.9228 (development version)
+# tarr.pop 0.0.0.9229 (development version)
 
-Changes since development version 0.0.0.9227.
+Changes since development version 0.0.0.9228.
 
 * Renamed the public `project()` input argument from `parray` to `x` for
   consistency with other array functions. Named calls should use `x =`;
@@ -24,6 +24,10 @@ Changes since development version 0.0.0.9227.
   class documentation and added inheritance, dispatch, laziness, and numerical
   boundary regression coverage. Corrected stale projection examples and
   declared the withr test dependency. Existing HDF5 schemas remain unchanged.
+
+# tarr.pop 0.0.0.9228
+
+Changes since development version 0.0.0.9227.
 
 * Filtering and subsetting now remove absent labels from `overlap_levels`.
   When all declared overlaps are removed and the retained labels pass the
