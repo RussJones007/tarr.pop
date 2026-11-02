@@ -1,6 +1,6 @@
 Package: tarr.pop
 Type: Package
-Title: Population figures for Tarrant and other selected areas like Texas and comparable counties
+Title: Population data staorage and retrieval for Texas counties.
 Version: 0.0.0.9229
 Description: A package for retrieving and manipulating population data.
     Data is stored on disk in multidimensional arrays or cubes. Operations
@@ -10,7 +10,8 @@ Description: A package for retrieving and manipulating population data.
     Census Bureau decennial census and population estimates, ACS population 
     estimates by ZIP Code Tabulation Area, Texas Demographic Center estimates 
     and projections, and National Cancer Institute SEER population estimates 
-    and standard populations used for adjustments.
+    and standard populations used for adjustments. Select ACS data to be 
+    added with empahsis on Tarrant County
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

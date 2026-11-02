@@ -4,8 +4,9 @@ An R package for retrieving and managing population figures for epidemiological 
 
 ### Overview
 
-`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed lazily.
-The core data structure is **`poparray`**, an S4 class that extends `DelayedArray` with explicit, role-aware dimension metadata.
+`tarr.pop` supports scalable workflows over large, multi-dimensional population cubes stored on disk and accessed
+lazily. The core data structure is **`poparray`**, an S4 class that extends `DelayedArray` with explicit, role-aware
+dimension metadata.
 
 ### Data sources
 
@@ -17,29 +18,30 @@ The package integrates population data from the following sources:
 
 ### Storage model
 
-Population cubes can be large, so numeric data are typically stored in HDF5-backed arrays (via `HDF5Array`/`DelayedArray`) to avoid loading full datasets into memory.
-Semantic meaning (dimension roles, provenance, and optional geographic lookup tables) is stored as metadata/attributes rather than encoded as additional array dimensions.
+Population cubes can be large, so numeric data are stored in HDF5-backed arrays (via `HDF5Array`/`DelayedArray`) to
+avoid loading full datasets into memory. Semantic meaning (dimension roles, provenance, and optional geographic lookup
+tables) is stored as metadata/attributes rather than encoded as additional array dimensions.
 
 ### First-time setup
 
-When `tarr.pop` is loaded for the first time, the package now asks for the folder where population cubes are stored, or where they should be initialized.
-
-This is needed because the cube files are intentionally stored outside the package installation directory:
+When `tarr.pop` is loaded for the first time, the package will for the folder where population cubes are stored, or
+where they should be initialized. The package needs to set an option pointing to the location of the population data
+cubes.  These cubes are downloaded/installed separately: 
 
 -   HDF5 cube files can be large and should not be duplicated every time the package is installed
 -   the cube folder may live in a user-managed location, shared drive, or server path
 -   keeping cubes outside the package makes the data persistent across re-installs and updates
 
-In an interactive session, `library(tarr.pop)` will prompt for this folder if it has not already been configured.
-That path is then saved and reused in later sessions.
-
-In a non-interactive session, the package will throw an error if the cube folder has not been configured yet.
-For initial setup, load the package once interactively and choose the cube folder.
+In an interactive session, `library(tarr.pop)` will prompt for this folder if it has not already been configured. That
+path is then saved and reused in later sessions. In a non-interactive session, the package will throw an error if the
+cube folder has not been configured yet. For initial setup, load the package once interactively and choose the cube
+folder.
 
 ### poparray: core concept
 
-A **`poparray`** represents population counts indexed over **time** and **area**, optionally stratified by other independent (“orthogonal”) dimensions such as age, sex, race, or ethnicity.\
-Every `poparray` must include exactly one time dimension and one area dimension; all other dimensions are optional stratifications.
+A **`poparray`** represents population counts indexed over **time** and **area**, optionally stratified by other
+independent (“orthogonal”) dimensions such as age, sex, race, or ethnicity.\ Every `poparray` must include exactly one
+time dimension and one area dimension; all other dimensions are optional stratifications.
 
 Design principles:
 
@@ -65,7 +67,7 @@ Design principles:
 -   Load `tarr.pop` and, if prompted, choose the folder where cubes are stored.
 -   Open a population series into a `poparray`.
 -   Filter to the time/area/strata you need using `filter()` (method for `poparray`, stays lazy).
--   Collapse one or more stratification dimensions using `collapse_dim()` (method for `poparray`); time/area collapsing should be explicit and metadata-driven.
+-   Collapse one or more stratification dimensions using `collapse_dim()` (method for `poparray`); time/area collapsing is explicit and metadata-driven.
 -   Convert a manageable slice to a data frame/tibble for downstream analysis (**EAGER**).
 
 ### Example usage
