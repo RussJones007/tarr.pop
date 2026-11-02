@@ -5,7 +5,7 @@
 \title{Project a population cube forward in time}
 \usage{
 project(
-  parray,
+  x,
   h,
   level = 0.95,
   method = c("auto", "ARIMA", "ETS", "CAGR"),
@@ -15,7 +15,7 @@ project(
 )
 }
 \arguments{
-\item{parray}{A \code{poparray} object (filtered or unfiltered) containing a time
+\item{x}{A \code{poparray} object (filtered or unfiltered) containing a time
 dimension.}
 
 \item{h}{Integer forecast horizon (number of future years).}
@@ -24,7 +24,7 @@ dimension.}
 Values such as \code{0.95} or \code{95} are both accepted.}
 
 \item{method}{The projection method: \code{"auto"}, \code{"ETS"}, \code{"CAGR"}, or \code{"ARIMA"}.
-If \code{"auto"}, the method is inferred from the number of base years in \code{"parray"}:
+If \code{"auto"}, the method is inferred from the number of base years in \code{x}:
 \itemize{
 \item 5-7 years uses \code{"ETS"}
 \item 8-10 years uses  \code{"CAGR"}
@@ -111,7 +111,7 @@ semantics$sex@partition_type <- "partition"
 dim_semantics(parray) <- semantics
 
 \dontrun{
-  pr <- project(parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
+  pr <- project(x = parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
   pr
   as.poparray(pr)
 }

@@ -2,6 +2,10 @@
 
 Changes since development version 0.0.0.9227.
 
+* Renamed the public `project()` input argument from `parray` to `x` for
+  consistency with other array functions. Named calls should use `x =`;
+  positional calls are unchanged.
+
 * Introduced virtual S4 `demographic_array`, extending DelayedArray, as the
   shared superclass of sibling classes `poparray` and `poparray_projection`.
   Shared slots and structural validation cover dimension roles, current

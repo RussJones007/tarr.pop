@@ -78,7 +78,7 @@ test_that("infer_projection_method_from_tp uses poparray time dimension", {
 test_that("project returns poparray_projection with one-cube handle and source metadata", {
   pa <- make_poparray_fixture()
 
-  pr <- tarr.pop::project(pa, h = 2, method = "CAGR", level = 0.95, guard = FALSE)
+  pr <- tarr.pop::project(x = pa, h = 2, method = "CAGR", level = 0.95, guard = FALSE)
 
   expect_s4_class(pr, "poparray_projection")
   expect_s4_class(pr, "DelayedArray")

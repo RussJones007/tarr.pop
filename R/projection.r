@@ -780,13 +780,13 @@ infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
 #' * **base_years** — The number of historical years used to fit the model.
 #' * **created** — Timestamp indicating when the projection was generated.
 #'
-#' @param parray A `poparray` object (filtered or unfiltered) containing a time
+#' @param x A `poparray` object (filtered or unfiltered) containing a time
 #'   dimension.
 #' @param h Integer forecast horizon (number of future years).
 #' @param level Confidence level for interval estimation (default `0.95`).
 #'   Values such as `0.95` or `95` are both accepted.
 #' @param method The projection method: `"auto"`, `"ETS"`, `"CAGR"`, or `"ARIMA"`.
-#'   If `"auto"`, the method is inferred from the number of base years in `"parray"`:
+#'   If `"auto"`, the method is inferred from the number of base years in `x`:
 #'
 #'   * 5-7 years uses `"ETS"`
 #'   * 8-10 years uses  `"CAGR"`
@@ -815,7 +815,7 @@ infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
 #' dim_semantics(parray) <- semantics
 #'
 #' \dontrun{
-#'   pr <- project(parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
+#'   pr <- project(x = parray, h = 3, method = "auto", level = 0.95, guard = FALSE)
 #'   pr
 #'   as.poparray(pr)
 #' }
@@ -827,7 +827,7 @@ infer_projection_method_from_tp <- function(parray, time_dim = NULL) {
 #' * [plot.poparray_projection()] for visualization.
 #' 
 #' @export
-project <- function(parray,
+project <- function(x,
                     h,
                     level = 0.95,
                     method = c("auto", "ARIMA", "ETS", "CAGR"),
@@ -838,11 +838,11 @@ project <- function(parray,
   method <- match.arg(method)
   
   if (identical(method, "auto")) {
-    method <- infer_projection_method_from_tp(parray, time_dim = time_dim)
+    method <- infer_projection_method_from_tp(x, time_dim = time_dim)
   }
   
-  # validate poparray here, only needed  her and other functions can depend on getitng a poparray object
-  validate_poparray(parray)
+  # Validate once here so downstream functions receive a poparray object.
+  validate_poparray(x)
   
-  project_cube(parray = parray, h = h, level = level, method = method, guard = guard, ...)
+  project_cube(parray = x, h = h, level = level, method = method, guard = guard, ...)
 }
