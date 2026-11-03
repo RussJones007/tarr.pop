@@ -26,11 +26,11 @@ You can return those counts as a data frame or tibble for analysis, reporting, o
 guide follows one example: obtaining population estimates for Dallas and Tarrant counties for
 2015–2018 using the small example cube included with the package.
 
-Population data when represented as a data frame are very convenient for manipulating in grouping,
-sub-setting, aggregating. However, reading large population data sets into R can be memory
-consuming, using tens or even hundreds of megabytes of memory that can slow execution. The tarr.pop
-package allows you to get the population you need by two means: efficient data organization and
-manipulation of metadata that reduces the data items for loading into memory.
+Population data when represented as a data frame are very convenient for  grouping, sub-setting, aggregating, joining,
+etc . However, reading large population data sets into R can be memory intensive, using tens or even hundreds of
+megabytes of memory. The tarr.pop package allows you to get the population you need by two means: efficient data
+organization with persistent storage on disk and manipulation of metadata that reduces the data items for loading into
+memory.
 
 [Arrays](https://www.programiz.com/r/arrays) store data much more efficiently
 than data frames. For population stratified by age, sex, race, ethnicity, area, and year, an array
@@ -48,11 +48,10 @@ To retrieve population data, open a population cube (`open_poparry()`), inspect 
 labels and categories (`dimnames() and dim_labels()`), select the population you need
 (`filter() and the [] operator`), and convert the result to a table/data frame
 (`as.data.frame(), as_tibble(), or as.arry()`). If you want totals rather than separate demographic
-groups, you can "collapse" the dimension categories (`collapse_dim(), collapse_all(), group_ages()`)
-into fewer groups within the dimension which automatically sums the population figures for the new
-groupings. All this is done by manipulating the metadata - dimension selection, removing or grouping
-categories, then converting to a data.frame or in memory array which causes selected data to be
-fetched.
+groups, you can "collapse" the dimension categories (`collapse_dim(), collapse_all(), group_ages()`) into fewer groups
+within the dimension which automatically sums the population figures for the new groupings. All this is done by
+manipulating the metadata - dimension selection, removing or grouping categories, then converting to a data.frame or an
+in-memory array which causes only the desired data to be fetched from disk.
 
 A population array/cube contains two or more dimensions and is saved to disk in a compressed
 [HDF5](https://support.hdfgroup.org/documentation/hdf5/latest/_intro_h_d_f5.html) type file. The
@@ -64,11 +63,11 @@ data.
 
 # Find and open a cube
 
-The main function for opening a population array is pop_array().  You pass the file name cpomplete with the file path,
-or use package named list "population" to select the name of the population cube of interest. That named
-list is organized first by source agency of the data - U.S. Census Bureau, Texas Demographic Center, and the National
+The main function for opening a population array is pop_array().  You pass the file name complete with the file path,
+or use the tarr.pop named list `pop_catalog` to select the name of the population cube of interest. The catalog 
+is organized first by source agency of the data - U.S. Census Bureau, Texas Demographic Center, and the National
 Cancer Institute SEER program.  Each source agency can have more than one population cube.  For example
-population$census.bureau has references population cubes containing Texas county decennial census counts, county
+pop_catalog$census.bureau has references population cubes containing Texas county decennial census counts, county
 estimates, and Tarrant County ZCTA estimates with margins of error.
 
 ## Load the bundled example
