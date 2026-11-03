@@ -14,24 +14,24 @@
 
 #' Population Tables/Arrays
 #'
-#' `population` is a list containing a named catalog of the population cubes currently available. 
-#' Entries are grouped by source agency and table type. Each entry stores a `series_id` string is basically the cube
-#' file name minus the extension. The series name is passed to the [open_poparray()] function and a [poparray] object 
+#' `pop_catalog` is a list containing a named catalog of the population cubes currently available. Entries are grouped
+#' by source agency and then population cube series id. Each  `series_id` string is basically  the cube file name minus
+#' the `hdf5' file name extension. The series name is passed to the [open_poparray()] function and a [poparray] object
 #' is returned.
 #'
-#' A `poparray` extends `DelayedArray` (typically backed by an HDF5 file) and stores explicit dimension labels, and
-#' roles as part of the  dimension  metadata. See [DimSemantics] for how each dimension is described. The meta data is
-#' used to enable safe  filtering and aggregation before realization, reducing memory use and helping guard against
-#' unsafe aggregation when non-exclusive categories are present.
+#' A `poparray` extends `DelayedArray` (usually backed by an HDF5 file) and stores explicit dimension labels, and roles
+#' as part of the  dimension  metadata. See [DimSemantics] for how each dimension is described. The meta data is used to
+#' enable safe  filtering and aggregation before pulling the data from disk (realization), reducing memory use and
+#' guarding against unsafe aggregation when non-exclusive categories are present.
 #'
 #' The available cubes are sourced from :
 #' * [U.S. Census Bureau](https://www.census.gov/)
 #' * [Texas Demographic Center](https://demographics.texas.gov/)
 #' * [National Cancer Institute SEER Program](https://seer.cancer.gov/data-software/uspopulations.html)
 #'
-#' Most cubes use are at the county-level wit demographic dimensions liske  Age, Sex, Race, and  Ethnicity (**ASRE**).
-#' The `census_zcta_estimates` cube is different: it contains ZCTA-level totals focused on Tarrant County- geography
-#' rather than ASRE county slices.
+#' Most cubes contain Texas population figures at the county-level with demographic dimensions like  Age, Sex, Race, and
+#' Ethnicity (**ASRE**). The `census_zcta_estimates` cube is different: it contains ZCTA-level totals focused on Tarrant
+#' County- geography rather than ASRE county slices.
 #'
 #' Common workflow:
 #' * open a cube: [open_poparray()]
@@ -51,13 +51,13 @@
 #' partition, set, or interval domain before aggregating.
 #' 
 #' @format A named list with source-grouped entries:
-#' * `population$texas.demographic.center$estimates` = `"tdc_estimates_county"`
-#' * `population$texas.demographic.center$projections` = `"tdc_projections_county"`
-#' * `population$census.bureau$census` = `"census_decennial_county_1y"`
-#' * `population$census.bureau$estimates` = `"census_estimates_county_5y"`
-#' * `population$census.bureau$zcta` = `"census_zcta_estimates"`
-#' * `population$seer$single_age` = `"seer_estimates_county_1y"`
-#' * `population$seer$grouped_age` = `"seer_estimates_county_5y"`
+#' * `pop_catalog$texas.demographic.center$estimates` = `"tdc_estimates_county"`
+#' * `pop_catalog$texas.demographic.center$projections` = `"tdc_projections_county"`
+#' * `pop_catalog$census.bureau$census` = `"census_decennial_county_1y"`
+#' * `pop_catalog$census.bureau$estimates` = `"census_estimates_county_5y"`
+#' * `pop_catalog$census.bureau$zcta` = `"census_zcta_estimates"`
+#' * `pop_catalog$seer$single_age` = `"seer_estimates_county_1y"`
+#' * `pop_catalog$seer$grouped_age` = `"seer_estimates_county_5y"`
 #'
 #' Cube summary by current registry:
 #'
@@ -111,12 +111,11 @@
 #'
 #' * `tdc_estimates_county`
 #'   Source: [Texas Demographic Center population estimates](https://demographics.texas.gov/Resources/TPEPP/Estimates/).
-#'   Dimensions: `year`, `area.name`, `sex`, `age.char`, `race.eth`.
-#'   `year` has 11 levels (`2011` through `2022`, with no `2020` level in the
-#'   current registry) and is an ordered interval-like time axis. `area.name` is
-#'   the 255-county Texas partition. `sex` is a 2-level partition. `age.char`
-#'   is an ordered age domain that mixes single ages with top-coded intervals
-#'   such as `85 +` and `95 +`, so it should be treated as an interval domain.
+#'   Dimensions: `year`, `area.name`, `sex`, `age.char`, `race.eth`. `year` has 11 levels (`2011` through `2022`, with
+#'   no `2020` level in the current registry) and is an ordered interval-like time axis. `area.name` is the 255-county
+#'   Texas partition. `sex` is a 2-level partition. `age.char` is an ordered age domain that mixes single ages with
+#'   top-coded intervals such as `85 +` and `95 +`, so it should be treated as an interval domain. Note that the top age
+#'   before 2017 was 85+.  The demographic center added single ages to 94 and 95+ starting in 2017.
 #'   `race.eth` is a 5-level partition (`asian`, `black`, `hispanic`, `other`,
 #'   `white`) combining race and ethnicity into one dimension.
 #'
@@ -128,4 +127,4 @@
 #'   2-level partition. `age.char` is a single-year ordered interval domain with
 #'   an infant `< 1` label and a top-coded `95 +` label. `race.eth` is the same
 #'   5-level partition used by the TDC estimates cube.
-"population"
+"pop_catalog"
