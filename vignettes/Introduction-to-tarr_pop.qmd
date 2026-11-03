@@ -312,6 +312,9 @@ pop_totals_2 <- pop_small |>
 pop_totals_2
 ```
 
+Both pop_totals and pop_totals_2 have the same length and contain the same population figures. However, using the 
+`select()` function automatically dropped the dimensions with only one label of "all".  You can see that pop_total still
+has five dimensions whereas pop_total_2 only has two dimensions. 
 
 ## Choose a data frame or tibble
 
@@ -324,8 +327,8 @@ county_tbl <- tibble::as_tibble(pop_totals)
 county_tbl
 ```
 
-Both tables contain the same population values. Choose a data frame for base R tools or a tibble for
-a tidyverse workflow. With two counties and three  years, the total table contains eight rows. The
+Both county_df and county_tbl are tables that contain the same population values. Choose a data frame for base R tools
+or a tibble for a tidyverse workflow. With two counties and three  years, the total table contains eight rows. The
 `sex`, `age.char`, and `race.eth` columns contain `"all"`, recording the dimensions that were
 summed.
 
