@@ -66,7 +66,7 @@ county_names <- function(x) {
 # rm(fls)
 # 
 # population
-population <- list(
+pop_catalog <- list(
   "texas.demographic.center" = list(
     "estimates"   = "tdc_estimates_county",
     "projections" = "tdc_projections_county"
@@ -82,5 +82,5 @@ population <- list(
   )
 )
 
-usethis::use_data(population, overwrite = TRUE)
+usethis::use_data(pop_catalog, overwrite = TRUE)
 #rm(list = ls())
