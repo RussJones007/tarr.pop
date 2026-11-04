@@ -26,6 +26,15 @@ editor:
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
+
+```{r libraries}
+#| message: false
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(tarr.pop)
+```
+
 # Get the population data you need
 
 `tarr.pop` helps you retrieve population counts for selected places, years, and demographic groups.
@@ -132,14 +141,6 @@ County ZCTA estimates with margins of error.
 
 The package includes a small TDC county population estimates cube that will be used in the following
 examples.
-
-```{r libraries}
-#| message: false
-library(tarr.pop)
-library(dplyr)
-library(tibble)
-library(ggplot2)
-```
 
 Using `system.file()` to find the example data inside the installed tarr.pop package, then pass its
 path to `open_poparray()`:

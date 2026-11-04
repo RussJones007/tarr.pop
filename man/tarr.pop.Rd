@@ -21,7 +21,7 @@ large data sets that exceed available memory. Operations such as filtering, sub-
 lazily, minimizing memory usage and improving performance by avoiding unnecessary data realization.
 
 The package also provides tools for extending population cubes, including time-series projection methods and a
-standardized HDF5-based storage format with embedded metadata. Refer to the \link{population} help topic for available
+standardized HDF5-based storage format with embedded metadata. Refer to the \link[tidyr:population]{population} help topic for available
 example data sets and their formats.
 }
 \references{
