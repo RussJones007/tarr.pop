@@ -10,7 +10,7 @@ Phase 3 must make grouping/collapsing operations consume applicability correctly
 
 > Determine applicable source levels separately for each schema/context, exclude structurally inapplicable levels before numerical reduction, and continue to propagate genuine missing values from applicable source cells.
 
-Follow `AI_GUIDELINES.md` as authoritative. Preserve DelayedArray/HDF5Array safety and do not realize the complete population cube.
+Follow `.codex/skills/tarr-pop-repo-guard/SKILL.md` as authoritative. Preserve DelayedArray/HDF5Array safety and do not realize the complete population cube.
 
 ## 1. Core problem
 
@@ -109,7 +109,7 @@ Requirements:
 - avoid unnecessary duplication of large numeric blocks;
 - deterministic/testable schema dispatch.
 
-Verify uncertain DelayedArray/HDF5Array APIs before relying on them, consistent with `AI_GUIDELINES.md`.
+Verify uncertain DelayedArray/HDF5Array APIs before relying on them, consistent with `.codex/skills/tarr-pop-repo-guard/references/repo-guidelines.md`.
 
 ## 6. Age grouping semantics
 

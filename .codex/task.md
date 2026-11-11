@@ -1,6 +1,6 @@
 TASKS 8–10 — PERFORMANCE REGRESSION TESTS, METADATA READ OPTIMIZATION, AND FINAL BENCHMARKING
 
-Follow AI_GUIDELINES.md throughout this work.
+Follow `.codex/skills/tarr-pop-repo-guard/SKILL.md` and its referenced guidelines throughout this work.
 
 Do NOT implement local caching, checkout, local cube copying, synchronization, or cache invalidation. Those features are explicitly reserved for a separate development effort.
 

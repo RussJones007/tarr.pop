@@ -21,7 +21,7 @@ This phase is intentionally **metadata-focused**.
 
 Do **not** yet implement schema-dependent age collapsing/harmonization such as deriving later-year `85+` from `85-89 + 90-94 + 95+`. That is Phase 3.
 
-Follow `AI_GUIDELINES.md` as authoritative.
+Follow `.codex/skills/tarr-pop-repo-guard/SKILL.md` as authoritative.
 
 ---
 

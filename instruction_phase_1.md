@@ -11,7 +11,7 @@ Phase 1 has two objectives:
 1. Correct the existing overlap-safety behavior so that overlap risk is determined from the **current `poparray` object's levels**, not inherited from levels that have been removed by filtering or subsetting.
 2. Audit first-argument naming across the `poparray` API and report recommendations, but **do not perform a broad argument-renaming refactor yet**.
 
-Follow `AI_GUIDELINES.md` as authoritative. In particular, preserve laziness, dimensional integrity, metadata consistency, and existing S3/S4 contracts.
+Follow `.codex/skills/tarr-pop-repo-guard/SKILL.md` as authoritative. In particular, preserve laziness, dimensional integrity, metadata consistency, and existing S3/S4 contracts.
 
 The existing `poparray` design states that overlap risk is to be derived at runtime from current labels plus intrinsic semantics rather than from a mutable historical overlap flag.
 
