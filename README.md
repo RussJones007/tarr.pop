@@ -24,6 +24,15 @@ tables) is stored as metadata/attributes rather than encoded as additional array
 
 ### First-time setup
 
+Install agecraft >= 0.1.0.9021 before installing this development version of
+`tarr.pop`. The naming refactor is available in the agecraft source repository
+at commit `da09133` (version 0.1.0.9021). For a local checkout, run
+`R CMD INSTALL /path/to/agecraft`, then install `tarr.pop` into the same library.
+A version requirement alone does not make an unpublished development build
+available from CRAN. Use `agecraft::as_age_interval()` for age labels and
+`agecraft::age_interval_presets` for preset breaks; population cubes retain
+their character age labels and do not need rebuilding for this API change.
+
 When `tarr.pop` is loaded for the first time, the package will for the folder where population cubes are stored, or
 where they should be initialized. The package needs to set an option pointing to the location of the population data
 cubes.  These cubes are downloaded/installed separately: 

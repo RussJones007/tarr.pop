@@ -61,7 +61,7 @@ test_that("group_ages matches collapse_dim age specialization", {
 
 test_that("group_ages accepts agecraft preset breaks and preserves totals", {
   pa <- make_group_ages_fixture()
-  out <- group_ages(pa, agecraft::age_group_presets$ILI)
+  out <- group_ages(pa, agecraft::age_interval_presets$ILI)
 
   expect_identical(dimnames(out)$age.char, c("0-4", "5-24"))
   expect_true(tarr.pop:::is_hdf5_backed_delayed(out))
@@ -79,4 +79,30 @@ test_that("agecraft canonical labels retain interval safety", {
   expect_identical(pa_age_contributors(c("85-89", "90-94", "95 +"), "85+"),
     c("85-89", "90-94", "95 +"))
   expect_identical(pa_age_contributors("85 +", "90+"), character())
+  expect_true(pa_has_interval_overlap(c("unknown", "1-4")))
+  expect_false(pa_has_interval_overlap(c("85-89", "90-94", "95 +")))
+})
+
+test_that("interval definitions give equivalent age groupings", {
+  pa <- make_group_ages_fixture()
+  labels <- c("0-9", "10-14")
+  expected <- group_ages(pa, labels)
+  inputs <- list(agecraft::as_age_interval(labels), c(0, 10, 15))
+  for (input in inputs) {
+    out <- group_ages(pa, input)
+    expect_equal(as.array(out), as.array(expected))
+    expect_identical(dimnames(out), dimnames(expected))
+    expect_equal(roles(out), roles(pa))
+    expect_equal(dim_semantics(out), dim_semantics(expected))
+    expect_true(is_hdf5_backed_delayed(out))
+  }
+})
+
+test_that("categorical assignments cannot stand in for interval definitions", {
+  pa <- make_group_ages_fixture()
+  definitions <- agecraft::as_age_interval(c("0-9", "10-14"))
+  assignments <- agecraft::categorize_age(c(3, 12), by = definitions)
+  expect_true(agecraft::is_age_group(assignments))
+  expect_false(agecraft::is_age_interval(assignments))
+  expect_error(group_ages(pa, assignments), "interval definitions.*assignments")
 })

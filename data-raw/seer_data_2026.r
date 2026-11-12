@@ -22,7 +22,7 @@ seer_2026_ages <- function(age_type = c("single", "grouped")) {
   age_type <- match.arg(age_type)
   labels <- if (age_type == "single") c(as.character(0:89), "90+") else
     c("0", "1-4", paste0(seq(5, 85, 5), "-", seq(9, 89, 5)), "90+")
-  labels <- as.character(agecraft::as.age_group(labels))
+  labels <- as.character(agecraft::as_age_interval(labels))
   stats::setNames(labels, as.character(seq_along(labels) - 1L))
 }
 

@@ -34,8 +34,10 @@
 #' explicitly allowed.
 #'
 #' @param pop A `poparray`.
-#' @param age_groups Target age groups accepted by [agecraft::as.age_group()],
-#'   including break vectors from `agecraft::age_group_presets`.
+#' @param age_groups Target age groups accepted by [agecraft::as_age_interval()],
+#'   including character labels, `age_interval` vectors, and numeric break
+#'   vectors from `agecraft::age_interval_presets`. Categorical `age_group`
+#'   assignments are not interval definitions and are not accepted.
 #' @param dimension_name Name of the age dimension. Defaults to `"age.char"`.
 #' @param keep_empty Logical; keep declared `age_groups` levels even when no
 #'   source labels map to them in the legacy global mapping? With applicability,
@@ -53,7 +55,7 @@
 #' # Load a poparray, subset lazily, then group ages.
 #' # census <- open_poparray(population$census.bureau$census)
 #' # census <- dplyr::filter(census, year %in% c("2010", "2020"))
-#' # census_age_grouped <- group_ages(census, agecraft::age_group_presets$ILI)
+#' # census_age_grouped <- group_ages(census, agecraft::age_interval_presets$ILI)
 #' \dontrun{
 #' values <- array(NA_real_, c(2, 1, 4), dimnames = list(
 #'   year = c("2000", "2001"), area.name = "A",
@@ -81,8 +83,15 @@ group_ages <- function(pop,
     cli::cli_abort("Dimension {.val {dimension_name}} was not found in {.cls poparray}.")
   }
 
-  current_age <- agecraft::as.age_group(as.character(dn[[dimension_name]]))
-  target_age <- agecraft::as.age_group(age_groups)
+  if (agecraft::is_age_group(age_groups)) {
+    cli::cli_abort(paste0(
+      "{.arg age_groups} must contain age interval definitions, not {.cls age_group} assignments. ",
+      "Supply interval labels, numeric breaks, or an {.cls age_interval} vector."
+    ))
+  }
+
+  current_age <- agecraft::as_age_interval(as.character(dn[[dimension_name]]))
+  target_age <- agecraft::as_age_interval(age_groups)
 
   applicability <- pa_dim_applicability(dim_semantics(pop)[[dimension_name]])
   if (!is.null(applicability)) {
@@ -132,8 +141,8 @@ group_ages <- function(pop,
 #' @keywords internal
 #' @noRd
 pa_age_contributors <- function(levels, target) {
-  source_age <- agecraft::as.age_group(as.character(levels))
-  target_age <- agecraft::as.age_group(target)
+  source_age <- agecraft::as_age_interval(as.character(levels))
+  target_age <- agecraft::as_age_interval(target)
   source <- list(start = ivs::iv_start(source_age), end = ivs::iv_end(source_age))
   requested <- list(start = ivs::iv_start(target_age), end = ivs::iv_end(target_age))
   exact <- which(source$start == requested$start & source$end == requested$end)

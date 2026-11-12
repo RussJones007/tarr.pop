@@ -16,8 +16,10 @@ group_ages(
 \arguments{
 \item{pop}{A \code{poparray}.}
 
-\item{age_groups}{Target age groups accepted by \code{\link[agecraft:as.age_group]{agecraft::as.age_group()}},
-including break vectors from \code{agecraft::age_group_presets}.}
+\item{age_groups}{Target age groups accepted by \code{\link[agecraft:as_age_interval]{agecraft::as_age_interval()}},
+including character labels, \code{age_interval} vectors, and numeric break
+vectors from \code{agecraft::age_interval_presets}. Categorical \code{age_group}
+assignments are not interval definitions and are not accepted.}
 
 \item{dimension_name}{Name of the age dimension. Defaults to \code{"age.char"}.}
 
@@ -59,7 +61,7 @@ explicitly allowed.
 # Load a poparray, subset lazily, then group ages.
 # census <- open_poparray(population$census.bureau$census)
 # census <- dplyr::filter(census, year \%in\% c("2010", "2020"))
-# census_age_grouped <- group_ages(census, agecraft::age_group_presets$ILI)
+# census_age_grouped <- group_ages(census, agecraft::age_interval_presets$ILI)
 \dontrun{
 values <- array(NA_real_, c(2, 1, 4), dimnames = list(
   year = c("2000", "2001"), area.name = "A",

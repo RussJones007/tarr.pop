@@ -45,7 +45,7 @@ census_county_names <- function(codes) {
 #' @return Ordered factor using agecraft interval ordering.
 census_age_factor <- function(x) {
   labels <- unique(as.character(x))
-  ages <- agecraft::as.age_group(labels)
+  ages <- agecraft::as_age_interval(labels)
   ordered(as.character(ages)[match(as.character(x), labels)],
     levels = as.character(sort(unique(ages))))
 }

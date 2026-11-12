@@ -164,7 +164,9 @@ Age labels (`age.char`) are stored as character but have **interval meaning**.
 
 Rules:
 
--   use `rage::age_group()` or package equivalents for coercion
+-   use `agecraft::as_age_interval()` for coercion and
+    `agecraft::age_interval()` for explicit bounds; `agecraft::age_group()`
+    represents categorical assignments, not interval definitions
 -   `"85+"` represents `[85, Inf)`
 -   single ages are half-open intervals: `[x, x+1)`
 

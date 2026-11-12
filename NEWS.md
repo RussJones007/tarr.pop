@@ -1,4 +1,23 @@
-# tarr.pop (development version)
+# tarr.pop 0.0.0.9231 (development version)
+
+Changes since development version 0.0.0.9230.
+
+* Migrated age grouping, interval safety checks, and data-frame age ordering to
+  the refactored agecraft interval API. Requires agecraft >= 0.1.0.9021 and
+  uses the canonical `age_interval_presets` data.
+* Updated maintained Census, TDC, and SEER ingestion scripts, examples,
+  package help, and contributor guidance for the new interval API.
+* Clarified accepted age-grouping inputs: character interval labels, numeric
+  breaks, and `age_interval` vectors are supported; categorical `age_group`
+  assignments are explicitly rejected.
+* Preserved HDF5-backed processing, population values, dimension roles,
+  semantic metadata, and saved-view label contracts. Existing population
+  cubes do not require rebuilding for the API migration.
+* Expanded regression coverage for interval inputs, age ordering, overlap
+  safeguards, and categorical assignment rejection. Recorded dependency,
+  serialized-metadata, and compatibility audits in the migration report,
+  including a separate existing grouping limitation for open-ended intervals
+  without applicability metadata.
 
 # tarr.pop 0.0.0.9229 (development version)
 

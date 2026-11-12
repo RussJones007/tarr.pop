@@ -3,6 +3,18 @@ array_2_df_fixture <- function() {
         dimnames = list(year = c("2020", "2021"), sex = c("Female", "Male")))
 }
 
+test_that("age labels sort by interval bounds and retain virtual totals", {
+  labels <- c("95+", "10-14", "< 1", "1-4", "85-89", "90-94", "All")
+  df <- data.frame(age.char = labels, population = seq_along(labels))
+  out <- polish_df(df)
+  expect_true(is.ordered(out$age.char))
+  expect_identical(levels(out$age.char),
+    c("< 1", "1-4", "10-14", "85-89", "90-94", "95+", "All"))
+  expect_identical(as.character(out$age.char), labels)
+  expect_false(anyNA(out$age.char))
+  expect_equal(out$population, df$population)
+})
+
 test_that("array_2_df uses the stored response name", {
   arr <- array_2_df_fixture()
   attr(arr, "data_col") <- "population"
