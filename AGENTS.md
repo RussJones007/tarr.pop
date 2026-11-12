@@ -111,3 +111,45 @@ changes, and unresolved limitations.
 
 Consult authoritative sources for external technical claims.
 Distinguish verified behavior from assumptions.
+
+
+
+## Development testing policy
+
+Use a risk-based testing strategy to minimize unnecessary repeated full-suite execution.
+
+## During implementation
+
+1. Run the relevant tests for the functionality being modified.
+2. Add regression tests for confirmed defects.
+3. When modifying shared helpers, also run tests for affected public interfaces and downstream callers.
+4. Re-run targeted tests after corrections until they pass.
+5. Do not automatically run the entire test suite or `R CMD check` after every individual change.
+6. Use the actual repository test filenames and dependencies to select appropriate tests.
+
+## Full validation checkpoints
+
+Run the complete test suite and `R CMD check`:
+
+- When incrementing the development package version.
+- Before merging a development branch into the main branch.
+- Before a release.
+- After substantial architectural changes or changes with broad package-wide effects.
+- When specifically requested.
+
+At these checkpoints, include relevant examples and vignette checks.
+
+## Reporting
+
+For each implementation task, report:
+
+- Tests selected and why.
+- Number of passing, failing, and skipped tests.
+- Any affected functionality not covered by the targeted run.
+- Whether full-suite validation was performed or deferred.
+
+Do not describe targeted testing as a complete package validation.
+
+If a change is unusually risky, recommend broader testing and explain why before running it.
+
+**Default:** Targeted tests during development; comprehensive validation at defined milestones.
