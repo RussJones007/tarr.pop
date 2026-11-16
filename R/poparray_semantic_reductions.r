@@ -23,7 +23,7 @@ pa_has_interval_overlap <- function(labels) {
   if (is.null(bnd)) {
     # Canonical agecraft labels such as '< 1' also have interval meaning.
     bnd <- tryCatch({
-      age <- agecraft::as.age_group(as.character(labels))
+      age <- agecraft::as_age_interval(as.character(labels))
       list(start = ivs::iv_start(age), end = ivs::iv_end(age))
     }, error = function(e) NULL)
   }

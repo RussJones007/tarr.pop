@@ -34,7 +34,7 @@
 #' explicitly allowed.
 #'
 #' @param pop A `poparray`.
-#' @param age_groups Target age groups accepted by [agecraft::as.age_group()],
+#' @param age_groups Target age groups accepted by [agecraft::as_age_interval()],
 #'   including break vectors from `agecraft::age_group_presets`.
 #' @param dimension_name Name of the age dimension. Defaults to `"age.char"`.
 #' @param keep_empty Logical; keep declared `age_groups` levels even when no
@@ -81,8 +81,8 @@ group_ages <- function(pop,
     cli::cli_abort("Dimension {.val {dimension_name}} was not found in {.cls poparray}.")
   }
 
-  current_age <- agecraft::as.age_group(as.character(dn[[dimension_name]]))
-  target_age <- agecraft::as.age_group(age_groups)
+  current_age <- agecraft::as_age_interval(as.character(dn[[dimension_name]]))
+  target_age <- agecraft::as_age_interval(age_groups)
 
   applicability <- pa_dim_applicability(dim_semantics(pop)[[dimension_name]])
   if (!is.null(applicability)) {
@@ -132,8 +132,8 @@ group_ages <- function(pop,
 #' @keywords internal
 #' @noRd
 pa_age_contributors <- function(levels, target) {
-  source_age <- agecraft::as.age_group(as.character(levels))
-  target_age <- agecraft::as.age_group(target)
+  source_age <- agecraft::as_age_interval(as.character(levels))
+  target_age <- agecraft::as_age_interval(target)
   source <- list(start = ivs::iv_start(source_age), end = ivs::iv_end(source_age))
   requested <- list(start = ivs::iv_start(target_age), end = ivs::iv_end(target_age))
   exact <- which(source$start == requested$start & source$end == requested$end)
