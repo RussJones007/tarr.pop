@@ -1,13 +1,15 @@
 # tarr.pop (development version)
 
----
+------------------------------------------------------------------------
 
-editor_options: 
-  markdown: 
-    wrap: 72
----
+editor_options: markdown: wrap: 72 ---
 
-# tarr.pop (development version)
+# tarr.pop 0.0.09231 (development version)
+
+The refactoring of the agecraft package with better descriptive function names and classes has been migrated to
+tarr.pop. This mostly affected names for age_group which is now class age_interval.
+Vignettes have been updated to reflect agecraft function names and improved api.
+
 
 # tarr.pop 0.0.0.9229 (development version)
 

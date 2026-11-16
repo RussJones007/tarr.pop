@@ -16,7 +16,7 @@ group_ages(
 \arguments{
 \item{pop}{A \code{poparray}.}
 
-\item{age_groups}{Target age groups accepted by \code{\link[agecraft:as.age_group]{agecraft::as.age_group()}},
+\item{age_groups}{Target age groups accepted by \code{\link[agecraft:as_age_interval]{agecraft::as_age_interval()}},
 including break vectors from \code{agecraft::age_group_presets}.}
 
 \item{dimension_name}{Name of the age dimension. Defaults to \code{"age.char"}.}
