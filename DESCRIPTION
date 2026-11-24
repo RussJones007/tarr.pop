@@ -52,6 +52,7 @@ Imports:
     agecraft (>= 0.1.0.9021),
     yaml,
     memoise,
+    digest,
     rhdf5,
     data.table
 Remotes: RussJones007/agecraft@v0.1.0.9025
