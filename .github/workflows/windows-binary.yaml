@@ -2,6 +2,11 @@ name: Build source and Windows binary
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub release from the default branch'
+        type: boolean
+        default: false
   pull_request:
     paths:
       - '.github/workflows/windows-binary.yaml'
@@ -59,3 +64,58 @@ jobs:
           path: tarr.pop_*.zip
           if-no-files-found: error
           retention-days: 30
+
+  publish-release:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    needs: windows-binary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: tarr-pop-release
+    steps:
+      - name: Download package files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tarr-pop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish versioned release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          sources=(release-assets/tarr.pop_*.tar.gz)
+          binaries=(release-assets/tarr.pop_*.zip)
+          if [[ ${#sources[@]} -ne 1 || ${#binaries[@]} -ne 1 ]]; then
+            echo 'Expected one tarr.pop source archive and one Windows binary.' >&2
+            exit 1
+          fi
+
+          source_file=${sources[0]}
+          binary_file=${binaries[0]}
+          version=${source_file#release-assets/tarr.pop_}
+          version=${version%.tar.gz}
+          if [[ ! $version =~ ^[0-9]+([.-][0-9]+)+$ || $binary_file != "release-assets/tarr.pop_${version}.zip" ]]; then
+            echo 'The source archive and Windows binary must have the same valid package version.' >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          if git ls-remote --exit-code --refs "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists. Increase Version in DESCRIPTION before publishing another release." >&2
+            exit 1
+          else
+            status=$?
+            if [[ $status -ne 2 ]]; then
+              exit "$status"
+            fi
+          fi
+
+          gh release create "$tag" "$source_file" "$binary_file" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "tarr.pop $version" \
+            --notes 'The .zip file is the Windows x64 binary built with R 4.6.0. The .tar.gz file is the R source package. Vignettes were not rendered for this build.'
