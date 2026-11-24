@@ -54,6 +54,7 @@ Imports:
     memoise,
     rhdf5,
     data.table
+Remotes: RussJones007/agecraft@v0.1.0.9025
 Suggests: 
     knitr,
     rmarkdown,
